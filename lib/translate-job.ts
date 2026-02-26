@@ -75,7 +75,7 @@ export const translateBook = inngest.createFunction(
       const langName = LANGUAGE_NAMES[langCode]
       const langSettings = LANGUAGE_SETTINGS[langCode]
 
-      // Pass 1: Translation
+      // Pass 1: Translation (Sonnet - fast and accurate)
       const translatedText = await step.run(`translate-${langCode}`, async () => {
         const response = await anthropic.messages.create({
           model: 'claude-sonnet-4-20250514',
@@ -90,12 +90,19 @@ Translate the following book into ${langName}.
 LANGUAGE SETTINGS:
 ${langSettings}
 
-IMPORTANT GUIDELINES:
+CRITICAL FORMATTING RULES:
+- Preserve ALL original formatting exactly: paragraph breaks, chapter headings, line breaks
+- Keep the same structure: if original has a blank line, keep the blank line
+- Maintain any special formatting markers or symbols
+- Keep chapter numbers/titles in the same position
+- Preserve any indentation patterns
+- If there are bullet points or numbered lists, keep them formatted the same way
+
+TRANSLATION GUIDELINES:
 - Preserve the author's unique voice and writing style
-- Maintain the original formatting, paragraph structure, and layout
 - Keep proper nouns and names consistent throughout
 - Handle technical terms accurately - keep specialized terminology where appropriate
-- Ensure the translation reads naturally to native ${langName} speakers, not like a translation
+- Ensure the translation reads naturally to native ${langName} speakers
 - Adapt idioms and expressions to equivalent ones in ${langName}
 - Maintain the same tone (formal/informal) as the original
 
@@ -108,7 +115,7 @@ ${order.special_instructions ? `AUTHOR'S SPECIAL INSTRUCTIONS:\n${order.special_
 TEXT TO TRANSLATE:
 ${fileContent}
 
-Provide ONLY the translation, no explanations or notes.`,
+Provide ONLY the translation, preserving all formatting. No explanations or notes.`,
             },
           ],
         })
@@ -116,7 +123,9 @@ Provide ONLY the translation, no explanations or notes.`,
         return response.content[0].type === 'text' ? response.content[0].text : ''
       })
 
-      // Pass 2: Editorial Review
+      // Pass 2: Editorial Review (Opus - premium quality)
+      // This pass improves the translation and highlights what the ORIGINAL said
+      // so the author can see what was improved
       const editorialResult = await step.run(`editorial-${langCode}`, async () => {
         const response = await anthropic.messages.create({
           model: 'claude-opus-4-20250514',
@@ -126,29 +135,46 @@ Provide ONLY the translation, no explanations or notes.`,
               role: 'user',
               content: `You are a senior ${langName} editor specializing in ${order.genre || 'general'} books.
 
-Review this translation and make improvements for natural flow, cultural accuracy, and readability.
+TASK: Review this translation and improve it for natural flow, cultural accuracy, and readability.
+
+FIRST, analyze the tone and style of the original English text:
+- Is it formal or casual?
+- Is it literary or conversational?
+- What is the author's unique voice?
+Then ensure your edits maintain that same tone and voice.
 
 LANGUAGE SETTINGS:
 ${langSettings}
 
-ORIGINAL ENGLISH:
+ORIGINAL ENGLISH (for reference):
 ${fileContent.slice(0, 30000)}
 
-TRANSLATION TO REVIEW:
-${translatedText.slice(0, 30000)}
+TRANSLATION TO REVIEW AND IMPROVE:
+${translatedText}
 
-For each improvement you make:
-1. Ensure it sounds natural to native speakers
-2. Adapt cultural references appropriately
-3. Improve flow and readability
-4. Fix any grammatical issues
+EDITING INSTRUCTIONS:
+1. Improve phrases that sound awkward or unnatural in ${langName}
+2. Fix any grammatical issues
+3. Adapt cultural references appropriately for ${langName} readers
+4. Ensure consistency in terminology throughout
+5. Maintain the author's voice and tone
 
-IMPORTANT: Mark ALL changes you make by wrapping them in [[HIGHLIGHT]] tags like this:
-Original phrase → [[HIGHLIGHT]]Improved phrase[[/HIGHLIGHT]]
+CRITICAL - HIGHLIGHTING FORMAT:
+When you make an improvement, show what the ORIGINAL translation said (before your edit) using this format:
+[[ORIGINAL: original phrase]]improved phrase
 
-This allows the author to see exactly what was changed.
+This way the author sees:
+- Yellow highlighted text = what the first translation said
+- Clean text after it = your improved version (what will be published)
 
-Respond with the full edited translation with highlights.`,
+Example:
+[[ORIGINAL: El hombre caminó rápido]]El hombre avanzó con paso veloz
+
+Only highlight phrases you actually changed. Do not highlight text you kept the same.
+
+PRESERVE ALL FORMATTING from the translation (paragraph breaks, chapters, etc.)
+
+Respond with the full improved translation with highlights showing original phrases that were changed.`,
             },
           ],
         })
@@ -215,7 +241,10 @@ Respond with the full edited translation with highlights.`,
             
             <div style="background: #fef3c7; padding: 15px; border-radius: 8px; margin: 20px 0;">
               <p style="margin: 0; color: #92400e;">
-                <strong>📝 Review your changes:</strong> Editorial improvements are highlighted in yellow in your documents. Review each change to ensure it matches your vision.
+                <strong>📝 How to review your translations:</strong><br><br>
+                Text highlighted in yellow shows the <em>original</em> translation before our editorial improvements. 
+                The clean text that follows is the improved version ready for publishing.<br><br>
+                Simply delete the yellow highlighted portions to get your final, polished translation.
               </p>
             </div>
             

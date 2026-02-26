@@ -21,7 +21,7 @@ export async function POST(request: NextRequest) {
       textContent = await file.text()
     } else if (fileExtension === 'docx') {
       const arrayBuffer = await file.arrayBuffer()
-const result = await mammoth.extractRawText({ buffer: Buffer.from(arrayBuffer) })
+      const result = await mammoth.extractRawText({ arrayBuffer: Buffer.from(arrayBuffer) })
       textContent = result.value
     } else if (fileExtension === 'epub') {
       // For EPUB, we'll store the raw file and process server-side
