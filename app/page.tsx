@@ -2,7 +2,6 @@
 
 import { useState, useCallback } from 'react'
 import Image from 'next/image'
-import FAQ from '@/components/FAQ'
 
 // Updated pricing tiers
 const WORD_TIERS = {
@@ -85,6 +84,10 @@ export default function Home() {
   const [isProcessing, setIsProcessing] = useState(false)
   const [checkoutStep, setCheckoutStep] = useState(1)
   const [dragActive, setDragActive] = useState(false)
+  const [voucherCode, setVoucherCode] = useState('')
+  const [voucherApplied, setVoucherApplied] = useState<{ code: string; discount: number; type: string; discountAmount: string } | null>(null)
+  const [voucherError, setVoucherError] = useState('')
+  const [voucherLoading, setVoucherLoading] = useState(false)
 
   const determineTier = (words: number): 'small' | 'medium' | 'large' => {
     if (words <= 30000) return 'small'
@@ -116,6 +119,59 @@ export default function Home() {
     const translationCost = parseFloat(calculatePrice(selectedTier, selectedLanguages.length))
     const upsellCost = calculateUpsellTotal()
     return (translationCost + upsellCost).toFixed(2)
+  }
+
+  const calculateFinalTotal = () => {
+    const subtotal = parseFloat(calculateTotal())
+    if (voucherApplied) {
+      const discountAmount = parseFloat(voucherApplied.discountAmount)
+      return Math.max(subtotal - discountAmount, 1).toFixed(2)
+    }
+    return subtotal.toFixed(2)
+  }
+
+  const applyVoucher = async () => {
+    if (!voucherCode.trim()) return
+    
+    setVoucherLoading(true)
+    setVoucherError('')
+    
+    try {
+      const response = await fetch('/api/validate-voucher', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          code: voucherCode, 
+          subtotal: parseFloat(calculateTotal()) 
+        }),
+      })
+      
+      const result = await response.json()
+      
+      if (result.valid) {
+        setVoucherApplied({
+          code: result.code,
+          discount: result.discount,
+          type: result.type,
+          discountAmount: result.discountAmount,
+        })
+        setVoucherError('')
+      } else {
+        setVoucherError(result.error || 'Invalid voucher code')
+        setVoucherApplied(null)
+      }
+    } catch (error) {
+      setVoucherError('Failed to validate voucher')
+      setVoucherApplied(null)
+    }
+    
+    setVoucherLoading(false)
+  }
+
+  const removeVoucher = () => {
+    setVoucherApplied(null)
+    setVoucherCode('')
+    setVoucherError('')
   }
 
   const toggleLanguage = (code: string) => {
@@ -196,6 +252,7 @@ export default function Home() {
           selectedUpsells,
           specialInstructions,
           totalAmount: calculateTotal(),
+          voucherCode: voucherApplied?.code || '',
         }),
       })
 
@@ -466,7 +523,6 @@ export default function Home() {
           </div>
         </section>
 
-        <FAQ />
         {/* Footer */}
         <footer className="bg-gray-900 text-gray-400 py-12">
           <div className="max-w-7xl mx-auto px-8 text-center">
@@ -881,10 +937,58 @@ export default function Home() {
                         <span className="font-medium">${calculateUpsellTotal()}</span>
                       </div>
                     )}
+                    {voucherApplied && (
+                      <div className="flex justify-between text-green-600">
+                        <span className="flex items-center gap-2">
+                          Voucher ({voucherApplied.code})
+                          <button onClick={removeVoucher} className="text-red-500 hover:text-red-700 text-xs">✕</button>
+                        </span>
+                        <span className="font-medium">-${voucherApplied.discountAmount}</span>
+                      </div>
+                    )}
                     <div className="border-t border-gray-200 pt-3 flex justify-between">
                       <span className="text-lg font-bold text-gray-900">Total</span>
-                      <span className="text-2xl font-bold text-violet-600">${calculateTotal()}</span>
+                      <div className="text-right">
+                        {voucherApplied && (
+                          <span className="text-gray-400 line-through text-sm mr-2">${calculateTotal()}</span>
+                        )}
+                        <span className="text-2xl font-bold text-violet-600">${calculateFinalTotal()}</span>
+                      </div>
                     </div>
+                  </div>
+
+                  {/* Voucher Code Input */}
+                  <div className="mb-4">
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Voucher Code</label>
+                    {!voucherApplied ? (
+                      <div className="flex gap-2">
+                        <input
+                          type="text"
+                          value={voucherCode}
+                          onChange={(e) => setVoucherCode(e.target.value.toUpperCase())}
+                          placeholder="Enter code"
+                          className="flex-1 px-3 py-2 rounded-xl border border-gray-200 focus:border-violet-400 outline-none text-sm"
+                        />
+                        <button
+                          onClick={applyVoucher}
+                          disabled={voucherLoading || !voucherCode.trim()}
+                          className="px-4 py-2 bg-violet-100 text-violet-700 rounded-xl font-medium text-sm hover:bg-violet-200 disabled:opacity-50"
+                        >
+                          {voucherLoading ? '...' : 'Apply'}
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="flex items-center gap-2 px-3 py-2 bg-green-50 rounded-xl border border-green-200">
+                        <span className="text-green-600">✓</span>
+                        <span className="text-green-700 font-medium">{voucherApplied.code}</span>
+                        <span className="text-green-600 text-sm">
+                          ({voucherApplied.type === 'percent' ? `${voucherApplied.discount}% off` : `$${voucherApplied.discount} off`})
+                        </span>
+                      </div>
+                    )}
+                    {voucherError && (
+                      <p className="text-red-500 text-sm mt-1">{voucherError}</p>
+                    )}
                   </div>
 
                   <button
@@ -892,7 +996,7 @@ export default function Home() {
                     disabled={isProcessing}
                     className="w-full py-4 bg-gradient-to-r from-blue-600 to-violet-600 text-white rounded-2xl font-bold text-lg shadow-xl hover:shadow-2xl transition-all mb-4 disabled:opacity-50"
                   >
-                    {isProcessing ? 'Processing...' : `Pay $${calculateTotal()} →`}
+                    {isProcessing ? 'Processing...' : `Pay $${calculateFinalTotal()} →`}
                   </button>
 
                   <button
