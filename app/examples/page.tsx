@@ -453,22 +453,71 @@ function LaunchPackTab() {
     {
       number: '4',
       title: 'Review Strategy',
-      subtitle: 'Pre-launch & launch',
+      subtitle: 'Pre-launch, launch & beyond',
       icon: '⭐',
       content: (
-        <ul className="space-y-2 mt-3">
-          {[
-            'Target ARC readers in Spanish BookTok communities',
-            'Approach Spanish gothic/horror book clubs on Instagram',
-            'Submit to Spanish literary review blogs (El Rincón del Lector, etc.)',
-            'Highlight the "Translated with editorial review" angle as authenticity signal',
-          ].map((item, i) => (
-            <li key={i} className="flex items-start gap-2 text-[15px] text-gray-700">
-              <span className="w-1.5 h-1.5 bg-violet-500 rounded-full mt-2 flex-shrink-0" />
-              {item}
-            </li>
-          ))}
-        </ul>
+        <div className="mt-3 space-y-4">
+          {/* Phase 1 */}
+          <div>
+            <div className="flex items-center gap-2 mb-2">
+              <span className="px-2 py-0.5 bg-blue-100 text-blue-700 text-xs font-bold rounded-full">4 WEEKS BEFORE</span>
+              <span className="text-xs text-gray-500 font-medium">Build your ARC team</span>
+            </div>
+            <ul className="space-y-1.5">
+              {[
+                'Post in Spanish-language Facebook groups: "Lectores de Terror" (12k members), "Amantes del Horror" (8k members)',
+                'Reach out to BookTok creators in Spain & Latin America with 5k–50k followers — offer a free copy in exchange for an honest video review',
+                'Submit to Spanish literary ARC services: NetGalley España, Leer en español',
+                'Email 10–15 Spanish gothic/horror bloggers directly — subject line: "ARC request: classic horror, newly translated with editorial review"',
+              ].map((item, i) => (
+                <li key={i} className="flex items-start gap-2 text-[13px] text-gray-700">
+                  <span className="w-1.5 h-1.5 bg-blue-400 rounded-full mt-1.5 flex-shrink-0" />
+                  {item}
+                </li>
+              ))}
+            </ul>
+          </div>
+          {/* Phase 2 */}
+          <div>
+            <div className="flex items-center gap-2 mb-2">
+              <span className="px-2 py-0.5 bg-violet-100 text-violet-700 text-xs font-bold rounded-full">LAUNCH WEEK</span>
+              <span className="text-xs text-gray-500 font-medium">Drive the first 10 reviews</span>
+            </div>
+            <ul className="space-y-1.5">
+              {[
+                'Use your authenticity angle: "Professionally translated with editorial review — not machine translation" in all outreach',
+                'Post your Translation Notes as social content — showing the editorial decisions builds instant credibility',
+                'Run a 48-hour launch price of €0.99 to spike the Amazon.es bestseller rank in the Horror > Vampires category',
+                'Ask your English-language ARC readers to also leave reviews on Amazon.es if they read Spanish',
+              ].map((item, i) => (
+                <li key={i} className="flex items-start gap-2 text-[13px] text-gray-700">
+                  <span className="w-1.5 h-1.5 bg-violet-400 rounded-full mt-1.5 flex-shrink-0" />
+                  {item}
+                </li>
+              ))}
+            </ul>
+          </div>
+          {/* Phase 3 */}
+          <div>
+            <div className="flex items-center gap-2 mb-2">
+              <span className="px-2 py-0.5 bg-green-100 text-green-700 text-xs font-bold rounded-full">ONGOING</span>
+              <span className="text-xs text-gray-500 font-medium">Sustain momentum</span>
+            </div>
+            <ul className="space-y-1.5">
+              {[
+                'Submit to Spanish book review blogs: El Rincón del Lector, Dentro del Libro, Gracias por los Libros',
+                'Target Latin American markets separately — Argentina, Mexico, Colombia are your biggest Spanish-language Amazon markets',
+                'Add "Translated Edition" badge to your English listing — cross-promote to English readers who speak Spanish',
+                'Aim for 15+ reviews before running Amazon Ads — reviews dramatically lower your cost-per-click',
+              ].map((item, i) => (
+                <li key={i} className="flex items-start gap-2 text-[13px] text-gray-700">
+                  <span className="w-1.5 h-1.5 bg-green-400 rounded-full mt-1.5 flex-shrink-0" />
+                  {item}
+                </li>
+              ))}
+            </ul>
+          </div>
+        </div>
       ),
     },
     {
