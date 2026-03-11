@@ -54,6 +54,7 @@ export async function POST(request: NextRequest) {
       selectedUpsells,
       totalAmount,
       voucherCode,
+      sessionId,
     } = body
     
     // Calculate discount if voucher provided
@@ -106,6 +107,7 @@ export async function POST(request: NextRequest) {
         originalAmount: totalAmount,
         voucherCode: appliedVoucher || '',
         finalAmount: finalAmount.toString(),
+        sessionId: sessionId || '',
       },
     })
 

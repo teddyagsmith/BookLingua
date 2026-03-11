@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useRef } from 'react'
 import Image from 'next/image'
 
 // Updated pricing tiers
@@ -88,6 +88,9 @@ export default function Home() {
   const [voucherApplied, setVoucherApplied] = useState<{ code: string; discount: number; type: string; discountAmount: string } | null>(null)
   const [voucherError, setVoucherError] = useState('')
   const [voucherLoading, setVoucherLoading] = useState(false)
+  const sessionIdRef = useRef<string>(crypto.randomUUID())
+  const [uploadComplete, setUploadComplete] = useState(false)
+  const [uploadError, setUploadError] = useState('')
 
   const determineTier = (words: number): 'small' | 'medium' | 'large' => {
     if (words <= 30000) return 'small'
@@ -214,6 +217,8 @@ export default function Home() {
       setFileFormat(ext)
       setUploadedFile(file)
       setIsProcessing(true)
+      setUploadComplete(false)
+      setUploadError('')
 
       let words = 0
 
@@ -229,11 +234,36 @@ export default function Home() {
       
       const titleFromFile = file.name.replace(/\.[^/.]+$/, '').replace(/_/g, ' ')
       setBookTitle(titleFromFile)
+
+      // Upload file to server so it's available after payment
+      try {
+        const formData = new FormData()
+        formData.append('file', file)
+        formData.append('sessionId', sessionIdRef.current)
+
+        const res = await fetch('/api/upload', { method: 'POST', body: formData })
+        if (!res.ok) throw new Error('Upload failed')
+        const result = await res.json()
+        // Use server-calculated word count for txt/docx (more accurate)
+        if (result.wordCount && (ext === '.txt' || ext === '.docx')) {
+          setWordCount(result.wordCount)
+          setSelectedTier(determineTier(result.wordCount))
+        }
+        setUploadComplete(true)
+      } catch (err) {
+        console.error('File upload error:', err)
+        setUploadError('File upload failed. Please try again.')
+      }
+
       setIsProcessing(false)
     }
   }, [])
 
   const handleCheckout = async () => {
+    if (!uploadComplete) {
+      alert('Please wait for your file to finish uploading before proceeding.')
+      return
+    }
     setIsProcessing(true)
     
     try {
@@ -253,10 +283,12 @@ export default function Home() {
           specialInstructions,
           totalAmount: calculateTotal(),
           voucherCode: voucherApplied?.code || '',
+          sessionId: sessionIdRef.current,
         }),
       })
 
-      const { url } = await response.json()
+      const { url, error } = await response.json()
+      if (error) throw new Error(error)
       window.location.href = url
     } catch (error) {
       console.error('Checkout error:', error)
@@ -640,7 +672,7 @@ export default function Home() {
                         </div>
                       </div>
                       <button
-                        onClick={() => { setUploadedFile(null); setWordCount(0); setSelectedTier(null) }}
+                        onClick={() => { setUploadedFile(null); setWordCount(0); setSelectedTier(null); setUploadComplete(false); setUploadError(''); sessionIdRef.current = crypto.randomUUID() }}
                         className="text-gray-400 hover:text-red-500 transition"
                       >
                         ✕
@@ -695,11 +727,29 @@ export default function Home() {
                       />
                     </div>
 
+                    {/* Upload status indicator */}
+                    {!uploadComplete && !uploadError && (
+                      <div className="flex items-center gap-2 text-sm text-blue-600 mb-4 px-1">
+                        <div className="w-4 h-4 border-2 border-blue-400 border-t-blue-600 rounded-full animate-spin" />
+                        Uploading your file securely…
+                      </div>
+                    )}
+                    {uploadComplete && (
+                      <div className="flex items-center gap-2 text-sm text-green-600 mb-4 px-1">
+                        <span>✓</span> File uploaded securely
+                      </div>
+                    )}
+                    {uploadError && (
+                      <div className="flex items-center gap-2 text-sm text-red-600 mb-4 px-1">
+                        <span>✕</span> {uploadError}
+                      </div>
+                    )}
+
                     <button
                       onClick={() => setCheckoutStep(2)}
-                      disabled={!email || !bookTitle}
+                      disabled={!email || !bookTitle || !uploadComplete}
                       className={`w-full py-4 rounded-2xl font-bold text-lg transition-all ${
-                        email && bookTitle
+                        email && bookTitle && uploadComplete
                           ? 'bg-gradient-to-r from-blue-600 to-violet-600 text-white shadow-xl hover:shadow-2xl'
                           : 'bg-gray-200 text-gray-400 cursor-not-allowed'
                       }`}

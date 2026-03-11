@@ -40,6 +40,7 @@ export async function POST(request: NextRequest) {
       selectedGenre,
       selectedUpsells,
       specialInstructions,
+      sessionId,
     } = session.metadata!
 
     const customerEmail = session.customer_email!
@@ -72,7 +73,29 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Failed to create order' }, { status: 500 })
     }
 
-    // 2. Send confirmation email to customer
+    // 2. Link uploaded file from temp_uploads to the order's files table
+    if (sessionId) {
+      const { data: tempUpload } = await supabaseAdmin
+        .from('temp_uploads')
+        .select('*')
+        .eq('session_id', sessionId)
+        .single()
+
+      if (tempUpload) {
+        await supabaseAdmin.from('files').insert({
+          order_id: order.id,
+          type: 'original',
+          language: 'en',
+          content: tempUpload.content,
+        })
+        // Clean up temp upload
+        await supabaseAdmin.from('temp_uploads').delete().eq('session_id', sessionId)
+      } else {
+        console.error(`No temp upload found for sessionId: ${sessionId}`)
+      }
+    }
+
+    // 3. Send confirmation email to customer
     await resend.emails.send({
       from: 'BookLingua <orders@booklingua.com>',
       to: customerEmail,
@@ -108,7 +131,7 @@ export async function POST(request: NextRequest) {
       `,
     })
 
-    // 3. Send notification to admin
+    // 4. Send notification to admin
     await resend.emails.send({
       from: 'BookLingua <orders@booklingua.com>',
       to: process.env.ADMIN_EMAIL!,
@@ -130,7 +153,7 @@ export async function POST(request: NextRequest) {
       `,
     })
 
-    // 4. Trigger automatic translation via Inngest
+    // 5. Trigger automatic translation via Inngest
     await inngest.send({
       name: 'book/translate.requested',
       data: {
