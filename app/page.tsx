@@ -465,7 +465,7 @@ export default function Home() {
                     </div>
                     <div>
                       <h3 className="font-bold text-gray-900" style={serifFont}>The Art of Clear Thinking</h3>
-                      <p className="text-sm text-gray-500">65,000 words • EPUB</p>
+                      <p className="text-sm text-gray-500">65,000 words · Non-Fiction · EPUB</p>
                     </div>
                   </div>
 
@@ -479,13 +479,19 @@ export default function Home() {
                   </div>
 
                   <div className="flex justify-between items-center py-3 border-t border-gray-100">
-                    <span className="text-gray-600">Translation + Editorial</span>
-                    <span className="font-bold text-2xl text-violet-600">$882</span>
+                    <div>
+                      <span className="text-gray-600 text-sm block">Translation + Editorial Review</span>
+                      <span className="text-xs text-green-600 font-medium">37% bundle discount applied · Save $221</span>
+                    </div>
+                    <div className="text-right">
+                      <span className="font-bold text-2xl text-violet-600">$375</span>
+                      <span className="text-xs text-gray-400 line-through block">$596</span>
+                    </div>
                   </div>
 
                   <div className="bg-green-50 rounded-xl p-4 border border-green-200 mt-4">
-                    <div className="flex items-center gap-2 text-green-700 font-medium">
-                      <span>✓</span> Formatting preserved • Changes highlighted
+                    <div className="flex items-center gap-2 text-green-700 font-medium text-sm">
+                      <span>✓</span> Formatting preserved · Changes highlighted · vs $8,000+ with a human translator
                     </div>
                   </div>
                 </div>
