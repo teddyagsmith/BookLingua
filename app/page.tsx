@@ -24,7 +24,7 @@ const CORE_LANGUAGES = [
   { code: 'pt', name: 'Portuguese', flag: '🇵🇹', market: '250M+ speakers' },
 ]
 
-const UPSELLS = [
+const UPSELLS: Array<{id: string; name: string; price: number; description: string; icon: string; popular?: boolean; perLanguage?: boolean; details?: string[]; priceAll?: number; savings?: string; originalPrice?: number}> = [
   { 
     id: 'launch-pack', 
     name: 'Launch Strategy Pack', 
@@ -1178,9 +1178,9 @@ export default function Home() {
                                   Recommended
                                 </span>
                               )}
-                              {'savings' in upsell && upsell.savings && (
+                              {upsell.savings && (
                                 <span className="px-2 py-0.5 bg-green-100 text-green-700 text-xs font-semibold rounded-full">
-                                  {upsell.savings as string}
+                                  {upsell.savings}
                                 </span>
                               )}
                             </div>
@@ -1203,7 +1203,7 @@ export default function Home() {
                             ) : (
                               <div>
                                 <p className="text-xl font-bold text-gray-900">${upsell.price}</p>
-                                {'originalPrice' in upsell && upsell.originalPrice && (
+                                {upsell.originalPrice && (
                                   <p className="text-xs text-gray-400 line-through">${upsell.originalPrice}</p>
                                 )}
                               </div>
