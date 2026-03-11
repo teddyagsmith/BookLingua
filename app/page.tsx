@@ -36,15 +36,6 @@ const UPSELLS: Array<{id: string; name: string; price: number; description: stri
     perLanguage: true,
     details: ['7 backend keywords per market', 'Ad targeting keywords', 'Category recommendations', 'Review strategy guide', 'KDP upload checklist'],
   },
-  { 
-    id: 'newsletter', 
-    name: 'Romance Reader Newsletter Feature', 
-    price: 69,
-    originalPrice: 90,
-    description: 'Get featured in our romance reader newsletter — 20,000+ engaged romance readers. English language audience.', 
-    icon: '📧',
-    details: ['Dedicated feature in next available issue', 'Your book cover + blurb + buy link', '20,000+ romance readers', 'English language newsletter'],
-  },
 ]
 
 const BOOK_GENRES = [
@@ -184,6 +175,7 @@ export default function Home() {
 
   const calculateUpsellTotal = () => {
     return selectedUpsells.reduce((total, id) => {
+      if (id === 'mrr-shoutout') return total + 69
       const upsell = UPSELLS.find(u => u.id === id)
       if (!upsell) return total
       if (upsell.id === 'launch-pack') {
@@ -1213,6 +1205,38 @@ export default function Home() {
                       </button>
                     ))}
                   </div>
+
+                  {/* MRR Romance Reader Promo — shows for romance/erotica only */}
+                  {(selectedGenre === 'Romance' || selectedGenre === 'Erotica' || heatLevel) && (
+                    <div className="mt-4 rounded-2xl border-2 border-pink-200 bg-gradient-to-br from-pink-50 to-rose-50 p-5">
+                      <div className="flex items-start gap-3">
+                        <span className="text-2xl">🌶️</span>
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2 mb-1">
+                            <h4 className="font-bold text-gray-900 text-sm">Romance Reader Shoutout</h4>
+                            <span className="px-2 py-0.5 bg-pink-100 text-pink-700 text-xs font-semibold rounded-full">Romance Special</span>
+                          </div>
+                          <p className="text-xs text-gray-600 mb-3">Get your translated romance featured to 20,000+ romance readers. English-language audience. Perfect for building your international reader base.</p>
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-2">
+                              <span className="text-lg font-bold text-gray-900">$69</span>
+                              <span className="text-xs text-gray-400 line-through">$90</span>
+                            </div>
+                            <button
+                              onClick={() => toggleUpsell('mrr-shoutout')}
+                              className={`px-4 py-2 rounded-xl text-sm font-semibold transition-all ${
+                                selectedUpsells.includes('mrr-shoutout')
+                                  ? 'bg-pink-500 text-white'
+                                  : 'bg-white border-2 border-pink-300 text-pink-700 hover:bg-pink-50'
+                              }`}
+                            >
+                              {selectedUpsells.includes('mrr-shoutout') ? '✓ Added' : '+ Add'}
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
 
