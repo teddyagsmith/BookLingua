@@ -121,19 +121,6 @@ const SUPPORTED_FORMATS = [
   { ext: '.txt', name: 'TXT', icon: '📃', desc: 'Plain text' },
 ]
 
-const GENRE_INSTRUCTION_TIPS: Record<string, string[]> = {
-  Romance: ['Keep pet names between characters exactly as written', 'Preserve all terms of endearment in English', 'Use "member" consistently — do not vary intimate terminology'],
-  Erotica: ['Translate explicit content fully — do not soften or censor', 'Keep intimate terminology consistent throughout'],
-  very_steamy: ['Match the heat and explicitness of intimate scenes exactly', 'Keep intimate slang consistent — pick one word and use it throughout'],
-  Fantasy: ['Do NOT translate invented words (add them here): e.g. Aethermoor, Expelliarmus…', 'Preserve archaic speech (thee/thou) for characters who use it', 'Keep all spell names, magic terms, and place names exactly as written'],
-  Thriller: ['Keep American legal terms (DA, Miranda, precinct) — do not replace with local equivalents', 'Preserve law enforcement brands (FBI, SWAT, 911) as American', 'Keep all weapon names in standard form'],
-  'Sci-Fi': ['Do NOT translate invented terms (list them here): e.g. warp drive, Klingon…', 'Keep all ship names, alien species, and planet names exactly as written'],
-  Historical: ['Use place names contemporary to the era depicted', 'Preserve period-appropriate titles and honorifics'],
-  'Children\'s': ['Recreate rhymes and wordplay in the spirit of the original — do not translate literally', 'Keep character names exactly as written'],
-  Literary: ['Preserve all intentional stylistic choices — fragments, unusual punctuation, run-on sentences', 'Recreate wordplay and alliteration in the spirit of the original'],
-  'Non-Fiction': ['Keep all Latin terms as Latin (et al., ibid., in vitro, etc.)', 'Preserve all citations and bibliography references exactly', 'Convert imperial measurements to metric for EU audience'],
-}
-
 // Logo component
 const Logo = ({ size = 'md' }: { size?: 'sm' | 'md' | 'lg' }) => {
   const sizes = { sm: 32, md: 48, lg: 64 }

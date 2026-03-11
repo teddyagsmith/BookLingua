@@ -99,26 +99,6 @@ const HEAT_LEVEL_NOTES: Record<string, string> = {
 
 const SETTING_NOTES: Record<string, string> = {
   usa: `SETTING: This book is set in the United States of America.
-CRITICAL: Translate the words into the target language but do NOT relocate the story culturally. The story is American — keep it American.
-- Legal: DA, District Attorney, Miranda rights, First/Second Degree, public defender → keep as American terms (you may add a brief parenthetical on first use, e.g. "DA (Staatsanwalt/District Attorney)")
-- Law enforcement: FBI, precinct, Sheriff, SWAT, 911 → keep as American
-- Culture: American holidays, food, dollar currency, place names → preserve as American
-- Do NOT replace American references with target-country equivalents`,
-
-  uk: `SETTING: This book is set in the United Kingdom.
-Translate the words but preserve British authenticity:
-- Legal/police: barrister, solicitor, CPS, PC, DCI, magistrate → keep British
-- Culture: NHS, pub, British holidays, £ currency, British place names → keep British`,
-
-  fantasy_world: `SETTING: This book is set in a fictional/fantasy world.
-Do not map any cultural reference to a real-world country. All invented institutions, laws, currency, and cultural references are part of the fantasy world — keep them as-is.`,
-
-  historical: `SETTING: This book is set in a historical period.
-Use era-appropriate place names and terminology. Do NOT modernise historical references.`,
-}
-
-const SETTING_NOTES: Record<string, string> = {
-  usa: `SETTING: This book is set in the United States of America.
 CRITICAL: Preserve American cultural authenticity. Translate words into the target language but do NOT relocate the story culturally. Keep American institutions, legal terms, and cultural references as American:
 - Legal: DA (District Attorney), Miranda rights, First/Second Degree, public defender, etc. → keep these as American terms; you may add a brief parenthetical if helpful (e.g. "DA (Staatsanwalt)")
 - Law enforcement: FBI, precinct, Sheriff, SWAT, 911 → keep as American
