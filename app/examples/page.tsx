@@ -56,6 +56,7 @@ const originalText = [
 ]
 
 type LangCode = 'es' | 'fr' | 'de' | 'pt'
+type ActiveTab = LangCode | 'notes' | 'launch'
 
 interface TranslationSegment {
   id: number
@@ -286,10 +287,282 @@ const LANGUAGES = [
   { code: 'pt' as LangCode, label: 'PT', name: 'Portuguese', flag: '🇵🇹' },
 ]
 
+const translationNoteRows = [
+  {
+    original: '"The DA\'s office called"',
+    translated: '"La oficina del fiscal llamó"',
+    decision: "DA kept as 'fiscal' (District Attorney equivalent in Spain) rather than 'DA' — book is set in New York but using established Spanish legal term aids comprehension without relocating the story",
+  },
+  {
+    original: '"She grabbed her piece from the holster"',
+    translated: '"Sacó su arma de la funda"',
+    decision: "'piece' (slang for gun) → 'arma' — direct slang equivalent doesn't exist in Spanish; 'arma' preserves the casual register without sounding clinical",
+  },
+  {
+    original: '"The precinct was buzzing"',
+    translated: '"La comisaría zumbaba de actividad"',
+    decision: "'precinct' → 'comisaría' — standard Spanish equivalent; added 'de actividad' to preserve the idiomatic energy of 'buzzing'",
+  },
+  {
+    original: '"He was read his Miranda rights"',
+    translated: '"Le leyeron sus derechos Miranda"',
+    decision: "Kept as 'derechos Miranda' — internationally recognised term; translating would obscure the American legal context",
+  },
+  {
+    original: '"The perp walked in cuffed"',
+    translated: '"El sospechoso entró esposado"',
+    decision: "'perp' (police slang) → 'sospechoso' — no direct Spanish slang equivalent; formal term chosen to match Spanish police procedural convention",
+  },
+  {
+    original: '"Off-duty cop at a diner"',
+    translated: '"Un policía fuera de servicio en una cafetería"',
+    decision: "'diner' → 'cafetería' — closest Spanish cultural equivalent for an American diner atmosphere",
+  },
+]
+
+function TranslationNotesTab() {
+  return (
+    <div className="max-w-5xl mx-auto">
+      {/* Header card */}
+      <div className="bg-white rounded-3xl shadow-xl border border-blue-100 overflow-hidden mb-8">
+        <div className="px-6 py-4 bg-gradient-to-r from-blue-50 to-violet-50 border-b border-blue-100 flex items-center gap-4">
+          <div className="w-10 h-12 bg-gradient-to-br from-blue-500 to-violet-600 rounded-lg flex items-center justify-center shadow">
+            <span className="text-white text-xl">📋</span>
+          </div>
+          <div>
+            <h2 className="font-bold text-gray-900 text-lg" style={serifFont}>
+              &ldquo;The Last Precinct&rdquo; by J.K. Harlow — Spanish Translation Notes
+            </h2>
+            <p className="text-sm text-gray-500">Crime thriller · New York setting · ES translation</p>
+          </div>
+        </div>
+        <div className="px-6 py-5">
+          <p className="text-gray-600 text-[15px] leading-relaxed">
+            Every BookLingua translation includes a translator&apos;s notes table documenting key decisions.
+            Here&apos;s a real example from a crime thriller:
+          </p>
+        </div>
+      </div>
+
+      {/* Table */}
+      <div className="bg-white rounded-3xl shadow-xl border border-blue-100 overflow-hidden mb-6">
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="bg-gradient-to-r from-blue-600 to-violet-600 text-white">
+                <th className="text-left px-6 py-4 font-semibold w-[22%]">Original</th>
+                <th className="text-left px-6 py-4 font-semibold w-[22%]">Translated</th>
+                <th className="text-left px-6 py-4 font-semibold">Editorial Decision</th>
+              </tr>
+            </thead>
+            <tbody>
+              {translationNoteRows.map((row, i) => (
+                <tr
+                  key={i}
+                  className={i % 2 === 0 ? 'bg-white' : 'bg-slate-50'}
+                >
+                  <td className="px-6 py-4 align-top">
+                    <span className="font-medium text-gray-800 italic">{row.original}</span>
+                  </td>
+                  <td className="px-6 py-4 align-top" translate="no">
+                    <span className="font-medium text-violet-700 italic">{row.translated}</span>
+                  </td>
+                  <td className="px-6 py-4 align-top text-gray-600 leading-snug">{row.decision}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {/* Footer note */}
+      <div className="flex items-center gap-3 px-6 py-4 bg-gradient-to-r from-violet-50 to-blue-50 rounded-2xl border border-violet-200">
+        <span className="text-violet-600 text-xl flex-shrink-0">✅</span>
+        <p className="text-[15px] text-gray-700 font-medium">
+          Translation notes are included with every BookLingua order — no extra charge.
+        </p>
+      </div>
+    </div>
+  )
+}
+
+function LaunchPackTab() {
+  const sections = [
+    {
+      number: '1',
+      title: 'Amazon Backend Keywords',
+      subtitle: 'Spanish market',
+      icon: '🔑',
+      content: (
+        <ul className="space-y-2 mt-3" translate="no">
+          {['ficción gótica vampiros', 'terror clásico literatura inglesa', 'drácula español traducción', 'horror victoriano novela', 'bram stoker español'].map((kw, i) => (
+            <li key={i} className="flex items-center gap-2 text-[15px] text-gray-700">
+              <span className="w-1.5 h-1.5 bg-blue-500 rounded-full flex-shrink-0" />
+              {kw}
+            </li>
+          ))}
+        </ul>
+      ),
+    },
+    {
+      number: '2',
+      title: 'Ad Targeting Keywords',
+      subtitle: 'PPC & AMS campaigns',
+      icon: '🎯',
+      content: (
+        <div className="mt-3 space-y-3" translate="no">
+          <div>
+            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">Primary</p>
+            <div className="flex flex-wrap gap-2">
+              {['vampiros ficción', 'terror gótico español', 'clásicos literatura inglesa'].map((kw, i) => (
+                <span key={i} className="px-3 py-1 bg-blue-100 text-blue-800 rounded-full text-sm font-medium">{kw}</span>
+              ))}
+            </div>
+          </div>
+          <div>
+            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">Long-tail</p>
+            <div className="flex flex-wrap gap-2">
+              {['novela vampiros adultos', 'terror victoriano español', 'bram stoker libro'].map((kw, i) => (
+                <span key={i} className="px-3 py-1 bg-violet-100 text-violet-800 rounded-full text-sm font-medium">{kw}</span>
+              ))}
+            </div>
+          </div>
+        </div>
+      ),
+    },
+    {
+      number: '3',
+      title: 'Category Recommendations',
+      subtitle: 'KDP browse nodes',
+      icon: '📂',
+      content: (
+        <ul className="space-y-2 mt-3">
+          {[
+            { label: 'Primary', value: 'Libros > Literatura y ficción > Terror > Vampiros' },
+            { label: 'Secondary', value: 'Libros > Clásicos > Literatura inglesa' },
+            { label: 'Browse node suggestion', value: 'Spanish Horror Classics' },
+          ].map((item, i) => (
+            <li key={i} className="flex items-start gap-2 text-[15px] text-gray-700" translate="no">
+              <span className="text-xs font-bold text-gray-400 mt-1 w-28 flex-shrink-0">{item.label}:</span>
+              <span>{item.value}</span>
+            </li>
+          ))}
+        </ul>
+      ),
+    },
+    {
+      number: '4',
+      title: 'Review Strategy',
+      subtitle: 'Pre-launch & launch',
+      icon: '⭐',
+      content: (
+        <ul className="space-y-2 mt-3">
+          {[
+            'Target ARC readers in Spanish BookTok communities',
+            'Approach Spanish gothic/horror book clubs on Instagram',
+            'Submit to Spanish literary review blogs (El Rincón del Lector, etc.)',
+            'Highlight the "Translated with editorial review" angle as authenticity signal',
+          ].map((item, i) => (
+            <li key={i} className="flex items-start gap-2 text-[15px] text-gray-700">
+              <span className="w-1.5 h-1.5 bg-violet-500 rounded-full mt-2 flex-shrink-0" />
+              {item}
+            </li>
+          ))}
+        </ul>
+      ),
+    },
+    {
+      number: '5',
+      title: 'KDP Upload Checklist',
+      subtitle: 'Before you publish',
+      icon: '✅',
+      content: (
+        <ul className="space-y-2 mt-3">
+          {[
+            'Set primary marketplace to Amazon.es',
+            'Use Spanish-language title and subtitle',
+            'Write Spanish product description (500–600 words)',
+            'Select correct Kindle categories for Spanish readers',
+            'Set price to €9.99–€12.99 (Spanish market sweet spot)',
+          ].map((item, i) => (
+            <li key={i} className="flex items-center gap-2 text-[15px] text-gray-700">
+              <span className="text-green-500 flex-shrink-0">✅</span>
+              {item}
+            </li>
+          ))}
+        </ul>
+      ),
+    },
+  ]
+
+  return (
+    <div className="max-w-5xl mx-auto">
+      {/* Intro */}
+      <div className="bg-white rounded-3xl shadow-xl border border-blue-100 overflow-hidden mb-8">
+        <div className="px-6 py-4 bg-gradient-to-r from-blue-50 to-violet-50 border-b border-blue-100 flex items-center gap-4">
+          <div className="w-10 h-12 bg-gradient-to-br from-blue-500 to-violet-600 rounded-lg flex items-center justify-center shadow">
+            <span className="text-white text-xl">🚀</span>
+          </div>
+          <div>
+            <h2 className="font-bold text-gray-900 text-lg" style={serifFont}>
+              Launch Strategy Pack — Sample
+            </h2>
+            <p className="text-sm text-gray-500">Dracula · Spanish translation · Amazon KDP</p>
+          </div>
+        </div>
+        <div className="px-6 py-5">
+          <p className="text-gray-600 text-[15px] leading-relaxed">
+            The Launch Strategy Pack gives you everything you need to publish and promote your translated book on Amazon KDP.
+            Here&apos;s a sample for a Spanish translation:
+          </p>
+        </div>
+      </div>
+
+      {/* Section cards */}
+      <div className="grid sm:grid-cols-2 gap-5 mb-8">
+        {sections.map((section) => (
+          <div key={section.number} className="bg-white rounded-2xl shadow-lg border border-gray-100 overflow-hidden">
+            <div className="px-5 py-4 bg-gradient-to-r from-blue-600 to-violet-600 flex items-center gap-3">
+              <span className="w-7 h-7 bg-white/20 rounded-full flex items-center justify-center text-white text-xs font-bold flex-shrink-0">
+                {section.number}
+              </span>
+              <div>
+                <p className="text-white font-semibold text-sm">{section.icon} {section.title}</p>
+                <p className="text-white/70 text-xs">{section.subtitle}</p>
+              </div>
+            </div>
+            <div className="px-5 py-4">
+              {section.content}
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* CTA */}
+      <div className="bg-gradient-to-r from-blue-600 to-violet-600 rounded-3xl p-8 text-center text-white">
+        <p className="text-xl font-bold mb-2" style={serifFont}>Ready to launch your translation?</p>
+        <p className="text-white/80 mb-6 text-[15px]">
+          Add the Launch Strategy Pack to your translation order for{' '}
+          <span className="font-bold text-white text-lg">$29/language</span>
+        </p>
+        <Link
+          href="/"
+          className="inline-flex items-center gap-2 px-8 py-3.5 bg-white text-violet-700 rounded-2xl font-bold text-base shadow-xl hover:shadow-2xl hover:-translate-y-0.5 transition-all"
+        >
+          <span>Start Translating</span>
+          <span>→</span>
+        </Link>
+      </div>
+    </div>
+  )
+}
+
 export default function ExamplesPage() {
-  const [activeLang, setActiveLang] = useState<LangCode>('es')
+  const [activeTab, setActiveTab] = useState<ActiveTab>('es')
   const [hoveredNote, setHoveredNote] = useState<string | null>(null)
 
+  const isLangTab = activeTab === 'es' || activeTab === 'fr' || activeTab === 'de' || activeTab === 'pt'
+  const activeLang = isLangTab ? (activeTab as LangCode) : 'es'
   const currentTranslation = translations[activeLang]
   const currentLang = LANGUAGES.find(l => l.code === activeLang)!
 
@@ -352,13 +625,13 @@ export default function ExamplesPage() {
       <div className="sticky top-0 z-20 bg-white/90 backdrop-blur-sm border-b border-gray-200 shadow-sm">
         <div className="max-w-7xl mx-auto px-8">
           <div className="flex items-center gap-2 py-4 overflow-x-auto">
-            <span className="text-sm font-medium text-gray-500 mr-2 whitespace-nowrap">Translate to:</span>
+            <span className="text-sm font-medium text-gray-500 mr-2 whitespace-nowrap">Explore:</span>
             {LANGUAGES.map(lang => (
               <button
                 key={lang.code}
-                onClick={() => setActiveLang(lang.code)}
+                onClick={() => setActiveTab(lang.code)}
                 className={`flex items-center gap-2 px-5 py-2.5 rounded-full font-semibold text-sm transition-all whitespace-nowrap ${
-                  activeLang === lang.code
+                  activeTab === lang.code
                     ? 'bg-gradient-to-r from-blue-600 to-violet-600 text-white shadow-md'
                     : 'bg-white border-2 border-gray-200 text-gray-600 hover:border-violet-300'
                 }`}
@@ -366,10 +639,39 @@ export default function ExamplesPage() {
                 <span>{lang.flag}</span>
                 <span>{lang.name}</span>
                 <span className={`text-xs px-1.5 py-0.5 rounded font-bold ${
-                  activeLang === lang.code ? 'bg-white/20 text-white' : 'bg-gray-100 text-gray-500'
+                  activeTab === lang.code ? 'bg-white/20 text-white' : 'bg-gray-100 text-gray-500'
                 }`}>{lang.label}</span>
               </button>
             ))}
+
+            {/* Divider */}
+            <div className="w-px h-8 bg-gray-200 mx-1 flex-shrink-0" />
+
+            {/* Translation Notes tab */}
+            <button
+              onClick={() => setActiveTab('notes')}
+              className={`flex items-center gap-2 px-5 py-2.5 rounded-full font-semibold text-sm transition-all whitespace-nowrap ${
+                activeTab === 'notes'
+                  ? 'bg-gradient-to-r from-blue-600 to-violet-600 text-white shadow-md'
+                  : 'bg-white border-2 border-gray-200 text-gray-600 hover:border-violet-300'
+              }`}
+            >
+              <span>📋</span>
+              <span>Translation Notes</span>
+            </button>
+
+            {/* Launch Pack tab */}
+            <button
+              onClick={() => setActiveTab('launch')}
+              className={`flex items-center gap-2 px-5 py-2.5 rounded-full font-semibold text-sm transition-all whitespace-nowrap ${
+                activeTab === 'launch'
+                  ? 'bg-gradient-to-r from-blue-600 to-violet-600 text-white shadow-md'
+                  : 'bg-white border-2 border-gray-200 text-gray-600 hover:border-violet-300'
+              }`}
+            >
+              <span>🚀</span>
+              <span>Launch Pack</span>
+            </button>
           </div>
         </div>
       </div>
@@ -377,143 +679,154 @@ export default function ExamplesPage() {
       {/* Main Content */}
       <section className="max-w-7xl mx-auto px-8 py-12">
 
-        {/* Source info */}
-        <div className="flex items-center justify-between mb-6">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-12 bg-gradient-to-br from-blue-500 to-violet-600 rounded-lg flex items-center justify-center shadow">
-              <span className="text-white text-xl">📘</span>
-            </div>
-            <div>
-              <h2 className="font-bold text-gray-900" style={serifFont}>Dracula — Chapter I</h2>
-              <p className="text-sm text-gray-500">Bram Stoker, 1897 · Public Domain · ~400 words</p>
-            </div>
-          </div>
-          <div className="hidden md:flex items-center gap-4 text-sm text-gray-500">
-            <span className="flex items-center gap-2">
-              <span className="w-4 h-4 bg-yellow-100 border border-yellow-300 rounded inline-block" />
-              Editorial improvement highlighted
-            </span>
-            <span className="flex items-center gap-1.5 text-xs text-amber-600 bg-amber-50 border border-amber-200 rounded-full px-3 py-1">
-              ⚠️ Disable browser auto-translate to see the full effect
-            </span>
-          </div>
-        </div>
+        {/* ── Translation Notes tab ── */}
+        {activeTab === 'notes' && <TranslationNotesTab />}
 
-        {/* Side-by-side columns */}
-        <div className="grid lg:grid-cols-2 gap-6 mb-8">
-          {/* Original */}
-          <div className="bg-white rounded-3xl shadow-xl border border-blue-100 overflow-hidden">
-            <div className="px-6 py-4 bg-gradient-to-r from-blue-50 to-slate-50 border-b border-blue-100 flex items-center gap-3">
-              <span className="text-lg">🇬🇧</span>
-              <div>
-                <p className="font-bold text-gray-900 text-sm">Original English</p>
-                <p className="text-xs text-gray-500">Source text</p>
-              </div>
-            </div>
-            <div className="p-6 leading-relaxed text-gray-800 space-y-4" style={serifFont}>
-              {originalText.map(para => (
-                <p key={para.id} className="text-[15px] leading-7">{para.text}</p>
-              ))}
-            </div>
-          </div>
+        {/* ── Launch Pack tab ── */}
+        {activeTab === 'launch' && <LaunchPackTab />}
 
-          {/* Translation — translate="no" prevents Chrome/Safari auto-translate */}
-          <div className="bg-white rounded-3xl shadow-xl border border-violet-100 overflow-hidden" translate="no">
-            <div className="px-6 py-4 bg-gradient-to-r from-violet-50 to-blue-50 border-b border-violet-100 flex items-center justify-between">
+        {/* ── Language translation tabs ── */}
+        {isLangTab && (
+          <>
+            {/* Source info */}
+            <div className="flex items-center justify-between mb-6">
               <div className="flex items-center gap-3">
-                <span className="text-lg">{currentLang.flag}</span>
+                <div className="w-10 h-12 bg-gradient-to-br from-blue-500 to-violet-600 rounded-lg flex items-center justify-center shadow">
+                  <span className="text-white text-xl">📘</span>
+                </div>
                 <div>
-                  <p className="font-bold text-gray-900 text-sm">{currentLang.name} Translation</p>
-                  <p className="text-xs text-gray-500">BookLingua · AI + Editorial Review</p>
+                  <h2 className="font-bold text-gray-900" style={serifFont}>Dracula — Chapter I</h2>
+                  <p className="text-sm text-gray-500">Bram Stoker, 1897 · Public Domain · ~400 words</p>
                 </div>
               </div>
-              <div className="flex items-center gap-1.5 px-3 py-1.5 bg-yellow-50 border border-yellow-200 rounded-full">
-                <span className="w-2.5 h-2.5 bg-yellow-300 rounded-sm inline-block" />
-                <span className="text-xs font-medium text-yellow-800">
-                  {currentTranslation.segments.filter(s => s.highlighted).length} edits
+              <div className="hidden md:flex items-center gap-4 text-sm text-gray-500">
+                <span className="flex items-center gap-2">
+                  <span className="w-4 h-4 bg-yellow-100 border border-yellow-300 rounded inline-block" />
+                  Editorial improvement highlighted
+                </span>
+                <span className="flex items-center gap-1.5 text-xs text-amber-600 bg-amber-50 border border-amber-200 rounded-full px-3 py-1">
+                  ⚠️ Disable browser auto-translate to see the full effect
                 </span>
               </div>
             </div>
-            <div className="p-6 leading-relaxed text-gray-800 space-y-4" style={serifFont}>
-              {currentTranslation.segments.map(seg => (
-                <div key={seg.id} className="relative group">
-                  {seg.highlighted ? (
-                    <p className="text-[15px] leading-7">
-                      <span
-                        className="bg-yellow-100 border-b-2 border-yellow-300 rounded-sm px-0.5 cursor-help transition-colors hover:bg-yellow-200"
-                        onMouseEnter={() => setHoveredNote(seg.id.toString())}
-                        onMouseLeave={() => setHoveredNote(null)}
-                      >
-                        {seg.text}
-                      </span>
-                      {hoveredNote === seg.id.toString() && seg.editNote && (
-                        <span className="absolute left-0 top-full mt-1 z-30 w-72 bg-gray-900 text-white text-xs rounded-xl px-3 py-2 shadow-xl leading-snug pointer-events-none">
-                          ✏️ <strong>Editorial note:</strong> {seg.editNote}
-                        </span>
+
+            {/* Side-by-side columns */}
+            <div className="grid lg:grid-cols-2 gap-6 mb-8">
+              {/* Original */}
+              <div className="bg-white rounded-3xl shadow-xl border border-blue-100 overflow-hidden">
+                <div className="px-6 py-4 bg-gradient-to-r from-blue-50 to-slate-50 border-b border-blue-100 flex items-center gap-3">
+                  <span className="text-lg">🇬🇧</span>
+                  <div>
+                    <p className="font-bold text-gray-900 text-sm">Original English</p>
+                    <p className="text-xs text-gray-500">Source text</p>
+                  </div>
+                </div>
+                <div className="p-6 leading-relaxed text-gray-800 space-y-4" style={serifFont}>
+                  {originalText.map(para => (
+                    <p key={para.id} className="text-[15px] leading-7">{para.text}</p>
+                  ))}
+                </div>
+              </div>
+
+              {/* Translation — translate="no" prevents Chrome/Safari auto-translate */}
+              <div className="bg-white rounded-3xl shadow-xl border border-violet-100 overflow-hidden" translate="no">
+                <div className="px-6 py-4 bg-gradient-to-r from-violet-50 to-blue-50 border-b border-violet-100 flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <span className="text-lg">{currentLang.flag}</span>
+                    <div>
+                      <p className="font-bold text-gray-900 text-sm">{currentLang.name} Translation</p>
+                      <p className="text-xs text-gray-500">BookLingua · AI + Editorial Review</p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-1.5 px-3 py-1.5 bg-yellow-50 border border-yellow-200 rounded-full">
+                    <span className="w-2.5 h-2.5 bg-yellow-300 rounded-sm inline-block" />
+                    <span className="text-xs font-medium text-yellow-800">
+                      {currentTranslation.segments.filter(s => s.highlighted).length} edits
+                    </span>
+                  </div>
+                </div>
+                <div className="p-6 leading-relaxed text-gray-800 space-y-4" style={serifFont}>
+                  {currentTranslation.segments.map(seg => (
+                    <div key={seg.id} className="relative group">
+                      {seg.highlighted ? (
+                        <p className="text-[15px] leading-7">
+                          <span
+                            className="bg-yellow-100 border-b-2 border-yellow-300 rounded-sm px-0.5 cursor-help transition-colors hover:bg-yellow-200"
+                            onMouseEnter={() => setHoveredNote(seg.id.toString())}
+                            onMouseLeave={() => setHoveredNote(null)}
+                          >
+                            {seg.text}
+                          </span>
+                          {hoveredNote === seg.id.toString() && seg.editNote && (
+                            <span className="absolute left-0 top-full mt-1 z-30 w-72 bg-gray-900 text-white text-xs rounded-xl px-3 py-2 shadow-xl leading-snug pointer-events-none">
+                              ✏️ <strong>Editorial note:</strong> {seg.editNote}
+                            </span>
+                          )}
+                        </p>
+                      ) : (
+                        <p className="text-[15px] leading-7">{seg.text}</p>
                       )}
-                    </p>
-                  ) : (
-                    <p className="text-[15px] leading-7">{seg.text}</p>
-                  )}
+                    </div>
+                  ))}
                 </div>
-              ))}
+              </div>
             </div>
-          </div>
-        </div>
 
-        {/* Editorial Notes */}
-        <div className="bg-gradient-to-br from-violet-50 to-blue-50 rounded-3xl p-8 border border-violet-200 mb-16">
-          <div className="flex items-center gap-3 mb-5">
-            <div className="w-10 h-10 bg-gradient-to-br from-violet-500 to-blue-600 rounded-xl flex items-center justify-center text-white font-bold text-lg shadow">
-              2
+            {/* Editorial Notes */}
+            <div className="bg-gradient-to-br from-violet-50 to-blue-50 rounded-3xl p-8 border border-violet-200 mb-16">
+              <div className="flex items-center gap-3 mb-5">
+                <div className="w-10 h-10 bg-gradient-to-br from-violet-500 to-blue-600 rounded-xl flex items-center justify-center text-white font-bold text-lg shadow">
+                  2
+                </div>
+                <div>
+                  <h3 className="font-bold text-gray-900" style={serifFont}>What the Editorial Pass Improved</h3>
+                  <p className="text-sm text-gray-500">{currentLang.name} — specific improvements made beyond raw translation</p>
+                </div>
+              </div>
+              <ul className="space-y-3">
+                {currentTranslation.editorialNotes.map((note, i) => (
+                  <li key={i} className="flex items-start gap-3 text-gray-700">
+                    <span className="mt-0.5 flex-shrink-0 w-5 h-5 bg-violet-600 text-white rounded-full text-xs flex items-center justify-center font-bold">
+                      {i + 1}
+                    </span>
+                    <span className="text-[15px] leading-6">{note}</span>
+                  </li>
+                ))}
+              </ul>
             </div>
-            <div>
-              <h3 className="font-bold text-gray-900" style={serifFont}>What the Editorial Pass Improved</h3>
-              <p className="text-sm text-gray-500">{currentLang.name} — specific improvements made beyond raw translation</p>
-            </div>
-          </div>
-          <ul className="space-y-3">
-            {currentTranslation.editorialNotes.map((note, i) => (
-              <li key={i} className="flex items-start gap-3 text-gray-700">
-                <span className="mt-0.5 flex-shrink-0 w-5 h-5 bg-violet-600 text-white rounded-full text-xs flex items-center justify-center font-bold">
-                  {i + 1}
-                </span>
-                <span className="text-[15px] leading-6">{note}</span>
-              </li>
-            ))}
-          </ul>
-        </div>
 
-        {/* Legend */}
-        <div className="bg-white rounded-2xl border border-gray-200 p-6 mb-16 max-w-2xl mx-auto">
-          <h4 className="font-bold text-gray-900 text-center mb-4" style={serifFont}>How to Read the Highlights</h4>
-          <div className="grid sm:grid-cols-2 gap-4 text-sm text-gray-600">
-            <div className="flex items-start gap-3">
-              <span className="bg-yellow-100 border-b-2 border-yellow-300 px-2 py-0.5 rounded text-xs font-medium text-gray-800 whitespace-nowrap mt-0.5">highlighted text</span>
-              <span>This passage was modified by the editorial pass — hover to see the reason</span>
+            {/* Legend */}
+            <div className="bg-white rounded-2xl border border-gray-200 p-6 mb-16 max-w-2xl mx-auto">
+              <h4 className="font-bold text-gray-900 text-center mb-4" style={serifFont}>How to Read the Highlights</h4>
+              <div className="grid sm:grid-cols-2 gap-4 text-sm text-gray-600">
+                <div className="flex items-start gap-3">
+                  <span className="bg-yellow-100 border-b-2 border-yellow-300 px-2 py-0.5 rounded text-xs font-medium text-gray-800 whitespace-nowrap mt-0.5">highlighted text</span>
+                  <span>This passage was modified by the editorial pass — hover to see the reason</span>
+                </div>
+                <div className="flex items-start gap-3">
+                  <span className="bg-white border border-gray-200 px-2 py-0.5 rounded text-xs font-medium text-gray-800 whitespace-nowrap mt-0.5">plain text</span>
+                  <span>Translation pass output accepted as-is — no editorial change needed</span>
+                </div>
+              </div>
             </div>
-            <div className="flex items-start gap-3">
-              <span className="bg-white border border-gray-200 px-2 py-0.5 rounded text-xs font-medium text-gray-800 whitespace-nowrap mt-0.5">plain text</span>
-              <span>Translation pass output accepted as-is — no editorial change needed</span>
-            </div>
-          </div>
-        </div>
 
-        {/* Language switcher teaser */}
-        <div className="text-center mb-20">
-          <p className="text-gray-500 mb-4 text-sm">Switch language to compare translations →</p>
-          <div className="flex items-center justify-center gap-3 flex-wrap">
-            {LANGUAGES.filter(l => l.code !== activeLang).map(lang => (
-              <button
-                key={lang.code}
-                onClick={() => setActiveLang(lang.code)}
-                className="flex items-center gap-2 px-4 py-2 bg-white border-2 border-gray-200 rounded-full text-sm font-medium text-gray-700 hover:border-violet-400 transition-all"
-              >
-                {lang.flag} {lang.name}
-              </button>
-            ))}
-          </div>
-        </div>
+            {/* Language switcher teaser */}
+            <div className="text-center mb-20">
+              <p className="text-gray-500 mb-4 text-sm">Switch language to compare translations →</p>
+              <div className="flex items-center justify-center gap-3 flex-wrap">
+                {LANGUAGES.filter(l => l.code !== activeLang).map(lang => (
+                  <button
+                    key={lang.code}
+                    onClick={() => setActiveTab(lang.code)}
+                    className="flex items-center gap-2 px-4 py-2 bg-white border-2 border-gray-200 rounded-full text-sm font-medium text-gray-700 hover:border-violet-400 transition-all"
+                  >
+                    {lang.flag} {lang.name}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </>
+        )}
 
       </section>
 
