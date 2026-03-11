@@ -5,9 +5,9 @@ import Image from 'next/image'
 
 // Updated pricing tiers
 const WORD_TIERS = {
-  small: { maxWords: 30000, label: 'Up to 30k words', basePrice: 199 },
-  medium: { maxWords: 80000, label: 'Up to 80k words', basePrice: 449 },
-  large: { maxWords: 150000, label: 'Up to 150k words', basePrice: 749 },
+  small: { maxWords: 40000, label: 'Up to 40k words', basePrice: 99 },
+  medium: { maxWords: 80000, label: 'Up to 80k words', basePrice: 149 },
+  large: { maxWords: 150000, label: 'Up to 150k words', basePrice: 199 },
 }
 
 const BUNDLE_DISCOUNTS = {
@@ -307,7 +307,16 @@ export default function Home() {
       <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-violet-50">
         {/* Google Font */}
         <style>{`@import url('https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&display=swap');`}</style>
-        
+
+        {/* Top pricing bar */}
+        <div className="bg-gradient-to-r from-blue-600 to-violet-600 text-white text-sm py-2 px-4 text-center">
+          <span className="font-semibold">From $99 per language</span>
+          <span className="mx-2 opacity-60">·</span>
+          Novellas from $99 · Novels from $149 · Up to 150k words $199
+          <span className="mx-2 opacity-60">·</span>
+          <a href="/examples" className="underline underline-offset-2 hover:opacity-80 font-medium">See examples →</a>
+        </div>
+
         <header className="relative overflow-hidden">
           <div className="absolute inset-0 opacity-30">
             <div className="absolute top-20 left-10 w-72 h-72 bg-blue-200 rounded-full blur-3xl" />
@@ -340,7 +349,7 @@ export default function Home() {
               <div>
                 <div className="inline-flex items-center gap-2 px-4 py-2 bg-white/80 rounded-full text-sm font-medium text-violet-700 mb-8">
                   <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
-                  Trusted by 5,000+ Authors Worldwide
+                  From $99 per language · Editorial review included
                 </div>
 
                 <h1 className="text-6xl font-bold text-gray-900 leading-tight mb-6" style={serifFont}>
@@ -351,7 +360,7 @@ export default function Home() {
                 </h1>
 
                 <p className="text-xl text-gray-600 leading-relaxed mb-10 max-w-lg">
-                  Professional AI translation for indie authors. From $150 per language — vs $5,000–$20,000 with a human agency. Powered by Claude.
+                  Professional AI translation for indie authors. From $99 per language — vs $5,000–$20,000 with a human agency. Two-pass editorial review included.
                 </p>
 
                 <div className="flex flex-wrap gap-3 mb-8">
@@ -362,12 +371,20 @@ export default function Home() {
                   ))}
                 </div>
 
-                <button
-                  onClick={() => setCurrentView('upload')}
-                  className="px-8 py-4 bg-gradient-to-r from-blue-600 to-violet-600 text-white rounded-2xl font-bold text-lg shadow-xl hover:shadow-2xl transition-all hover:-translate-y-1"
-                >
-                  Upload Your Book →
-                </button>
+                <div className="flex flex-wrap gap-4 items-center">
+                  <button
+                    onClick={() => setCurrentView('upload')}
+                    className="px-8 py-4 bg-gradient-to-r from-blue-600 to-violet-600 text-white rounded-2xl font-bold text-lg shadow-xl hover:shadow-2xl transition-all hover:-translate-y-1"
+                  >
+                    Upload Your Book →
+                  </button>
+                  <a
+                    href="/examples"
+                    className="px-8 py-4 bg-white border-2 border-violet-200 text-violet-700 rounded-2xl font-bold text-lg hover:border-violet-400 hover:bg-violet-50 transition-all"
+                  >
+                    See Examples
+                  </a>
+                </div>
               </div>
 
               <div className="relative">
@@ -568,7 +585,7 @@ export default function Home() {
                 ))}
               </div>
               <p className="text-center text-gray-600 mt-6">
-                Example: 80k book → All 4 languages = <span className="font-bold text-violet-600">${(449 * 4 * 0.63).toFixed(0)}</span> <span className="text-gray-400 line-through">${449 * 4}</span>
+                Example: 80k book → All 4 languages = <span className="font-bold text-violet-600">${(149 * 4 * 0.63).toFixed(0)}</span> <span className="text-gray-400 line-through">${149 * 4}</span>
               </p>
             </div>
 
@@ -594,28 +611,39 @@ export default function Home() {
               {[
                 {
                   q: 'Is this better than Google Translate?',
-                  a: 'Yes — significantly. We use Claude (Anthropic\'s most capable AI) with a two-pass editorial review. The first pass translates; the second refines idioms, tone, and cultural context. Changes are highlighted so you can review them.',
+                  a: 'Yes — significantly. BookLingua uses a proprietary two-pass system: the first pass produces a faithful translation; the second is an editorial review that refines idioms, adapts cultural context, and ensures your book reads naturally to native speakers. Every change is highlighted so you stay in control.',
                 },
                 {
                   q: 'What file formats do you support?',
-                  a: 'EPUB, PDF, DOCX, and TXT. We recommend DOCX for best results.',
+                  a: 'EPUB, PDF, DOCX, and TXT. We recommend DOCX for best results — it gives the most accurate word count and preserves formatting perfectly.',
                 },
                 {
                   q: 'How long does translation take?',
-                  a: 'Most books complete within 2–6 hours depending on length. You\'ll get an email when it\'s ready.',
+                  a: 'Most books complete within 2–6 hours depending on length. You\'ll receive an email with your download link as soon as it\'s ready.',
                 },
                 {
-                  q: 'Can I see examples first?',
-                  a: 'Yes — check our Examples page to see real translations of classic literature.',
+                  q: 'Can I see examples before I buy?',
+                  a: 'Absolutely — visit our Examples page to see real side-by-side translations with editorial highlights.',
+                  link: { href: '/examples', label: 'View Examples →' },
                 },
                 {
                   q: 'What if I\'m not happy with the translation?',
                   a: 'Email us within 7 days and we\'ll work with you to make it right.',
                 },
+                {
+                  q: 'Do you offer pricing for publishers with larger catalogues?',
+                  a: 'Yes — if you have 10 or more books, we offer custom bulk pricing and a hands-off pipeline.',
+                  link: { href: '/publishers', label: 'Learn more →' },
+                },
               ].map((item, i) => (
                 <div key={i} className="bg-gradient-to-br from-slate-50 to-blue-50 rounded-2xl p-6 border border-blue-100">
                   <h3 className="text-lg font-bold text-gray-900 mb-3" style={serifFont}>{item.q}</h3>
                   <p className="text-gray-600 leading-relaxed">{item.a}</p>
+                  {'link' in item && item.link && (
+                    <a href={item.link.href} className="inline-block mt-3 text-sm font-semibold text-violet-600 hover:text-violet-800 transition-colors">
+                      {item.link.label}
+                    </a>
+                  )}
                 </div>
               ))}
             </div>
