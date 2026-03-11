@@ -76,6 +76,7 @@ export default function Home() {
   const [selectedTier, setSelectedTier] = useState<'small' | 'medium' | 'large' | null>(null)
   const [selectedLanguages, setSelectedLanguages] = useState<string[]>([])
   const [selectedGenre, setSelectedGenre] = useState('')
+  const [heatLevel, setHeatLevel] = useState<string>('')
   const [selectedUpsells, setSelectedUpsells] = useState<string[]>([])
   const [authorName, setAuthorName] = useState('')
   const [bookTitle, setBookTitle] = useState('')
@@ -279,6 +280,7 @@ export default function Home() {
           fileFormat,
           selectedLanguages,
           selectedGenre,
+          heatLevel,
           selectedUpsells,
           specialInstructions,
           totalAmount: calculateTotal(),
@@ -811,6 +813,36 @@ export default function Home() {
                       </select>
                     </div>
 
+                    {(selectedGenre === 'Romance' || selectedGenre === 'Erotica') && (
+                      <div className="mt-4 mb-6">
+                        <label className="block text-sm font-semibold text-gray-700 mb-2">
+                          Heat Level <span className="text-red-400">*</span>
+                          <span className="ml-2 text-xs font-normal text-gray-500">This helps us match the language register of intimate scenes perfectly</span>
+                        </label>
+                        <div className="grid grid-cols-2 gap-3">
+                          {[
+                            { value: 'sweet', label: '💛 Sweet / Clean', desc: 'No explicit content' },
+                            { value: 'steamy', label: '🌶️ Steamy', desc: 'Suggestive, open door' },
+                            { value: 'very_steamy', label: '🔥 Very Steamy', desc: 'Explicit, erotic language' },
+                            { value: 'erotica', label: '🔥🔥 Erotica', desc: 'Maximum explicit' },
+                          ].map(opt => (
+                            <button
+                              key={opt.value}
+                              onClick={() => setHeatLevel(opt.value)}
+                              className={`p-3 rounded-xl border-2 text-left transition-all ${
+                                heatLevel === opt.value
+                                  ? 'border-violet-500 bg-violet-50'
+                                  : 'border-gray-200 hover:border-violet-300'
+                              }`}
+                            >
+                              <div className="font-semibold text-sm text-gray-900">{opt.label}</div>
+                              <div className="text-xs text-gray-500">{opt.desc}</div>
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
                     <div className="mb-8">
                       <label className="block text-sm font-medium text-gray-700 mb-2">Special Instructions (optional)</label>
                       <textarea
@@ -818,7 +850,7 @@ export default function Home() {
                         onChange={(e) => setSpecialInstructions(e.target.value)}
                         className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:border-violet-400 outline-none resize-none"
                         rows={3}
-                        placeholder="e.g., Keep medical terms in Latin, Use British English, etc."
+                        placeholder="e.g., Keep medical terms in Latin, Use British English, etc. For romance authors: e.g. 'I use the word member throughout — keep consistent in translation'"
                       />
                     </div>
 

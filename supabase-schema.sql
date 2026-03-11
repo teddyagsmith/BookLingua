@@ -13,6 +13,8 @@ CREATE TABLE orders (
   file_format TEXT NOT NULL, -- '.epub', '.pdf', '.docx', '.txt'
   languages JSONB NOT NULL, -- ['es', 'fr', 'de', 'pt']
   genre TEXT,
+  -- heat_level TEXT, -- TODO: add this column via migration: ALTER TABLE orders ADD COLUMN heat_level TEXT;
+  -- heat_level is currently passed through Inngest event data (event.data.heatLevel) rather than stored in DB
   upsells JSONB DEFAULT '[]',
   special_instructions TEXT,
   amount_paid DECIMAL(10,2) NOT NULL,

@@ -26,6 +26,77 @@ const LANGUAGE_SETTINGS: Record<string, string> = {
 
 const MAX_CHUNK_WORDS = 15000
 
+const GENRE_TRANSLATION_NOTES: Record<string, string> = {
+  romance: `GENRE: Romance fiction.
+- Preserve the author's emotional tone and pacing exactly
+- Character names and place names: keep as-is
+- Relationship terms should feel natural and warm in the target language`,
+
+  fantasy: `GENRE: Fantasy fiction.
+- CRITICAL: Preserve ALL invented proper nouns EXACTLY as written — character names, place names, magic words, invented terms, spell names, creature names, world-specific terminology. Do NOT translate or adapt these.
+- Archaic speech patterns ("thee", "thou", "dost") should use equivalent archaic register in the target language, not modern speech
+- Magic system terminology stays untranslated
+- Real-world place names and languages referenced in the story should use standard target-language equivalents`,
+
+  'sci-fi': `GENRE: Science fiction.
+- Preserve ALL invented proper nouns exactly — ship names, alien species, planet names, made-up technology terms
+- Real scientific terminology should use established target-language scientific equivalents, not English
+- Technical neologisms and made-up science terms remain untranslated`,
+
+  thriller: `GENRE: Thriller / Crime fiction.
+- American/British legal and law enforcement terms (DA, First Degree Murder, Miranda rights, SWAT, CID) should be adapted to the nearest cultural equivalent in the target language, or kept in English with contextual framing
+- Police ranks and procedures: adapt to local equivalents where this aids reader comprehension
+- Firearms and weapons terminology: use established target-language equivalents`,
+
+  'non-fiction': `GENRE: Non-fiction.
+- Latin and academic terms universally recognized as Latin (et al., ibid., in vitro, per se, ad hoc, etc.) must remain as Latin — do NOT translate them
+- Statistics and measurements: convert imperial to metric where the target-language audience would expect metric (EU, most non-US markets)
+- All proper names, brand names, and bibliographic references must be preserved exactly
+- Technical terminology should use the established target-language term from academic/professional literature`,
+
+  historical: `GENRE: Historical fiction.
+- Use place names contemporary to the ERA being depicted (e.g. Constantinople for Ottoman-era Istanbul, Persia not Iran for ancient settings)
+- Titles, honorifics, and forms of address should use historically accurate target-language equivalents
+- Match the formality register of the original — a Victorian novel should feel formal, not modern`,
+
+  children: `GENRE: Children's fiction.
+- Vocabulary MUST be age-appropriate in the target language — simple, clear, joyful
+- Rhymes, alliteration, and wordplay CANNOT be literally translated — recreate them in the spirit and feel of the original using target-language sounds and words
+- Cultural references unfamiliar to target-language children should be gently adapted
+- Onomatopoeia should use target-language equivalents (not English sounds)`,
+
+  literary: `GENRE: Literary fiction.
+- Preserve ALL of the author's stylistic choices: intentional sentence fragments, unusual punctuation, stream of consciousness, run-on sentences — these are deliberate, do NOT correct them
+- Wordplay, alliteration, and sound devices must be recreated in the target language in the same spirit
+- Cultural and literary allusions should be preserved; adapt only where a note of clarification serves the reader`,
+
+  general: `Preserve the author's tone, voice, and style throughout. Adapt idioms and expressions to natural equivalents in the target language.`,
+}
+
+const HEAT_LEVEL_NOTES: Record<string, string> = {
+  sweet: `HEAT LEVEL: Sweet/Clean romance.
+- No explicit content. All intimate scenes are "closed door" — fade to black before anything explicit.
+- Use warm, tender, romantic language. No sexual slang or suggestive terms.
+- Body parts referenced only in anatomically neutral terms if at all.`,
+
+  steamy: `HEAT LEVEL: Steamy romance.
+- Open-door intimate scenes with sensual but not explicitly graphic language.
+- Use evocative, sensual language. Mild intimate terms are appropriate where they feel natural.
+- Avoid clinical anatomical terms; equally avoid crude vulgar slang. Aim for "tastefully sensual".`,
+
+  very_steamy: `HEAT LEVEL: Very steamy / Hot romance.
+- Explicit intimate scenes. Language should be erotic and match the heat of the original.
+- IMPORTANT: Do NOT use clinical anatomical terms (vagina, penis, etc.) — these kill the mood. Use equivalent-register erotic slang that feels natural and hot to native readers of the target language.
+- Examples by language: Spanish: coño/polla or regional equivalents; French: chatte/bite; German: Muschi/Schwanz; Portuguese EU: cona/pica; Portuguese BR: buceta/pau
+- Match the author's chosen register exactly — if they use a word 20 times, use its equivalent 20 times.`,
+
+  erotica: `HEAT LEVEL: Erotica — maximum explicit content.
+- Translate with full explicitness matching the original. This is adult content for adult readers.
+- Use the most naturally explicit erotic slang in the target language — clinical terms are wrong, overly crude street slang is wrong. Match the erotic literary register of the original.
+- Examples by language: Spanish: coño/polla/follar; French: chatte/bite/baiser; German: Muschi/Schwanz/ficken; Portuguese EU: cona/pica/foder; Portuguese BR: buceta/pau/foder
+- Consistency is critical: pick the right word and use it throughout.`,
+}
+
 /**
  * Split text into chunks of ~maxWords words, breaking on paragraph boundaries
  * (double newline) to avoid cutting mid-paragraph.
@@ -67,7 +138,7 @@ export const translateBook = inngest.createFunction(
   },
   { event: 'book/translate.requested' },
   async ({ event, step }) => {
-    const { orderId } = event.data
+    const { orderId, heatLevel } = event.data
 
     // Step 1: Get order details from database
     const order = await step.run('get-order', async () => {
@@ -109,6 +180,10 @@ export const translateBook = inngest.createFunction(
     for (const langCode of languages) {
       const langName = LANGUAGE_NAMES[langCode]
       const langSettings = LANGUAGE_SETTINGS[langCode]
+      const genreKey = (order.genre || 'general').toLowerCase().replace(/\s+/g, '-')
+      const genreNotes = GENRE_TRANSLATION_NOTES[genreKey] || GENRE_TRANSLATION_NOTES['general']
+      const heatNotes = heatLevel ? (HEAT_LEVEL_NOTES[heatLevel] || '') : ''
+      const genreGuidance = [genreNotes, heatNotes].filter(Boolean).join('\n\n')
 
       // Split book into chunks for Pass 1
       const textChunks = chunkText(fileContent, MAX_CHUNK_WORDS)
@@ -151,7 +226,8 @@ TRANSLATION GUIDELINES:
 
 BOOK TITLE: ${order.book_title}
 AUTHOR: ${order.author_name}
-GENRE: ${order.genre || 'General'}
+
+${genreGuidance}
 
 ${order.special_instructions ? `AUTHOR'S SPECIAL INSTRUCTIONS:\n${order.special_instructions}\n` : ''}
 
@@ -203,6 +279,9 @@ Then ensure your edits maintain that same tone and voice.
 
 LANGUAGE SETTINGS:
 ${langSettings}
+
+GENRE & STYLE GUIDANCE:
+${genreGuidance}
 
 ORIGINAL ENGLISH (for reference):
 ${origSlice}

@@ -38,6 +38,7 @@ export async function POST(request: NextRequest) {
       fileFormat,
       selectedLanguages,
       selectedGenre,
+      heatLevel,
       selectedUpsells,
       specialInstructions,
       sessionId,
@@ -158,6 +159,7 @@ export async function POST(request: NextRequest) {
       name: 'book/translate.requested',
       data: {
         orderId: order.id,
+        heatLevel: heatLevel || null,
       },
     })
 
