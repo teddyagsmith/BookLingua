@@ -36,9 +36,15 @@ const UPSELLS = [
     perLanguage: true,
     details: ['7 backend keywords per market', 'Ad targeting keywords', 'Category recommendations', 'Review strategy guide', 'KDP upload checklist'],
   },
-  { id: 'newsletter', name: 'Newsletter Feature', price: 99, description: 'Get featured in our weekly newsletter to 50,000+ book lovers', icon: '📧' },
-  { id: 'author-list', name: 'Author Network Blast', price: 149, description: 'Promote your translated book to our network of 5,000+ authors', icon: '👥' },
-  { id: 'full-promo', name: 'Full Promo Package', price: 249, description: 'Newsletter + Author Network + Social media promotion + Blog feature', icon: '⭐', savings: 'Save $98' },
+  { 
+    id: 'newsletter', 
+    name: 'Romance Reader Newsletter Feature', 
+    price: 69,
+    originalPrice: 90,
+    description: 'Get featured in our romance reader newsletter — 20,000+ engaged romance readers. English language audience.', 
+    icon: '📧',
+    details: ['Dedicated feature in next available issue', 'Your book cover + blurb + buy link', '20,000+ romance readers', 'English language newsletter'],
+  },
 ]
 
 const BOOK_GENRES = [
@@ -1195,7 +1201,12 @@ export default function Home() {
                                 {selectedLanguages.length === 1 && <p className="text-xs text-green-600">$49 for 2+</p>}
                               </div>
                             ) : (
-                              <p className="text-xl font-bold text-gray-900">${upsell.price}</p>
+                              <div>
+                                <p className="text-xl font-bold text-gray-900">${upsell.price}</p>
+                                {'originalPrice' in upsell && upsell.originalPrice && (
+                                  <p className="text-xs text-gray-400 line-through">${upsell.originalPrice}</p>
+                                )}
+                              </div>
                             )}
                           </div>
                         </div>
