@@ -179,7 +179,7 @@ export default function PublishersPage() {
           <div className="flex flex-col md:flex-row items-center justify-center gap-8 md:gap-16 text-center">
             <div>
               <div className="text-3xl mb-2">🤖</div>
-              <p className="font-semibold text-gray-800">Powered by Claude (Anthropic)</p>
+              <p className="font-semibold text-gray-800">Proprietary two-pass AI translation</p>
               <p className="text-sm text-gray-500 mt-1">State-of-the-art literary AI</p>
             </div>
             <div className="hidden md:block w-px h-12 bg-gray-200" />
