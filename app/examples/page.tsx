@@ -303,12 +303,17 @@ export default function ExamplesPage() {
           <Logo size="md" />
           <span className="text-2xl font-bold text-gray-800" style={serifFont}>BookLingua</span>
         </Link>
-        <Link
-          href="/"
-          className="px-6 py-2.5 bg-gradient-to-r from-blue-600 to-violet-600 text-white rounded-full font-semibold shadow-lg hover:shadow-xl transition-all"
-        >
-          Start Translating
-        </Link>
+        <div className="flex items-center gap-6">
+          <Link href="/publishers" className="text-gray-600 hover:text-violet-700 font-medium transition-colors hidden sm:block">
+            Publishers
+          </Link>
+          <Link
+            href="/"
+            className="px-6 py-2.5 bg-gradient-to-r from-blue-600 to-violet-600 text-white rounded-full font-semibold shadow-lg hover:shadow-xl transition-all"
+          >
+            Start Translating
+          </Link>
+        </div>
       </nav>
 
       {/* Hero */}

@@ -24,6 +24,40 @@ const LANGUAGE_SETTINGS: Record<string, string> = {
   pt: 'Use Brazilian Portuguese as the default for wider readability.',
 }
 
+const MAX_CHUNK_WORDS = 15000
+
+/**
+ * Split text into chunks of ~maxWords words, breaking on paragraph boundaries
+ * (double newline) to avoid cutting mid-paragraph.
+ */
+function chunkText(text: string, maxWords: number = MAX_CHUNK_WORDS): string[] {
+  const wordCount = text.trim().split(/\s+/).length
+  if (wordCount <= maxWords) return [text]
+
+  const paragraphs = text.split(/\n\n/)
+  const chunks: string[] = []
+  let current: string[] = []
+  let currentWords = 0
+
+  for (const para of paragraphs) {
+    const paraWords = para.trim().split(/\s+/).length
+    if (currentWords + paraWords > maxWords && current.length > 0) {
+      chunks.push(current.join('\n\n'))
+      current = [para]
+      currentWords = paraWords
+    } else {
+      current.push(para)
+      currentWords += paraWords
+    }
+  }
+
+  if (current.length > 0) {
+    chunks.push(current.join('\n\n'))
+  }
+
+  return chunks
+}
+
 // Main translation job - triggered automatically after payment
 export const translateBook = inngest.createFunction(
   { 
@@ -76,17 +110,25 @@ export const translateBook = inngest.createFunction(
       const langName = LANGUAGE_NAMES[langCode]
       const langSettings = LANGUAGE_SETTINGS[langCode]
 
-      // Pass 1: Translation (Sonnet - fast and accurate)
-      const translatedText = await step.run(`translate-${langCode}`, async () => {
-        const response = await anthropic.messages.create({
-          model: 'claude-sonnet-4-20250514',
-          max_tokens: 100000,
-          messages: [
-            {
-              role: 'user',
-              content: `You are a professional literary translator specializing in ${order.genre || 'general'} books.
+      // Split book into chunks for Pass 1
+      const textChunks = chunkText(fileContent, MAX_CHUNK_WORDS)
+      const translatedChunks: string[] = []
 
-Translate the following book into ${langName}.
+      // Pass 1: Translation (Sonnet) — one step per chunk for Inngest retry granularity
+      for (let i = 0; i < textChunks.length; i++) {
+        const chunk = textChunks[i]
+        const chunkLabel = textChunks.length > 1 ? ` (chunk ${i + 1}/${textChunks.length})` : ''
+
+        const translatedChunk = await step.run(`translate-${langCode}-chunk-${i}`, async () => {
+          const response = await anthropic.messages.create({
+            model: 'claude-sonnet-4-20250514',
+            max_tokens: 8000,
+            messages: [
+              {
+                role: 'user',
+                content: `You are a professional literary translator specializing in ${order.genre || 'general'} books.
+
+Translate the following${chunkLabel ? ' excerpt' : ' book'} into ${langName}.${chunkLabel ? `\nThis is part ${i + 1} of ${textChunks.length} — maintain consistent style with other parts.` : ''}
 
 LANGUAGE SETTINGS:
 ${langSettings}
@@ -114,29 +156,44 @@ GENRE: ${order.genre || 'General'}
 ${order.special_instructions ? `AUTHOR'S SPECIAL INSTRUCTIONS:\n${order.special_instructions}\n` : ''}
 
 TEXT TO TRANSLATE:
-${fileContent}
+${chunk}
 
 Provide ONLY the translation, preserving all formatting. No explanations or notes.`,
-            },
-          ],
+              },
+            ],
+          })
+
+          return response.content[0].type === 'text' ? response.content[0].text : ''
         })
 
-        return response.content[0].type === 'text' ? response.content[0].text : ''
-      })
+        translatedChunks.push(translatedChunk)
+      }
 
-      // Pass 2: Editorial Review (Opus - premium quality)
-      // This pass improves the translation and highlights what the ORIGINAL said
-      // so the author can see what was improved
-      const editorialResult = await step.run(`editorial-${langCode}`, async () => {
-        const response = await anthropic.messages.create({
-          model: 'claude-opus-4-20250514',
-          max_tokens: 100000,
-          messages: [
-            {
-              role: 'user',
-              content: `You are a senior ${langName} editor specializing in ${order.genre || 'general'} books.
+      const translatedText = translatedChunks.join('\n\n')
 
-TASK: Review this translation and improve it for natural flow, cultural accuracy, and readability.
+      // Pass 2: Editorial Review (Opus) — chunked to match Pass 1 chunks
+      const editorialChunks: string[] = []
+      const translatedTextChunks = chunkText(translatedText, MAX_CHUNK_WORDS)
+
+      for (let i = 0; i < translatedTextChunks.length; i++) {
+        const translatedChunk = translatedTextChunks[i]
+        // Get proportional slice of original for context (up to 10,000 chars)
+        const origChunkStart = Math.floor((i / translatedTextChunks.length) * fileContent.length)
+        const origChunkEnd = Math.floor(((i + 1) / translatedTextChunks.length) * fileContent.length)
+        const origSlice = fileContent.slice(origChunkStart, Math.min(origChunkEnd, origChunkStart + 10000))
+
+        const chunkLabel = translatedTextChunks.length > 1 ? ` (chunk ${i + 1}/${translatedTextChunks.length})` : ''
+
+        const editorialChunk = await step.run(`editorial-${langCode}-chunk-${i}`, async () => {
+          const response = await anthropic.messages.create({
+            model: 'claude-opus-4-20250514',
+            max_tokens: 8000,
+            messages: [
+              {
+                role: 'user',
+                content: `You are a senior ${langName} editor specializing in ${order.genre || 'general'} books.
+
+TASK: Review this translation${chunkLabel ? ` excerpt${chunkLabel}` : ''} and improve it for natural flow, cultural accuracy, and readability.
 
 FIRST, analyze the tone and style of the original English text:
 - Is it formal or casual?
@@ -148,10 +205,10 @@ LANGUAGE SETTINGS:
 ${langSettings}
 
 ORIGINAL ENGLISH (for reference):
-${fileContent.slice(0, 30000)}
+${origSlice}
 
 TRANSLATION TO REVIEW AND IMPROVE:
-${translatedText}
+${translatedChunk}
 
 EDITING INSTRUCTIONS:
 1. Improve phrases that sound awkward or unnatural in ${langName}
@@ -176,12 +233,17 @@ Only highlight phrases you actually changed. Do not highlight text you kept the 
 PRESERVE ALL FORMATTING from the translation (paragraph breaks, chapters, etc.)
 
 Respond with the full improved translation with highlights showing original phrases that were changed.`,
-            },
-          ],
+              },
+            ],
+          })
+
+          return response.content[0].type === 'text' ? response.content[0].text : translatedChunk
         })
 
-        return response.content[0].type === 'text' ? response.content[0].text : translatedText
-      })
+        editorialChunks.push(editorialChunk)
+      }
+
+      const editorialResult = editorialChunks.join('\n\n')
 
       translations[langCode] = {
         translated: translatedText,

@@ -319,12 +319,20 @@ export default function Home() {
               <Logo size="md" />
               <span className="text-2xl font-bold text-gray-800" style={serifFont}>BookLingua</span>
             </div>
-            <button
-              onClick={() => setCurrentView('upload')}
-              className="px-6 py-2.5 bg-gradient-to-r from-blue-600 to-violet-600 text-white rounded-full font-semibold shadow-lg hover:shadow-xl transition-all"
-            >
-              Start Translating
-            </button>
+            <div className="flex items-center gap-6">
+              <a href="/examples" className="text-gray-600 hover:text-violet-700 font-medium transition-colors hidden sm:block">
+                Examples
+              </a>
+              <a href="/publishers" className="text-gray-600 hover:text-violet-700 font-medium transition-colors hidden sm:block">
+                Publishers
+              </a>
+              <button
+                onClick={() => setCurrentView('upload')}
+                className="px-6 py-2.5 bg-gradient-to-r from-blue-600 to-violet-600 text-white rounded-full font-semibold shadow-lg hover:shadow-xl transition-all"
+              >
+                Start Translating
+              </button>
+            </div>
           </nav>
 
           <div className="relative z-10 max-w-7xl mx-auto px-8 pt-20 pb-32">
