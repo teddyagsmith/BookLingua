@@ -113,7 +113,7 @@ export async function POST(request: NextRequest) {
         finalAmount: finalAmount.toString(),
         sessionId: sessionId || '',
         specialInstructions: (specialInstructions || '').slice(0, 490), // Stripe 500 char limit
-        book_setting: bookSetting || '',
+        book_setting: (bookSetting || '').slice(0, 490),
       },
     })
 

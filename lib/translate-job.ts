@@ -204,7 +204,10 @@ export const translateBook = inngest.createFunction(
       const genreKey = (order.genre || 'general').toLowerCase().replace(/\s+/g, '-')
       const genreNotes = GENRE_TRANSLATION_NOTES[genreKey] || GENRE_TRANSLATION_NOTES['general']
       const heatNotes = heatLevel ? (HEAT_LEVEL_NOTES[heatLevel] || '') : ''
-      const settingNotes = bookSetting ? (SETTING_NOTES[bookSetting] || '') : ''
+      // bookSetting can be a lookup key (legacy dropdown) OR freeform author text
+      const settingNotes = bookSetting
+        ? (SETTING_NOTES[bookSetting] || `AUTHOR'S SETTING & LANGUAGE INSTRUCTIONS:\n${bookSetting}\n\nFollow these instructions carefully — preserve the cultural context the author has described and keep any specified terms untranslated.`)
+        : ''
       const genreGuidance = [genreNotes, heatNotes, settingNotes].filter(Boolean).join('\n\n')
 
       // Split book into chunks for Pass 1
