@@ -42,6 +42,7 @@ export async function POST(request: NextRequest) {
       selectedUpsells,
       specialInstructions,
       sessionId,
+      book_setting,
     } = session.metadata!
 
     const customerEmail = session.customer_email!
@@ -160,6 +161,7 @@ export async function POST(request: NextRequest) {
       data: {
         orderId: order.id,
         heatLevel: heatLevel || null,
+        bookSetting: book_setting || null,
       },
     })
 

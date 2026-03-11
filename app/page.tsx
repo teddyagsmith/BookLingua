@@ -47,12 +47,92 @@ const BOOK_GENRES = [
   'Health & Wellness', 'Travel', 'Cooking', 'Children\'s Books', 'Romance', 'Other',
 ]
 
+const GENRE_INSTRUCTION_TIPS: Record<string, string[]> = {
+  romance: [
+    'Keep my pet names between characters exactly as written',
+    'Use "member" consistently — do not vary intimate terminology',
+    'Preserve all terms of endearment in English',
+  ],
+  'very_steamy': [
+    'Match the heat and explicitness of intimate scenes exactly',
+    'Keep intimate slang consistent — pick one word and use it throughout',
+  ],
+  erotica: [
+    'Translate explicit content fully — do not soften or censor',
+    'Keep intimate terminology consistent throughout',
+  ],
+  fantasy: [
+    'Do NOT translate invented words: [list them here]',
+    'Preserve archaic speech (thee/thou) for characters who speak it',
+    'Keep all spell names and magic terms in the original invented form',
+    'Keep all place names and character names exactly as written',
+  ],
+  thriller: [
+    'Keep American legal terms (DA, Miranda, etc.) — do not replace with local equivalents',
+    'Preserve law enforcement terminology (FBI, precinct, etc.) as American',
+    'Keep weapon names in their standard form',
+  ],
+  'sci-fi': [
+    'Do NOT translate invented terms: [list them here]',
+    'Keep all spaceship names, alien species, and planet names exactly',
+    'Preserve technical jargon as written',
+  ],
+  historical: [
+    'Use place names contemporary to the era depicted',
+    'Preserve period-appropriate titles and honorifics',
+  ],
+  children: [
+    'Recreate rhymes and wordplay in the spirit of the original — do not translate literally',
+    'Keep character names exactly as written',
+  ],
+  literary: [
+    'Preserve all intentional stylistic choices — fragments, unusual punctuation, run-ons',
+    'Recreate wordplay and alliteration in the spirit of the original',
+  ],
+  'non-fiction': [
+    'Keep all Latin terms as Latin (et al., ibid., in vitro, etc.)',
+    'Preserve all citations and bibliography exactly',
+    'Convert imperial measurements to metric for EU audience',
+  ],
+  general: [
+    "Preserve the author's unique voice and style",
+  ],
+}
+
+function normalizeGenreKey(genre: string): string {
+  const map: Record<string, string> = {
+    'romance': 'romance',
+    'fantasy': 'fantasy',
+    'science fiction': 'sci-fi',
+    'mystery & thriller': 'thriller',
+    "children's books": 'children',
+    'non-fiction': 'non-fiction',
+    'history': 'historical',
+    'fiction': 'general',
+    'other': 'general',
+  }
+  return map[genre.toLowerCase()] || genre.toLowerCase().replace(/\s+/g, '-')
+}
+
 const SUPPORTED_FORMATS = [
   { ext: '.epub', name: 'EPUB', icon: '📱', desc: 'E-book format - formatting preserved' },
   { ext: '.pdf', name: 'PDF', icon: '📄', desc: 'Paperback format - layout preserved' },
   { ext: '.docx', name: 'DOCX', icon: '📝', desc: 'Word document' },
   { ext: '.txt', name: 'TXT', icon: '📃', desc: 'Plain text' },
 ]
+
+const GENRE_INSTRUCTION_TIPS: Record<string, string[]> = {
+  Romance: ['Keep pet names between characters exactly as written', 'Preserve all terms of endearment in English', 'Use "member" consistently — do not vary intimate terminology'],
+  Erotica: ['Translate explicit content fully — do not soften or censor', 'Keep intimate terminology consistent throughout'],
+  very_steamy: ['Match the heat and explicitness of intimate scenes exactly', 'Keep intimate slang consistent — pick one word and use it throughout'],
+  Fantasy: ['Do NOT translate invented words (add them here): e.g. Aethermoor, Expelliarmus…', 'Preserve archaic speech (thee/thou) for characters who use it', 'Keep all spell names, magic terms, and place names exactly as written'],
+  Thriller: ['Keep American legal terms (DA, Miranda, precinct) — do not replace with local equivalents', 'Preserve law enforcement brands (FBI, SWAT, 911) as American', 'Keep all weapon names in standard form'],
+  'Sci-Fi': ['Do NOT translate invented terms (list them here): e.g. warp drive, Klingon…', 'Keep all ship names, alien species, and planet names exactly as written'],
+  Historical: ['Use place names contemporary to the era depicted', 'Preserve period-appropriate titles and honorifics'],
+  'Children\'s': ['Recreate rhymes and wordplay in the spirit of the original — do not translate literally', 'Keep character names exactly as written'],
+  Literary: ['Preserve all intentional stylistic choices — fragments, unusual punctuation, run-on sentences', 'Recreate wordplay and alliteration in the spirit of the original'],
+  'Non-Fiction': ['Keep all Latin terms as Latin (et al., ibid., in vitro, etc.)', 'Preserve all citations and bibliography references exactly', 'Convert imperial measurements to metric for EU audience'],
+}
 
 // Logo component
 const Logo = ({ size = 'md' }: { size?: 'sm' | 'md' | 'lg' }) => {
@@ -77,6 +157,7 @@ export default function Home() {
   const [selectedLanguages, setSelectedLanguages] = useState<string[]>([])
   const [selectedGenre, setSelectedGenre] = useState('')
   const [heatLevel, setHeatLevel] = useState<string>('')
+  const [bookSetting, setBookSetting] = useState('')
   const [selectedUpsells, setSelectedUpsells] = useState<string[]>([])
   const [authorName, setAuthorName] = useState('')
   const [bookTitle, setBookTitle] = useState('')
@@ -286,6 +367,7 @@ export default function Home() {
           totalAmount: calculateTotal(),
           voucherCode: voucherApplied?.code || '',
           sessionId: sessionIdRef.current,
+          bookSetting,
         }),
       })
 
@@ -843,14 +925,60 @@ export default function Home() {
                       </div>
                     )}
 
+                    {/* Book Setting */}
+                    <div className="mb-6">
+                      <label className="block text-sm font-semibold text-gray-700 mb-1">
+                        Where is your book set?
+                        <span className="ml-2 text-xs font-normal text-gray-500">Helps preserve cultural authenticity</span>
+                      </label>
+                      <select
+                        value={bookSetting}
+                        onChange={e => setBookSetting(e.target.value)}
+                        className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-violet-400 bg-white text-gray-800"
+                      >
+                        <option value="">Select setting (optional)</option>
+                        <option value="usa">United States / America</option>
+                        <option value="uk">United Kingdom / Britain</option>
+                        <option value="europe">Europe (unspecified)</option>
+                        <option value="australia">Australia / New Zealand</option>
+                        <option value="asia">Asia</option>
+                        <option value="fantasy_world">Fantasy / Fictional world</option>
+                        <option value="historical">Historical (pre-20th century)</option>
+                        <option value="multiple">Multiple countries / Global</option>
+                        <option value="other">Other / Doesn&apos;t apply</option>
+                      </select>
+                    </div>
+
+                    {/* Special Instructions with genre tips */}
                     <div className="mb-8">
                       <label className="block text-sm font-medium text-gray-700 mb-2">Special Instructions (optional)</label>
+                      {/* Genre-specific clickable tip chips */}
+                      {selectedGenre && GENRE_INSTRUCTION_TIPS[normalizeGenreKey(selectedGenre)] && (
+                        <div className="mb-2">
+                          <p className="text-xs font-medium text-gray-500 mb-1.5">💡 Suggested instructions — click to add:</p>
+                          <div className="flex flex-wrap gap-2 mb-2">
+                            {[
+                              ...(GENRE_INSTRUCTION_TIPS[normalizeGenreKey(selectedGenre)] || []),
+                              ...(heatLevel && GENRE_INSTRUCTION_TIPS[heatLevel] ? GENRE_INSTRUCTION_TIPS[heatLevel] : []),
+                            ].map((tip, i) => (
+                              <button
+                                key={i}
+                                type="button"
+                                onClick={() => setSpecialInstructions(prev => prev ? `${prev}\n${tip}` : tip)}
+                                className="text-xs px-3 py-1.5 rounded-full bg-violet-50 border border-violet-200 text-violet-700 hover:bg-violet-100 transition-colors text-left"
+                              >
+                                + {tip}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      )}
                       <textarea
                         value={specialInstructions}
                         onChange={(e) => setSpecialInstructions(e.target.value)}
                         className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:border-violet-400 outline-none resize-none"
                         rows={3}
-                        placeholder="e.g., Keep medical terms in Latin, Use British English, etc. For romance authors: e.g. 'I use the word member throughout — keep consistent in translation'"
+                        placeholder="Any specific instructions for your translator…"
                       />
                     </div>
 

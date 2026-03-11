@@ -97,6 +97,46 @@ const HEAT_LEVEL_NOTES: Record<string, string> = {
 - Consistency is critical: pick the right word and use it throughout.`,
 }
 
+const SETTING_NOTES: Record<string, string> = {
+  usa: `SETTING: This book is set in the United States of America.
+CRITICAL: Translate the words into the target language but do NOT relocate the story culturally. The story is American — keep it American.
+- Legal: DA, District Attorney, Miranda rights, First/Second Degree, public defender → keep as American terms (you may add a brief parenthetical on first use, e.g. "DA (Staatsanwalt/District Attorney)")
+- Law enforcement: FBI, precinct, Sheriff, SWAT, 911 → keep as American
+- Culture: American holidays, food, dollar currency, place names → preserve as American
+- Do NOT replace American references with target-country equivalents`,
+
+  uk: `SETTING: This book is set in the United Kingdom.
+Translate the words but preserve British authenticity:
+- Legal/police: barrister, solicitor, CPS, PC, DCI, magistrate → keep British
+- Culture: NHS, pub, British holidays, £ currency, British place names → keep British`,
+
+  fantasy_world: `SETTING: This book is set in a fictional/fantasy world.
+Do not map any cultural reference to a real-world country. All invented institutions, laws, currency, and cultural references are part of the fantasy world — keep them as-is.`,
+
+  historical: `SETTING: This book is set in a historical period.
+Use era-appropriate place names and terminology. Do NOT modernise historical references.`,
+}
+
+const SETTING_NOTES: Record<string, string> = {
+  usa: `SETTING: This book is set in the United States of America.
+CRITICAL: Preserve American cultural authenticity. Translate words into the target language but do NOT relocate the story culturally. Keep American institutions, legal terms, and cultural references as American:
+- Legal: DA (District Attorney), Miranda rights, First/Second Degree, public defender, etc. → keep these as American terms; you may add a brief parenthetical if helpful (e.g. "DA (Staatsanwalt)")
+- Law enforcement: FBI, precinct, Sheriff, SWAT, 911 → keep as American
+- Culture: American holidays, food, places, currency ($) → keep as American
+- Do NOT replace American references with target-country equivalents`,
+
+  uk: `SETTING: This book is set in the United Kingdom / Britain.
+Preserve British English cultural authenticity. Translate words but keep British institutions, legal terms, and cultural references:
+- Legal/police: barrister, solicitor, CPS, PC, DCI, magistrate → keep these British
+- Culture: NHS, pubs, British holidays, £ currency, British place names → keep as British`,
+
+  fantasy_world: `SETTING: This book is set in a fictional/fantasy world.
+Cultural references in the story are invented — do not map them to any real-world country's equivalents. Keep all invented institutions, laws, currency, and cultural details as-is in the translation.`,
+
+  historical: `SETTING: This book is set in a historical period.
+Use era-appropriate terminology. Do NOT modernise references — keep historical accuracy intact in translation.`,
+}
+
 /**
  * Split text into chunks of ~maxWords words, breaking on paragraph boundaries
  * (double newline) to avoid cutting mid-paragraph.
@@ -138,7 +178,7 @@ export const translateBook = inngest.createFunction(
   },
   { event: 'book/translate.requested' },
   async ({ event, step }) => {
-    const { orderId, heatLevel } = event.data
+    const { orderId, heatLevel, bookSetting } = event.data
 
     // Step 1: Get order details from database
     const order = await step.run('get-order', async () => {
@@ -175,6 +215,7 @@ export const translateBook = inngest.createFunction(
 
     const languages = order.languages as string[]
     const translations: Record<string, any> = {}
+    const translationNotes: Record<string, string> = {}
 
     // Step 4: Translate to each language
     for (const langCode of languages) {
@@ -183,7 +224,8 @@ export const translateBook = inngest.createFunction(
       const genreKey = (order.genre || 'general').toLowerCase().replace(/\s+/g, '-')
       const genreNotes = GENRE_TRANSLATION_NOTES[genreKey] || GENRE_TRANSLATION_NOTES['general']
       const heatNotes = heatLevel ? (HEAT_LEVEL_NOTES[heatLevel] || '') : ''
-      const genreGuidance = [genreNotes, heatNotes].filter(Boolean).join('\n\n')
+      const settingNotes = bookSetting ? (SETTING_NOTES[bookSetting] || '') : ''
+      const genreGuidance = [genreNotes, heatNotes, settingNotes].filter(Boolean).join('\n\n')
 
       // Split book into chunks for Pass 1
       const textChunks = chunkText(fileContent, MAX_CHUNK_WORDS)
@@ -311,7 +353,15 @@ Only highlight phrases you actually changed. Do not highlight text you kept the 
 
 PRESERVE ALL FORMATTING from the translation (paragraph breaks, chapters, etc.)
 
-Respond with the full improved translation with highlights showing original phrases that were changed.`,
+Respond with the full improved translation with highlights showing original phrases that were changed.${i === translatedTextChunks.length - 1 ? `
+
+After the translation, append this section EXACTLY (do not omit it):
+
+===TRANSLATION_NOTES===
+List the 8-15 most significant translation decisions made across this translation. Each on its own line:
+ORIGINAL: [original English phrase] | TRANSLATED: [your choice] | REASON: [brief explanation of why]
+Focus on: cultural adaptations, slang/register choices, setting-specific decisions (e.g. preserving American legal terms), idiom adaptations, heat-level register choices.
+===END_NOTES===` : ''}`,
               },
             ],
           })
@@ -322,11 +372,24 @@ Respond with the full improved translation with highlights showing original phra
         editorialChunks.push(editorialChunk)
       }
 
-      const editorialResult = editorialChunks.join('\n\n')
+      const rawEditorial = editorialChunks.join('\n\n')
+
+      // Extract translation notes from the last chunk (appended after ===TRANSLATION_NOTES===)
+      let editorialResult = rawEditorial
+      let translationNotesParsed = ''
+      const notesMatch = rawEditorial.match(/===TRANSLATION_NOTES===([\s\S]*?)===END_NOTES===/)
+      if (notesMatch) {
+        translationNotesParsed = notesMatch[1].trim()
+        editorialResult = rawEditorial.replace(/===TRANSLATION_NOTES===[\s\S]*?===END_NOTES===/, '').trim()
+      }
 
       translations[langCode] = {
         translated: translatedText,
         edited: editorialResult,
+        notes: translationNotesParsed,
+      }
+      if (translationNotesParsed) {
+        translationNotes[langCode] = translationNotesParsed
       }
 
       // Save translation to database
@@ -389,6 +452,34 @@ Respond with the full improved translation with highlights showing original phra
                 Simply delete the yellow highlighted portions to get your final, polished translation.
               </p>
             </div>
+
+            ${languages.map(lang => {
+              const notes = translations[lang]?.notes
+              if (!notes) return ''
+              const noteLines = notes.split('\n').filter((l: string) => l.startsWith('ORIGINAL:'))
+              if (noteLines.length === 0) return ''
+              return `
+              <div style="margin: 20px 0; border: 1px solid #e5e7eb; border-radius: 12px; overflow: hidden;">
+                <div style="background: #f5f3ff; padding: 12px 16px; border-bottom: 1px solid #e5e7eb;">
+                  <strong style="color: #7c3aed;">✏️ Translation Notes — ${LANGUAGE_NAMES[lang]}</strong>
+                  <span style="color: #6b7280; font-size: 13px; margin-left: 8px;">Key decisions our editors made</span>
+                </div>
+                <table style="width: 100%; border-collapse: collapse; font-size: 13px;">
+                  ${noteLines.map((line: string, i: number) => {
+                    const parts = line.replace('ORIGINAL: ', '').split(' | ')
+                    const original = parts[0] || ''
+                    const translated = (parts[1] || '').replace('TRANSLATED: ', '')
+                    const reason = (parts[2] || '').replace('REASON: ', '')
+                    return `<tr style="background: ${i % 2 === 0 ? '#fff' : '#fafafa'}; border-bottom: 1px solid #f3f4f6;">
+                      <td style="padding: 8px 12px; color: #6b7280; width: 28%;">${original}</td>
+                      <td style="padding: 8px 4px; color: #9ca3af; width: 4%;">→</td>
+                      <td style="padding: 8px 12px; color: #111827; width: 28%;"><strong>${translated}</strong></td>
+                      <td style="padding: 8px 12px; color: #6b7280; width: 40%; font-style: italic;">${reason}</td>
+                    </tr>`
+                  }).join('')}
+                </table>
+              </div>`
+            }).join('')}
             
             <p>Download links expire in 7 days. Need them resent? Just reply to this email.</p>
             
