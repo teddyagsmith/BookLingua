@@ -1178,9 +1178,9 @@ export default function Home() {
                                   Recommended
                                 </span>
                               )}
-                              {upsell.savings && (
+                              {'savings' in upsell && upsell.savings && (
                                 <span className="px-2 py-0.5 bg-green-100 text-green-700 text-xs font-semibold rounded-full">
-                                  {upsell.savings}
+                                  {upsell.savings as string}
                                 </span>
                               )}
                             </div>
