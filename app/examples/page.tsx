@@ -383,9 +383,14 @@ export default function ExamplesPage() {
               <p className="text-sm text-gray-500">Bram Stoker, 1897 · Public Domain · ~400 words</p>
             </div>
           </div>
-          <div className="hidden md:flex items-center gap-2 text-sm text-gray-500">
-            <span className="w-4 h-4 bg-yellow-100 border border-yellow-300 rounded inline-block" />
-            Editorial improvement highlighted
+          <div className="hidden md:flex items-center gap-4 text-sm text-gray-500">
+            <span className="flex items-center gap-2">
+              <span className="w-4 h-4 bg-yellow-100 border border-yellow-300 rounded inline-block" />
+              Editorial improvement highlighted
+            </span>
+            <span className="flex items-center gap-1.5 text-xs text-amber-600 bg-amber-50 border border-amber-200 rounded-full px-3 py-1">
+              ⚠️ Disable browser auto-translate to see the full effect
+            </span>
           </div>
         </div>
 
@@ -407,8 +412,8 @@ export default function ExamplesPage() {
             </div>
           </div>
 
-          {/* Translation */}
-          <div className="bg-white rounded-3xl shadow-xl border border-violet-100 overflow-hidden">
+          {/* Translation — translate="no" prevents Chrome/Safari auto-translate */}
+          <div className="bg-white rounded-3xl shadow-xl border border-violet-100 overflow-hidden" translate="no">
             <div className="px-6 py-4 bg-gradient-to-r from-violet-50 to-blue-50 border-b border-violet-100 flex items-center justify-between">
               <div className="flex items-center gap-3">
                 <span className="text-lg">{currentLang.flag}</span>
