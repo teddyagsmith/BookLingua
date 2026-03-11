@@ -1,6 +1,63 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase'
 import mammoth from 'mammoth'
+import { writeFileSync, unlinkSync } from 'fs'
+import { join } from 'path'
+import { tmpdir } from 'os'
+import { randomUUID } from 'crypto'
+
+// Lazy imports to avoid edge runtime issues
+async function extractEpubText(buffer: Buffer): Promise<string> {
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  const Epub = require('epub2').default ?? require('epub2')
+  const tmpPath = join(tmpdir(), `${randomUUID()}.epub`)
+
+  try {
+    writeFileSync(tmpPath, buffer)
+
+    return await new Promise((resolve, reject) => {
+      const epub = new Epub(tmpPath)
+
+      epub.on('end', async () => {
+        try {
+          const chapters: string[] = []
+          const flowItems = epub.flow || []
+
+          for (const item of flowItems) {
+            if (!item.id) continue
+            const chapterId = item.id as string
+            await new Promise<void>((res) => {
+              epub.getChapter(chapterId, (err: Error, text?: string) => {
+                if (!err && text) {
+                  // Strip HTML tags
+                  const stripped = text.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim()
+                  if (stripped.length > 0) chapters.push(stripped)
+                }
+                res()
+              })
+            })
+          }
+
+          resolve(chapters.join('\n\n'))
+        } catch (e) {
+          reject(e)
+        }
+      })
+
+      epub.on('error', reject)
+      epub.parse()
+    })
+  } finally {
+    try { unlinkSync(tmpPath) } catch {}
+  }
+}
+
+async function extractPdfText(buffer: Buffer): Promise<string> {
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  const pdfParse = require('pdf-parse')
+  const data = await pdfParse(buffer)
+  return data.text
+}
 
 export async function POST(request: NextRequest) {
   try {
@@ -16,60 +73,44 @@ export async function POST(request: NextRequest) {
     let textContent = ''
     let wordCount = 0
 
+    const arrayBuffer = await file.arrayBuffer()
+    const buffer = Buffer.from(arrayBuffer)
+
     // Extract text based on file type
     if (fileExtension === 'txt') {
-      textContent = await file.text()
+      textContent = buffer.toString('utf-8')
     } else if (fileExtension === 'docx') {
-      const arrayBuffer = await file.arrayBuffer()
-      const result = await mammoth.extractRawText({ buffer: Buffer.from(arrayBuffer) })
+      const result = await mammoth.extractRawText({ buffer })
       textContent = result.value
     } else if (fileExtension === 'epub') {
-      // For EPUB, we'll store the raw file and process server-side
-      // For now, estimate word count from file size
-      const arrayBuffer = await file.arrayBuffer()
-      const buffer = Buffer.from(arrayBuffer)
-      
-      // Store raw file in Supabase Storage
-      const { error: uploadError } = await supabaseAdmin.storage
-        .from('uploads')
-        .upload(`${sessionId}/original.${fileExtension}`, buffer, {
-          contentType: file.type,
-          upsert: true,
-        })
-
-      if (uploadError) {
-        console.error('Upload error:', uploadError)
+      try {
+        textContent = await extractEpubText(buffer)
+        if (!textContent || textContent.length < 100) {
+          // Fallback if extraction yields too little
+          textContent = `[EPUB: ${file.name} — text extraction produced minimal content. Please re-upload as DOCX or TXT.]`
+        }
+      } catch (err) {
+        console.error('EPUB extraction failed:', err)
+        textContent = `[EPUB: ${file.name} — extraction failed. Please re-upload as DOCX or TXT for best results.]`
       }
-
-      // Rough estimate: 6 characters per word
-      wordCount = Math.round(file.size / 6)
-      textContent = `[EPUB file uploaded - ${file.name}]`
     } else if (fileExtension === 'pdf') {
-      // Similar handling for PDF
-      const arrayBuffer = await file.arrayBuffer()
-      const buffer = Buffer.from(arrayBuffer)
-      
-      const { error: uploadError } = await supabaseAdmin.storage
-        .from('uploads')
-        .upload(`${sessionId}/original.${fileExtension}`, buffer, {
-          contentType: file.type,
-          upsert: true,
-        })
-
-      if (uploadError) {
-        console.error('Upload error:', uploadError)
+      try {
+        textContent = await extractPdfText(buffer)
+        if (!textContent || textContent.length < 100) {
+          textContent = `[PDF: ${file.name} — text extraction produced minimal content. Please re-upload as DOCX or TXT.]`
+        }
+      } catch (err) {
+        console.error('PDF extraction failed:', err)
+        textContent = `[PDF: ${file.name} — extraction failed. Please re-upload as DOCX or TXT for best results.]`
       }
-
-      wordCount = Math.round(file.size / 6)
-      textContent = `[PDF file uploaded - ${file.name}]`
+    } else {
+      return NextResponse.json({ error: `Unsupported file type: .${fileExtension}` }, { status: 400 })
     }
 
-    // Calculate word count for text-based files
-    if (fileExtension === 'txt' || fileExtension === 'docx') {
-      wordCount = textContent.trim().split(/\s+/).filter(word => word.length > 0).length
-    }
+    // Calculate word count
+    wordCount = textContent.trim().split(/\s+/).filter(w => w.length > 0).length
 
-    // Store text content in temporary storage for checkout
+    // Store in temp_uploads for retrieval after payment
     const { error: contentError } = await supabaseAdmin
       .from('temp_uploads')
       .upsert({
@@ -83,6 +124,7 @@ export async function POST(request: NextRequest) {
 
     if (contentError) {
       console.error('Content storage error:', contentError)
+      return NextResponse.json({ error: 'Failed to store upload' }, { status: 500 })
     }
 
     return NextResponse.json({

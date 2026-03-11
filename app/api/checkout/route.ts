@@ -52,6 +52,7 @@ export async function POST(request: NextRequest) {
       selectedLanguages,
       selectedGenre,
       selectedUpsells,
+      specialInstructions,
       totalAmount,
       voucherCode,
       sessionId,
@@ -108,6 +109,7 @@ export async function POST(request: NextRequest) {
         voucherCode: appliedVoucher || '',
         finalAmount: finalAmount.toString(),
         sessionId: sessionId || '',
+        specialInstructions: (specialInstructions || '').slice(0, 490), // Stripe 500 char limit
       },
     })
 

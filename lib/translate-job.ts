@@ -1,5 +1,6 @@
 import { inngest } from '@/lib/inngest'
 import { supabaseAdmin } from '@/lib/supabase'
+import { buildDownloadUrl } from '@/lib/download-token'
 import Anthropic from '@anthropic-ai/sdk'
 import { Resend } from 'resend'
 
@@ -214,7 +215,7 @@ Respond with the full improved translation with highlights showing original phra
     await step.run('send-completion-email', async () => {
       const downloadLinks = languages.map(lang => ({
         language: LANGUAGE_NAMES[lang],
-        url: `${process.env.NEXT_PUBLIC_APP_URL}/download/${orderId}/${lang}`,
+        url: buildDownloadUrl(orderId, lang),
       }))
 
       await resend.emails.send({

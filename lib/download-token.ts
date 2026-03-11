@@ -1,0 +1,34 @@
+import { createHmac } from 'crypto'
+
+/**
+ * Signs a download token for a specific order + language.
+ * Uses STRIPE_WEBHOOK_SECRET as the HMAC key (already available, strong secret).
+ */
+export function signDownloadToken(orderId: string, lang: string): string {
+  const secret = process.env.STRIPE_WEBHOOK_SECRET!
+  return createHmac('sha256', secret)
+    .update(`${orderId}:${lang}`)
+    .digest('hex')
+}
+
+/**
+ * Validates a download token. Returns true if valid.
+ */
+export function verifyDownloadToken(orderId: string, lang: string, token: string): boolean {
+  const expected = signDownloadToken(orderId, lang)
+  // Constant-time comparison to prevent timing attacks
+  if (expected.length !== token.length) return false
+  let mismatch = 0
+  for (let i = 0; i < expected.length; i++) {
+    mismatch |= expected.charCodeAt(i) ^ token.charCodeAt(i)
+  }
+  return mismatch === 0
+}
+
+/**
+ * Builds a signed download URL.
+ */
+export function buildDownloadUrl(orderId: string, lang: string): string {
+  const token = signDownloadToken(orderId, lang)
+  return `${process.env.NEXT_PUBLIC_APP_URL}/api/download/${orderId}/${lang}?token=${token}`
+}

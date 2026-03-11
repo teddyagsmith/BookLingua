@@ -1,11 +1,18 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase'
+import { verifyDownloadToken } from '@/lib/download-token'
 
 export async function GET(
   request: NextRequest,
   { params }: { params: { orderId: string; lang: string } }
 ) {
   const { orderId, lang } = params
+  const token = request.nextUrl.searchParams.get('token')
+
+  // Validate signed token before anything else
+  if (!token || !verifyDownloadToken(orderId, lang, token)) {
+    return NextResponse.json({ error: 'Invalid or missing download token' }, { status: 403 })
+  }
 
   try {
     // Verify order exists and is completed
