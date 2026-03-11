@@ -5,9 +5,9 @@ import Image from 'next/image'
 
 // Updated pricing tiers
 const WORD_TIERS = {
-  small: { maxWords: 30000, label: 'Up to 30k words', basePrice: 150 },
-  medium: { maxWords: 80000, label: 'Up to 80k words', basePrice: 350 },
-  large: { maxWords: 150000, label: 'Up to 150k words', basePrice: 600 },
+  small: { maxWords: 30000, label: 'Up to 30k words', basePrice: 199 },
+  medium: { maxWords: 80000, label: 'Up to 80k words', basePrice: 449 },
+  large: { maxWords: 150000, label: 'Up to 150k words', basePrice: 749 },
 }
 
 const BUNDLE_DISCOUNTS = {
@@ -336,14 +336,14 @@ export default function Home() {
                 </div>
 
                 <h1 className="text-6xl font-bold text-gray-900 leading-tight mb-6" style={serifFont}>
-                  Your book,
+                  Translate Your Book
                   <span className="block bg-gradient-to-r from-blue-600 to-violet-600 bg-clip-text text-transparent">
-                    in every language
+                    in Hours, Not Months
                   </span>
                 </h1>
 
                 <p className="text-xl text-gray-600 leading-relaxed mb-10 max-w-lg">
-                  Professional AI-powered book translation with editorial review. Upload EPUB, PDF, or DOCX — we preserve your formatting perfectly.
+                  Professional AI translation for indie authors. From $150 per language — vs $5,000–$20,000 with a human agency. Powered by Claude.
                 </p>
 
                 <div className="flex flex-wrap gap-3 mb-8">
@@ -399,6 +399,26 @@ export default function Home() {
             </div>
           </div>
         </header>
+
+        {/* Trust Bar */}
+        <section className="py-8 bg-white border-b border-gray-100">
+          <div className="max-w-7xl mx-auto px-8">
+            <div className="flex flex-col md:flex-row items-center justify-center gap-8 md:gap-20">
+              <div className="flex items-center gap-3 text-gray-700 font-semibold text-lg">
+                <span className="text-2xl">⚡</span>
+                <span>Delivered in hours</span>
+              </div>
+              <div className="flex items-center gap-3 text-gray-700 font-semibold text-lg">
+                <span className="text-2xl">✏️</span>
+                <span>Editorial review included</span>
+              </div>
+              <div className="flex items-center gap-3 text-gray-700 font-semibold text-lg">
+                <span className="text-2xl">🔒</span>
+                <span>Secure & private</span>
+              </div>
+            </div>
+          </div>
+        </section>
 
         {/* How It Works */}
         <section className="py-24 bg-white">
@@ -540,7 +560,7 @@ export default function Home() {
                 ))}
               </div>
               <p className="text-center text-gray-600 mt-6">
-                Example: 80k book → All 4 languages = <span className="font-bold text-violet-600">${(350 * 4 * 0.63).toFixed(0)}</span> <span className="text-gray-400 line-through">${350 * 4}</span>
+                Example: 80k book → All 4 languages = <span className="font-bold text-violet-600">${(449 * 4 * 0.63).toFixed(0)}</span> <span className="text-gray-400 line-through">${449 * 4}</span>
               </p>
             </div>
 
@@ -551,6 +571,45 @@ export default function Home() {
               >
                 Get Started →
               </button>
+            </div>
+          </div>
+        </section>
+
+        {/* FAQ */}
+        <section className="py-24 bg-white">
+          <div className="max-w-3xl mx-auto px-8">
+            <div className="text-center mb-16">
+              <h2 className="text-4xl font-bold text-gray-900 mb-4" style={serifFont}>Frequently Asked Questions</h2>
+              <p className="text-xl text-gray-600">Everything you need to know before you get started</p>
+            </div>
+            <div className="space-y-5">
+              {[
+                {
+                  q: 'Is this better than Google Translate?',
+                  a: 'Yes — significantly. We use Claude (Anthropic\'s most capable AI) with a two-pass editorial review. The first pass translates; the second refines idioms, tone, and cultural context. Changes are highlighted so you can review them.',
+                },
+                {
+                  q: 'What file formats do you support?',
+                  a: 'EPUB, PDF, DOCX, and TXT. We recommend DOCX for best results.',
+                },
+                {
+                  q: 'How long does translation take?',
+                  a: 'Most books complete within 2–6 hours depending on length. You\'ll get an email when it\'s ready.',
+                },
+                {
+                  q: 'Can I see examples first?',
+                  a: 'Yes — check our Examples page to see real translations of classic literature.',
+                },
+                {
+                  q: 'What if I\'m not happy with the translation?',
+                  a: 'Email us within 7 days and we\'ll work with you to make it right.',
+                },
+              ].map((item, i) => (
+                <div key={i} className="bg-gradient-to-br from-slate-50 to-blue-50 rounded-2xl p-6 border border-blue-100">
+                  <h3 className="text-lg font-bold text-gray-900 mb-3" style={serifFont}>{item.q}</h3>
+                  <p className="text-gray-600 leading-relaxed">{item.a}</p>
+                </div>
+              ))}
             </div>
           </div>
         </section>
