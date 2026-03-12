@@ -11,17 +11,57 @@ const anthropic = new Anthropic({
 const resend = new Resend(process.env.RESEND_API_KEY)
 
 const LANGUAGE_NAMES: Record<string, string> = {
-  es: 'Spanish',
+  'es-es': 'Spanish (Spain)',
+  'es-latam': 'Spanish (Latin America)',
+  es: 'Spanish', // legacy fallback
   fr: 'French',
   de: 'German',
-  pt: 'Portuguese',
+  'pt-pt': 'Portuguese (Portugal)',
+  'pt-br': 'Portuguese (Brazil)',
+  pt: 'Portuguese', // legacy fallback
 }
 
 const LANGUAGE_SETTINGS: Record<string, string> = {
-  es: 'Use Latin American Spanish as the default, but maintain universal readability. Use "tú" for informal address.',
-  fr: 'Use standard French (France) with clear, modern phrasing.',
-  de: 'Use standard German (Hochdeutsch) with clear sentence structure.',
-  pt: 'Use Brazilian Portuguese as the default for wider readability.',
+  'es-es': `Use Castilian Spanish (Spain).
+- Use "vosotros/vosotras" for second person plural informal address
+- Use "ordenador" for computer, "móvil" for mobile phone, "coche" for car
+- Follow RAE (Real Academia Española) spelling conventions
+- Use "coger" in appropriate Spanish contexts (e.g. coger el autobús)
+- Leísmo is acceptable in written Spanish Spain contexts`,
+
+  'es-latam': `Use Latin American Spanish, targeting neutral LatAm readability (universally understood across Mexico, Colombia, Argentina, and beyond).
+- Use "ustedes" for ALL second person plural — never use "vosotros"
+- Use "computadora" or "computador" for computer, "celular" for mobile phone, "auto/carro" for car
+- Avoid "coger" — use "agarrar", "tomar", or "tomar" depending on context
+- Use "lindo/a" rather than "guapo/a" for beautiful in casual contexts
+- Aim for a register that feels natural across the major LatAm markets`,
+
+  es: `Use neutral Latin American Spanish for wide readability. Use "ustedes" for second person plural.`,
+
+  fr: `Use standard French (France) with clear, modern phrasing.
+- Use "vous" for formal and "tu" for informal address as appropriate to the text
+- Follow Académie française spelling standards
+- Use French punctuation conventions (spaces before : ; ! ?)`,
+
+  de: `Use standard German (Hochdeutsch) with clear sentence structure.
+- Use Sie for formal, du for informal as appropriate
+- Follow current Duden spelling conventions
+- Maintain German sentence structure — don't over-simplify compound words`,
+
+  'pt-pt': `Use European Portuguese (Portugal).
+- Use "você" and "tu" appropriately — "tu" is common in informal Portuguese contexts
+- Follow European Portuguese spelling: "facto" not "fato", maintain consonant clusters (e.g. "acto", "óptimo")
+- Use European vocabulary: "autocarro" for bus, "telemóvel" for mobile, "pequeno-almoço" for breakfast, "casa de banho" for bathroom
+- European Portuguese has a more clipped, consonant-heavy rhythm than Brazilian — preserve this in prose style`,
+
+  'pt-br': `Use Brazilian Portuguese.
+- Use "você" as the standard second person throughout
+- Follow Brazilian spelling conventions (post-2009 Orthographic Agreement): "fato" not "facto", no silent consonants
+- Use Brazilian vocabulary: "ônibus" for bus, "celular" for mobile, "café da manhã" for breakfast, "banheiro" for bathroom
+- Brazilian Portuguese has a more open, vowel-rich rhythm — prose should feel warm and natural to Brazilian readers
+- Use Brazilian idioms and expressions where appropriate`,
+
+  pt: `Use Brazilian Portuguese as the default for wider readability.`,
 }
 
 const MAX_CHUNK_WORDS = 15000

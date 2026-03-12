@@ -14,14 +14,18 @@ const BUNDLE_DISCOUNTS = {
   1: { discount: 0, label: '1 Language' },
   2: { discount: 12, label: '2 Languages' },
   3: { discount: 25, label: '3 Languages' },
-  4: { discount: 37, label: 'All 4 Languages' },
+  4: { discount: 30, label: '4 Languages' },
+  5: { discount: 35, label: '5 Languages' },
+  6: { discount: 40, label: 'All 6 Languages' },
 }
 
 const CORE_LANGUAGES = [
-  { code: 'es', name: 'Spanish', flag: '🇪🇸', market: '500M+ speakers' },
+  { code: 'es-es', name: 'Spanish (Spain)', flag: '🇪🇸', market: 'Spain · Castilian' },
+  { code: 'es-latam', name: 'Spanish (Latin America)', flag: '🌎', market: 'Mexico, Colombia, Argentina+' },
   { code: 'fr', name: 'French', flag: '🇫🇷', market: '300M+ speakers' },
   { code: 'de', name: 'German', flag: '🇩🇪', market: '100M+ speakers' },
-  { code: 'pt', name: 'Portuguese', flag: '🇵🇹', market: '250M+ speakers' },
+  { code: 'pt-pt', name: 'Portuguese (Portugal)', flag: '🇵🇹', market: 'Portugal · European' },
+  { code: 'pt-br', name: 'Portuguese (Brazil)', flag: '🇧🇷', market: 'Brazil · 215M speakers' },
 ]
 
 const UPSELLS: Array<{id: string; name: string; price: number; description: string; icon: string; popular?: boolean; perLanguage?: boolean; details?: string[]; priceAll?: number; savings?: string; originalPrice?: number}> = [
@@ -167,7 +171,7 @@ export default function Home() {
   const calculatePrice = (tier: 'small' | 'medium' | 'large' | null, numLanguages: number) => {
     if (!tier || numLanguages === 0) return '0.00'
     const tierInfo = WORD_TIERS[tier]
-    const discountInfo = BUNDLE_DISCOUNTS[Math.min(numLanguages, 4) as keyof typeof BUNDLE_DISCOUNTS]
+    const discountInfo = BUNDLE_DISCOUNTS[Math.min(numLanguages, 6) as keyof typeof BUNDLE_DISCOUNTS]
     const baseTotal = tierInfo.basePrice * numLanguages
     const discount = baseTotal * (discountInfo.discount / 100)
     return (baseTotal - discount).toFixed(2)
@@ -472,22 +476,23 @@ export default function Home() {
                   </div>
 
                   <div className="flex items-center gap-2 mb-4">
-                    {CORE_LANGUAGES.map(l => (
+                    {CORE_LANGUAGES.slice(0, 4).map(l => (
                       <span key={l.code} className="text-2xl">{l.flag}</span>
                     ))}
-                    <span className="ml-2 px-2 py-1 bg-violet-100 text-violet-700 text-xs font-semibold rounded-full">
-                      4 Languages
+                    <span className="text-lg">+</span>
+                    <span className="ml-1 px-2 py-1 bg-violet-100 text-violet-700 text-xs font-semibold rounded-full">
+                      6 Languages
                     </span>
                   </div>
 
                   <div className="flex justify-between items-center py-3 border-t border-gray-100">
                     <div>
                       <span className="text-gray-600 text-sm block">Translation + Editorial Review</span>
-                      <span className="text-xs text-green-600 font-medium">37% bundle discount applied · Save $221</span>
+                      <span className="text-xs text-green-600 font-medium">40% bundle discount applied · Save $358</span>
                     </div>
                     <div className="text-right">
-                      <span className="font-bold text-2xl text-violet-600">$375</span>
-                      <span className="text-xs text-gray-400 line-through block">$596</span>
+                      <span className="font-bold text-2xl text-violet-600">$536</span>
+                      <span className="text-xs text-gray-400 line-through block">$894</span>
                     </div>
                   </div>
 
@@ -662,7 +667,7 @@ export default function Home() {
                 ))}
               </div>
               <p className="text-center text-gray-600 mt-6">
-                Example: 80k book → All 4 languages = <span className="font-bold text-violet-600">${(149 * 4 * 0.63).toFixed(0)}</span> <span className="text-gray-400 line-through">${149 * 4}</span>
+                Example: 80k novel → All 6 languages = <span className="font-bold text-violet-600">${(149 * 6 * 0.60).toFixed(0)}</span> <span className="text-gray-400 line-through">${149 * 6}</span> (40% bundle discount)
               </p>
             </div>
 
@@ -1014,14 +1019,14 @@ export default function Home() {
               <div className="bg-gradient-to-r from-blue-600 to-violet-600 rounded-2xl p-6 mb-8 text-white">
                 <div className="flex items-center justify-between">
                   <div>
-                    <h3 className="text-xl font-bold mb-1">🎉 Bundle All 4 Languages & Save 37%</h3>
+                    <h3 className="text-xl font-bold mb-1">🎉 Bundle All 6 Languages & Save 40%</h3>
                     <p className="text-white/80">Spanish, French, German & Portuguese</p>
                   </div>
                   <button
                     onClick={selectAllCore}
                     className="px-6 py-3 bg-white text-violet-600 rounded-xl font-bold hover:shadow-lg transition-all"
                   >
-                    Select All 4
+                    Select All 6
                   </button>
                 </div>
               </div>
