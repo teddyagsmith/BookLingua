@@ -380,8 +380,10 @@ export default function Home() {
         {/* Top pricing bar */}
         <div className="bg-gradient-to-r from-blue-600 to-violet-600 text-white text-sm py-2 px-4 text-center">
           <span className="font-semibold">From $99 per language</span>
-          <span className="mx-2 opacity-60">·</span>
-          Novellas from $99 · Novels from $149 · Up to 150k words $199
+          <span className="hidden sm:inline">
+            <span className="mx-2 opacity-60">·</span>
+            Novellas $99 · Novels $149 · Up to 150k words $199
+          </span>
           <span className="mx-2 opacity-60">·</span>
           <a href="/examples" className="underline underline-offset-2 hover:opacity-80 font-medium">See examples →</a>
         </div>
@@ -392,12 +394,12 @@ export default function Home() {
             <div className="absolute top-40 right-20 w-96 h-96 bg-violet-200 rounded-full blur-3xl" />
           </div>
 
-          <nav className="relative z-10 flex items-center justify-between px-8 py-6 max-w-7xl mx-auto">
-            <div className="flex items-center gap-3">
+          <nav className="relative z-10 flex items-center justify-between px-4 sm:px-8 py-6 max-w-7xl mx-auto">
+            <div className="flex items-center gap-3 min-w-0">
               <Logo size="md" />
-              <span className="text-2xl font-bold text-gray-800" style={serifFont}>BookLingua</span>
+              <span className="text-2xl font-bold text-gray-800 hidden sm:inline" style={serifFont}>BookLingua</span>
             </div>
-            <div className="flex items-center gap-6">
+            <div className="flex items-center gap-3 sm:gap-6">
               <a href="/examples" className="text-gray-600 hover:text-violet-700 font-medium transition-colors hidden sm:block">
                 Examples
               </a>
@@ -406,7 +408,7 @@ export default function Home() {
               </a>
               <button
                 onClick={() => setCurrentView('upload')}
-                className="px-6 py-2.5 bg-gradient-to-r from-blue-600 to-violet-600 text-white rounded-full font-semibold shadow-lg hover:shadow-xl transition-all"
+                className="px-4 py-2 sm:px-6 sm:py-2.5 bg-gradient-to-r from-blue-600 to-violet-600 text-white rounded-full text-sm sm:text-base font-semibold shadow-lg hover:shadow-xl transition-all whitespace-nowrap"
               >
                 Start Translating
               </button>
