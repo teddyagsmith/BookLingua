@@ -39,6 +39,41 @@ function validateVoucher(code: string, subtotal: number): { valid: boolean; disc
   return { valid: true, discountAmount }
 }
 
+// Server-side price calculation — NEVER trust client-submitted prices
+const WORD_TIERS: Record<string, { maxWords: number; basePrice: number }> = {
+  small:  { maxWords: 40000,  basePrice: 99  },
+  medium: { maxWords: 80000,  basePrice: 149 },
+  large:  { maxWords: 150000, basePrice: 199 },
+}
+
+const BUNDLE_DISCOUNTS: Record<number, number> = {
+  1: 0, 2: 12, 3: 25, 4: 30, 5: 35, 6: 40,
+}
+
+function calculateServerPrice(
+  tier: string,
+  selectedLanguages: string[],
+  selectedUpsells: string[],
+): number {
+  const tierInfo = WORD_TIERS[tier]
+  if (!tierInfo) throw new Error(`Invalid tier: ${tier}`)
+
+  const numLanguages = selectedLanguages.length
+  if (numLanguages === 0) throw new Error('No languages selected')
+
+  const discountPct = BUNDLE_DISCOUNTS[Math.min(numLanguages, 6)] ?? 0
+  const baseTotal = tierInfo.basePrice * numLanguages
+  const translationTotal = baseTotal * (1 - discountPct / 100)
+
+  let upsellTotal = 0
+  for (const id of selectedUpsells) {
+    if (id === 'launch-pack') upsellTotal += numLanguages > 1 ? 49 : 29
+    else if (id === 'mrr-shoutout') upsellTotal += 69
+  }
+
+  return Math.round((translationTotal + upsellTotal) * 100) / 100
+}
+
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
@@ -54,16 +89,22 @@ export async function POST(request: NextRequest) {
       heatLevel,
       selectedUpsells,
       specialInstructions,
-      totalAmount,
       voucherCode,
       sessionId,
       bookSetting,
     } = body
-    
-    // Calculate discount if voucher provided
-    let finalAmount = parseFloat(totalAmount)
+
+    // ✅ SECURITY: Recalculate price server-side — ignore any client-submitted totalAmount
+    let serverCalculatedAmount: number
+    try {
+      serverCalculatedAmount = calculateServerPrice(tier, selectedLanguages, selectedUpsells || [])
+    } catch (e) {
+      return NextResponse.json({ error: 'Invalid order configuration' }, { status: 400 })
+    }
+
+    let finalAmount = serverCalculatedAmount
     let appliedVoucher = null
-    
+
     if (voucherCode) {
       const voucherResult = validateVoucher(voucherCode, finalAmount)
       if (voucherResult.valid) {
@@ -71,7 +112,7 @@ export async function POST(request: NextRequest) {
         appliedVoucher = voucherCode.toUpperCase()
       }
     }
-    
+
     // Ensure minimum charge of $1
     finalAmount = Math.max(finalAmount, 1)
 
@@ -108,7 +149,7 @@ export async function POST(request: NextRequest) {
         selectedGenre,
         heatLevel: heatLevel || '',
         selectedUpsells: JSON.stringify(selectedUpsells),
-        originalAmount: totalAmount,
+        originalAmount: serverCalculatedAmount.toString(),
         voucherCode: appliedVoucher || '',
         finalAmount: finalAmount.toString(),
         sessionId: sessionId || '',

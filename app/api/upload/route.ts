@@ -69,7 +69,24 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'No file provided' }, { status: 400 })
     }
 
+    // File size limit: 50MB max
+    const MAX_FILE_SIZE = 50 * 1024 * 1024
+    if (file.size > MAX_FILE_SIZE) {
+      return NextResponse.json({ error: 'File too large. Maximum size is 50MB.' }, { status: 400 })
+    }
+
+    // Validate session ID format (basic sanity check)
+    if (!sessionId || typeof sessionId !== 'string' || sessionId.length > 200) {
+      return NextResponse.json({ error: 'Invalid session ID' }, { status: 400 })
+    }
+
     const fileExtension = file.name.split('.').pop()?.toLowerCase()
+
+    // Whitelist allowed extensions
+    const ALLOWED_EXTENSIONS = ['txt', 'docx', 'epub', 'pdf']
+    if (!fileExtension || !ALLOWED_EXTENSIONS.includes(fileExtension)) {
+      return NextResponse.json({ error: `File type not supported. Allowed: ${ALLOWED_EXTENSIONS.join(', ')}` }, { status: 400 })
+    }
     let textContent = ''
     let wordCount = 0
 

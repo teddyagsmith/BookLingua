@@ -19,6 +19,14 @@ const LANGUAGE_NAMES: Record<string, string> = {
 // For MVP, you can call this manually or set up a simple cron job
 
 export async function POST(request: NextRequest) {
+  // This legacy route is disabled — translations are handled by Inngest (lib/translate-job.ts)
+  // Kept for reference only
+  const authHeader = request.headers.get('authorization')
+  const expectedKey = process.env.INTERNAL_API_SECRET
+  if (!expectedKey || authHeader !== `Bearer ${expectedKey}`) {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  }
+
   try {
     const { orderId, bookContent, bookTitle, authorName, email, languages, genre } = await request.json()
 
