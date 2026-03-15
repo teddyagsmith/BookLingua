@@ -446,7 +446,7 @@ Focus on: cultural adaptations, slang/register choices, setting-specific decisio
       }))
 
       await resend.emails.send({
-        from: 'BookLingua <orders@booklingua.com>',
+        from: 'BookLingua <orders@booklingua.io>',
         to: order.email,
         subject: `Your translations are ready: ${order.book_title} 🎉`,
         html: `
@@ -515,7 +515,7 @@ Focus on: cultural adaptations, slang/register choices, setting-specific decisio
     // Step 7: Notify admin
     await step.run('notify-admin', async () => {
       await resend.emails.send({
-        from: 'BookLingua <orders@booklingua.com>',
+        from: 'BookLingua <orders@booklingua.io>',
         to: process.env.ADMIN_EMAIL!,
         subject: `✅ Translation Complete: ${order.book_title}`,
         html: `

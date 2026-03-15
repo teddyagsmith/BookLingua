@@ -33,7 +33,7 @@ const faqs = [
   },
   {
     question: "Do you offer refunds?",
-    answer: "If your translation hasn't started processing yet, we offer a full refund. Once translation has begun, we're happy to work with you to address any quality concerns. Contact us at support@booklingua.com."
+    answer: "If your translation hasn't started processing yet, we offer a full refund. Once translation has begun, we're happy to work with you to address any quality concerns. Contact us at support@booklingua.io."
   },
   {
     question: "Can I provide special instructions?",
@@ -89,7 +89,7 @@ export default function FAQ() {
         <div className="mt-12 text-center">
           <p className="text-gray-600 mb-4">Still have questions?</p>
           <a
-            href="mailto:support@booklingua.com"
+            href="mailto:support@booklingua.io"
             className="inline-flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-blue-600 to-violet-600 text-white rounded-xl font-semibold hover:shadow-lg transition-all"
           >
             Contact Support →

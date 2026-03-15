@@ -99,7 +99,7 @@ export async function POST(request: NextRequest) {
 
     // 3. Send confirmation email to customer
     await resend.emails.send({
-      from: 'BookLingua <orders@booklingua.com>',
+      from: 'BookLingua <orders@booklingua.io>',
       to: customerEmail,
       subject: `Order Confirmed: ${bookTitle} Translation`,
       html: `
@@ -135,7 +135,7 @@ export async function POST(request: NextRequest) {
 
     // 4. Send notification to admin
     await resend.emails.send({
-      from: 'BookLingua <orders@booklingua.com>',
+      from: 'BookLingua <orders@booklingua.io>',
       to: process.env.ADMIN_EMAIL!,
       subject: `🎉 New Order: ${bookTitle} - $${(session.amount_total! / 100).toFixed(2)}`,
       html: `

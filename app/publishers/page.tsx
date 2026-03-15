@@ -65,7 +65,7 @@ export default function PublishersPage() {
           </p>
 
           <a
-            href="mailto:hello@booklingua.com?subject=Publisher%20Enquiry"
+            href="mailto:hello@booklingua.io?subject=Publisher%20Enquiry"
             className="inline-flex items-center gap-3 px-10 py-4 bg-gradient-to-r from-blue-600 to-violet-600 text-white rounded-2xl font-bold text-lg shadow-xl hover:shadow-2xl transition-all hover:-translate-y-1"
           >
             Get in Touch →
@@ -214,7 +214,7 @@ export default function PublishersPage() {
           </p>
 
           <a
-            href="mailto:hello@booklingua.com?subject=Publisher%20Enquiry"
+            href="mailto:hello@booklingua.io?subject=Publisher%20Enquiry"
             className="inline-flex items-center gap-3 px-12 py-5 bg-gradient-to-r from-blue-600 to-violet-600 text-white rounded-2xl font-bold text-xl shadow-2xl hover:shadow-3xl transition-all hover:-translate-y-1"
           >
             Get in Touch
@@ -222,7 +222,7 @@ export default function PublishersPage() {
           </a>
 
           <p className="mt-6 text-gray-400 text-sm">
-            hello@booklingua.com · We reply within one business day.
+            hello@booklingua.io · We reply within one business day.
           </p>
         </div>
       </section>
