@@ -66,6 +66,47 @@ const LANGUAGE_SETTINGS: Record<string, string> = {
 
 const MAX_CHUNK_WORDS = 15000
 
+// ─── Profitability & Cost Tracking ───────────────────────────────────────────
+// Claude API pricing (USD per million tokens) — update if Anthropic changes pricing
+const SONNET_INPUT_PER_M  = 3.00   // claude-sonnet-4
+const SONNET_OUTPUT_PER_M = 15.00
+const OPUS_INPUT_PER_M    = 15.00  // claude-opus-4
+const OPUS_OUTPUT_PER_M   = 75.00
+const WORDS_TO_TOKENS     = 1.35   // rough words-to-tokens multiplier
+
+/**
+ * Estimate the API cost (USD) for translating a book of `wordCount` words into ONE language.
+ * Pass 1 = Sonnet (translation). Pass 2 = Opus (editorial review with original for context).
+ */
+function estimateApiCostPerLanguage(wordCount: number): number {
+  const contentTokens = Math.ceil(wordCount * WORDS_TO_TOKENS)
+  const promptOverhead = 3000 // system prompt + genre/language settings
+
+  // Pass 1 (Sonnet): input = original + prompt, output ≈ same length as original
+  const sonnetCost = (
+    (contentTokens + promptOverhead) * SONNET_INPUT_PER_M +
+    contentTokens * SONNET_OUTPUT_PER_M
+  ) / 1_000_000
+
+  // Pass 2 (Opus): input = translated + original slice for context + prompt, output ≈ translated length
+  const opusCost = (
+    (contentTokens * 2 + promptOverhead) * OPUS_INPUT_PER_M +
+    contentTokens * OPUS_OUTPUT_PER_M
+  ) / 1_000_000
+
+  return sonnetCost + opusCost
+}
+
+/** Calculate actual spend from accumulated token usage */
+function calcActualCost(usage: {
+  sonnetIn: number; sonnetOut: number; opusIn: number; opusOut: number
+}): number {
+  return (
+    (usage.sonnetIn * SONNET_INPUT_PER_M + usage.sonnetOut * SONNET_OUTPUT_PER_M) / 1_000_000 +
+    (usage.opusIn   * OPUS_INPUT_PER_M   + usage.opusOut   * OPUS_OUTPUT_PER_M)   / 1_000_000
+  )
+}
+
 const GENRE_TRANSLATION_NOTES: Record<string, string> = {
   romance: `GENRE: Romance fiction.
 - Preserve the author's emotional tone and pacing exactly
@@ -237,6 +278,35 @@ export const translateBook = inngest.createFunction(
     const translations: Record<string, any> = {}
     const translationNotes: Record<string, string> = {}
 
+    // ── Profitability check ────────────────────────────────────────────────
+    const estCostPerLang  = estimateApiCostPerLanguage(order.word_count)
+    const estCostTotal    = estCostPerLang * languages.length
+    const estMarginPct    = ((order.amount_paid - estCostTotal) / order.amount_paid * 100).toFixed(1)
+    console.log(`[BookLingua] Order ${orderId}: revenue=$${order.amount_paid} | est. API cost=$${estCostTotal.toFixed(2)} | est. margin=${estMarginPct}%`)
+
+    if (estCostTotal > Number(order.amount_paid)) {
+      console.warn(`[BookLingua] ⚠️  UNPROFITABLE ORDER ${orderId}: est. API cost ($${estCostTotal.toFixed(2)}) > revenue ($${order.amount_paid})`)
+      // Alert — non-blocking, job still runs to honour the customer's order
+      resend.emails.send({
+        from: 'BookLingua <orders@booklingua.io>',
+        to: 'hello@booklingua.io',
+        subject: `⚠️ Unprofitable Order — ${order.book_title}`,
+        text: [
+          `Order ID: ${orderId}`,
+          `Book: ${order.book_title} (${order.word_count?.toLocaleString()} words, ${order.tier} tier)`,
+          `Languages: ${languages.join(', ')}`,
+          `Revenue: $${order.amount_paid}`,
+          `Est. API cost: $${estCostTotal.toFixed(2)}`,
+          `Est. loss: $${(estCostTotal - Number(order.amount_paid)).toFixed(2)}`,
+          ``,
+          `Likely cause: deep discount code applied. Consider adding a minimum order value for discount codes.`,
+        ].join('\n'),
+      }).catch(err => console.error('[BookLingua] Failed to send profitability alert:', err))
+    }
+
+    // Token usage accumulator for actual cost tracking
+    const tokenUsage = { sonnetIn: 0, sonnetOut: 0, opusIn: 0, opusOut: 0 }
+
     // Step 4: Translate to each language
     for (const langCode of languages) {
       const langName = LANGUAGE_NAMES[langCode]
@@ -259,7 +329,7 @@ export const translateBook = inngest.createFunction(
         const chunk = textChunks[i]
         const chunkLabel = textChunks.length > 1 ? ` (chunk ${i + 1}/${textChunks.length})` : ''
 
-        const translatedChunk = await step.run(`translate-${langCode}-chunk-${i}`, async () => {
+        const translatedChunkResult = await step.run(`translate-${langCode}-chunk-${i}`, async () => {
           const response = await anthropic.messages.create({
             model: 'claude-sonnet-4-20250514',
             max_tokens: 8000,
@@ -304,10 +374,16 @@ Provide ONLY the translation, preserving all formatting. No explanations or note
             ],
           })
 
-          return response.content[0].type === 'text' ? response.content[0].text : ''
+          return {
+            text: response.content[0].type === 'text' ? response.content[0].text : '',
+            inputTokens: response.usage.input_tokens,
+            outputTokens: response.usage.output_tokens,
+          }
         })
 
-        translatedChunks.push(translatedChunk)
+        tokenUsage.sonnetIn  += translatedChunkResult.inputTokens
+        tokenUsage.sonnetOut += translatedChunkResult.outputTokens
+        translatedChunks.push(translatedChunkResult.text)
       }
 
       const translatedText = translatedChunks.join('\n\n')
@@ -325,7 +401,7 @@ Provide ONLY the translation, preserving all formatting. No explanations or note
 
         const chunkLabel = translatedTextChunks.length > 1 ? ` (chunk ${i + 1}/${translatedTextChunks.length})` : ''
 
-        const editorialChunk = await step.run(`editorial-${langCode}-chunk-${i}`, async () => {
+        const editorialChunkResult = await step.run(`editorial-${langCode}-chunk-${i}`, async () => {
           const response = await anthropic.messages.create({
             model: 'claude-opus-4-20250514',
             max_tokens: 8000,
@@ -389,10 +465,16 @@ Focus on: cultural adaptations, slang/register choices, setting-specific decisio
             ],
           })
 
-          return response.content[0].type === 'text' ? response.content[0].text : translatedChunk
+          return {
+            text: response.content[0].type === 'text' ? response.content[0].text : translatedChunkResult.text,
+            inputTokens: response.usage.input_tokens,
+            outputTokens: response.usage.output_tokens,
+          }
         })
 
-        editorialChunks.push(editorialChunk)
+        tokenUsage.opusIn  += editorialChunkResult.inputTokens
+        tokenUsage.opusOut += editorialChunkResult.outputTokens
+        editorialChunks.push(editorialChunkResult.text)
       }
 
       const rawEditorial = editorialChunks.join('\n\n')
@@ -426,6 +508,16 @@ Focus on: cultural adaptations, slang/register choices, setting-specific decisio
         })
       })
     }
+
+    // ── Final cost summary ────────────────────────────────────────────────
+    const actualCost   = calcActualCost(tokenUsage)
+    const actualMargin = ((Number(order.amount_paid) - actualCost) / Number(order.amount_paid) * 100).toFixed(1)
+    console.log(
+      `[BookLingua] Order ${orderId} DONE | revenue=$${order.amount_paid} | ` +
+      `actual API cost=$${actualCost.toFixed(2)} | margin=${actualMargin}% | ` +
+      `tokens: sonnet_in=${tokenUsage.sonnetIn} sonnet_out=${tokenUsage.sonnetOut} ` +
+      `opus_in=${tokenUsage.opusIn} opus_out=${tokenUsage.opusOut}`
+    )
 
     // Step 5: Update order status to completed
     await step.run('update-status-completed', async () => {
