@@ -739,7 +739,7 @@ export default function Home() {
               <Logo size="sm" />
               <span className="text-xl font-bold text-white" style={serifFont}>BookLingua</span>
             </div>
-            <p>© 2025 BookLingua. All rights reserved.</p>
+            <p>© 2026 BookLingua. All rights reserved.</p>
           </div>
         </footer>
       </div>

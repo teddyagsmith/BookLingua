@@ -916,7 +916,7 @@ export default function ExamplesPage() {
             <Logo size="sm" />
             <span className="text-xl font-bold text-white" style={serifFont}>BookLingua</span>
           </div>
-          <p className="mb-2">© 2025 BookLingua. All rights reserved.</p>
+          <p className="mb-2">© 2026 BookLingua. All rights reserved.</p>
           <p className="text-xs text-gray-600">
             Sample text: <em>Dracula</em> by Bram Stoker (1897) — public domain
           </p>
