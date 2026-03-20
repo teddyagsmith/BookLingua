@@ -31,7 +31,7 @@ function SuccessContent() {
                   1
                 </div>
                 <div>
-                  <p className="font-semibold text-gray-900">Translation (2-3 days)</p>
+                  <p className="font-semibold text-gray-900">Translation (1-2 hours)</p>
                   <p className="text-sm text-gray-600">Our AI translates your manuscript while preserving formatting</p>
                 </div>
               </div>
@@ -40,7 +40,7 @@ function SuccessContent() {
                   2
                 </div>
                 <div>
-                  <p className="font-semibold text-gray-900">Editorial Review (1-2 days)</p>
+                  <p className="font-semibold text-gray-900">Editorial Review (30-60 mins)</p>
                   <p className="text-sm text-gray-600">Premium AI reviews for cultural accuracy and natural phrasing</p>
                 </div>
               </div>
