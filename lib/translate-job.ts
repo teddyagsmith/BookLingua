@@ -534,7 +534,8 @@ Focus on: cultural adaptations, slang/register choices, setting-specific decisio
     await step.run('send-completion-email', async () => {
       const downloadLinks = languages.map(lang => ({
         language: LANGUAGE_NAMES[lang],
-        url: buildDownloadUrl(orderId, lang),
+        reviewUrl: buildDownloadUrl(orderId, lang, 'review'),
+        finalUrl: buildDownloadUrl(orderId, lang, 'final'),
       }))
 
       await resend.emails.send({
@@ -552,19 +553,25 @@ Focus on: cultural adaptations, slang/register choices, setting-specific decisio
             <div style="background: #f5f3ff; padding: 20px; border-radius: 12px; margin: 20px 0;">
               <h3 style="margin-top: 0;">Download Your Translations</h3>
               ${downloadLinks.map(link => `
-                <p style="margin: 10px 0;">
-                  <strong>${link.language}:</strong>
-                  <a href="${link.url}" style="color: #7c3aed; text-decoration: none;"> Download File →</a>
-                </p>
+                <div style="margin: 14px 0; padding: 12px; background: #fff; border-radius: 8px; border: 1px solid #e5e7eb;">
+                  <p style="margin: 0 0 8px 0; font-weight: bold; color: #111;">${link.language}</p>
+                  <p style="margin: 0 0 4px 0;">
+                    📝 <a href="${link.reviewUrl}" style="color: #7c3aed; text-decoration: none; font-weight: 500;">Review Version (with highlights)</a>
+                    <span style="color: #6b7280; font-size: 12px;"> — see every editorial change in yellow</span>
+                  </p>
+                  <p style="margin: 0;">
+                    ✅ <a href="${link.finalUrl}" style="color: #059669; text-decoration: none; font-weight: 500;">Final Version (clean, publish-ready)</a>
+                    <span style="color: #6b7280; font-size: 12px;"> — ready to upload to KDP or your publisher</span>
+                  </p>
+                </div>
               `).join('')}
             </div>
             
             <div style="background: #fef3c7; padding: 15px; border-radius: 8px; margin: 20px 0;">
               <p style="margin: 0; color: #92400e;">
-                <strong>📝 How to review your translations:</strong><br><br>
-                Text highlighted in yellow shows the <em>original</em> translation before our editorial improvements. 
-                The clean text that follows is the improved version ready for publishing.<br><br>
-                Simply delete the yellow highlighted portions to get your final, polished translation.
+                <strong>📝 Two files per language — here's how to use them:</strong><br><br>
+                <strong>Review Version</strong> — Yellow highlighted text is the first-pass translation. The clean text after it is our editorial improvement. Use this to approve every change before publishing.<br><br>
+                <strong>Final Version</strong> — Clean, publish-ready. No highlights. Ready to upload directly to KDP, Atticus, Vellum, or your publisher.
               </p>
             </div>
 

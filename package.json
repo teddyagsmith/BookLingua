@@ -12,6 +12,7 @@
     "@supabase/supabase-js": "^2.39.0",
     "@types/pdf-parse": "^1.1.5",
     "docx": "^8.5.0",
+    "epub-gen-memory": "^1.1.2",
     "epub2": "^3.0.2",
     "inngest": "^3.0.0",
     "mammoth": "^1.6.0",

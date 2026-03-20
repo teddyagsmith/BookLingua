@@ -27,8 +27,9 @@ export function verifyDownloadToken(orderId: string, lang: string, token: string
 
 /**
  * Builds a signed download URL.
+ * type: 'review' (highlighted DOCX) | 'final' (clean, original format)
  */
-export function buildDownloadUrl(orderId: string, lang: string): string {
+export function buildDownloadUrl(orderId: string, lang: string, type: 'review' | 'final' = 'review'): string {
   const token = signDownloadToken(orderId, lang)
-  return `${process.env.NEXT_PUBLIC_APP_URL}/api/download/${orderId}/${lang}?token=${token}`
+  return `${process.env.NEXT_PUBLIC_APP_URL}/api/download/${orderId}/${lang}?token=${token}&type=${type}`
 }
