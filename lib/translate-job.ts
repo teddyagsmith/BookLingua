@@ -466,7 +466,7 @@ Focus on: cultural adaptations, slang/register choices, setting-specific decisio
           })
 
           return {
-            text: response.content[0].type === 'text' ? response.content[0].text : translatedChunkResult.text,
+            text: response.content[0].type === 'text' ? response.content[0].text : translatedChunk,
             inputTokens: response.usage.input_tokens,
             outputTokens: response.usage.output_tokens,
           }
