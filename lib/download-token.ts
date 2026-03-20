@@ -1,6 +1,17 @@
 import { createHmac } from 'crypto'
 
 /**
+ * Signs + builds a one-click feedback rating URL.
+ */
+export function buildFeedbackUrl(orderId: string, rating: number): string {
+  const token = createHmac('sha256', process.env.STRIPE_WEBHOOK_SECRET!)
+    .update(`feedback:${orderId}`)
+    .digest('hex')
+    .slice(0, 32)
+  return `${process.env.NEXT_PUBLIC_APP_URL}/api/feedback?orderId=${orderId}&rating=${rating}&token=${token}`
+}
+
+/**
  * Signs a download token for a specific order + language.
  * Uses STRIPE_WEBHOOK_SECRET as the HMAC key (already available, strong secret).
  */

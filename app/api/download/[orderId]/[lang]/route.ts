@@ -10,7 +10,7 @@ import {
   AlignmentType,
   ShadingType,
 } from 'docx'
-import Epub from 'epub-gen-memory'
+import { default as EPub } from 'epub-gen-memory'
 
 const LANG_NAMES: Record<string, string> = {
   'es-es':    'Spanish_Spain',
@@ -158,7 +158,7 @@ async function buildFinalEpub(
 
   // Split into chapters by heading detection
   const lines = clean.split('\n')
-  const chapters: { title: string; data: string }[] = []
+  const chapters: { title: string; content: string }[] = []
   let currentTitle = 'Chapter 1'
   let currentLines: string[] = []
 
@@ -167,7 +167,7 @@ async function buildFinalEpub(
       if (currentLines.filter(l => l.trim()).length > 0) {
         chapters.push({
           title: currentTitle,
-          data: `<p>${currentLines.filter(l => l.trim()).join('</p><p>')}</p>`,
+          content: `<p>${currentLines.filter(l => l.trim()).join('</p><p>')}</p>`,
         })
       }
       currentTitle = line.trim()
@@ -181,7 +181,7 @@ async function buildFinalEpub(
   if (currentLines.filter(l => l.trim()).length > 0) {
     chapters.push({
       title: currentTitle,
-      data: `<p>${currentLines.filter(l => l.trim()).join('</p><p>')}</p>`,
+      content: `<p>${currentLines.filter(l => l.trim()).join('</p><p>')}</p>`,
     })
   }
 
@@ -189,19 +189,21 @@ async function buildFinalEpub(
   if (chapters.length === 0) {
     chapters.push({
       title: bookTitle,
-      data: `<p>${clean.split('\n').filter(l => l.trim()).join('</p><p>')}</p>`,
+      content: `<p>${clean.split('\n').filter(l => l.trim()).join('</p><p>')}</p>`,
     })
   }
 
-  const epub = new Epub({
-    title: bookTitle,
-    author: `Translated by BookLingua`,
-    description: `Translated into ${langDisplay}`,
-    publisher: 'BookLingua',
-    content: chapters,
-  })
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const buffer = await new (EPub as any)(
+    {
+      title: bookTitle,
+      author: 'Translated by BookLingua',
+      description: `Translated into ${langDisplay}`,
+      publisher: 'BookLingua',
+    },
+    chapters,
+  )
 
-  const buffer = await epub.genEpub()
   return Buffer.from(buffer)
 }
 
@@ -248,7 +250,7 @@ export async function GET(
     if (type === 'review') {
       const doc = buildReviewDocx(file.content, order.book_title, langDisplay)
       const buffer = await Packer.toBuffer(doc)
-      return new NextResponse(buffer, {
+      return new NextResponse(new Uint8Array(buffer), {
         headers: {
           'Content-Type': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
           'Content-Disposition': `attachment; filename="${safeTitle}_${langName}_Review.docx"`,
@@ -259,7 +261,7 @@ export async function GET(
     // ── Final version: clean, in original format ──
     if (fileFormat === '.epub') {
       const buffer = await buildFinalEpub(file.content, order.book_title, langDisplay)
-      return new NextResponse(buffer, {
+      return new NextResponse(new Uint8Array(buffer), {
         headers: {
           'Content-Type': 'application/epub+zip',
           'Content-Disposition': `attachment; filename="${safeTitle}_${langName}_Final.epub"`,
@@ -280,7 +282,7 @@ export async function GET(
     // DOCX or PDF → clean DOCX
     const doc = buildFinalDocx(file.content, order.book_title, langDisplay)
     const buffer = await Packer.toBuffer(doc)
-    return new NextResponse(buffer, {
+    return new NextResponse(new Uint8Array(buffer), {
       headers: {
         'Content-Type': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
         'Content-Disposition': `attachment; filename="${safeTitle}_${langName}_Final.docx"`,

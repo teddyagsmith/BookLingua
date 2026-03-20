@@ -1,6 +1,6 @@
 import { inngest } from '@/lib/inngest'
 import { supabaseAdmin } from '@/lib/supabase'
-import { buildDownloadUrl } from '@/lib/download-token'
+import { buildDownloadUrl, buildFeedbackUrl } from '@/lib/download-token'
 import Anthropic from '@anthropic-ai/sdk'
 import { Resend } from 'resend'
 
@@ -253,6 +253,16 @@ export const translateBook = inngest.createFunction(
       return data
     })
 
+    // Step 1b: Fetch author preferences (returning customers)
+    const authorPrefs = await step.run('get-author-preferences', async () => {
+      const { data } = await supabaseAdmin
+        .from('author_preferences')
+        .select('preferred_register, terminology_notes, style_notes, previous_special_instructions')
+        .eq('email', order.email)
+        .maybeSingle()
+      return data
+    })
+
     // Step 2: Get the original file content
     const fileContent = await step.run('get-file-content', async () => {
       const { data, error } = await supabaseAdmin
@@ -320,6 +330,24 @@ export const translateBook = inngest.createFunction(
         : ''
       const genreGuidance = [genreNotes, heatNotes, settingNotes].filter(Boolean).join('\n\n')
 
+      // Fetch genre glossary terms for this language
+      const glossaryTerms = await step.run(`get-glossary-${langCode}`, async () => {
+        const { data } = await supabaseAdmin
+          .from('genre_glossaries')
+          .select('source_term, target_term, notes')
+          .eq('language', langCode)
+          .or(`genre.eq.${genreKey},genre.eq.general`)
+        return data || []
+      })
+
+      const glossarySection = glossaryTerms.length > 0
+        ? `APPROVED TERMINOLOGY GLOSSARY:\nUse these approved translations consistently:\n${glossaryTerms.map((t: { source_term: string; target_term: string; notes?: string }) => `- "${t.source_term}" → "${t.target_term}"${t.notes ? ` (${t.notes})` : ''}`).join('\n')}\n`
+        : ''
+
+      const authorPrefsSection = authorPrefs
+        ? `RETURNING AUTHOR PREFERENCES:\n${authorPrefs.preferred_register ? `- Register: ${authorPrefs.preferred_register}\n` : ''}${authorPrefs.terminology_notes ? `- Terminology: ${authorPrefs.terminology_notes}\n` : ''}${authorPrefs.style_notes ? `- Style: ${authorPrefs.style_notes}\n` : ''}`
+        : ''
+
       // Split book into chunks for Pass 1
       const textChunks = chunkText(fileContent, MAX_CHUNK_WORDS)
       const translatedChunks: string[] = []
@@ -364,7 +392,7 @@ AUTHOR: ${order.author_name}
 
 ${genreGuidance}
 
-${order.special_instructions ? `AUTHOR'S SPECIAL INSTRUCTIONS:\n${order.special_instructions}\n` : ''}
+${glossarySection}${authorPrefsSection}${order.special_instructions ? `AUTHOR'S SPECIAL INSTRUCTIONS:\n${order.special_instructions}\n` : ''}
 
 TEXT TO TRANSLATE:
 ${chunk}
@@ -424,6 +452,7 @@ ${langSettings}
 GENRE & STYLE GUIDANCE:
 ${genreGuidance}
 
+${glossarySection}${authorPrefsSection}
 ORIGINAL ENGLISH (for reference):
 ${origSlice}
 
@@ -624,6 +653,72 @@ Focus on: cultural adaptations, slang/register choices, setting-specific decisio
           <p><strong>Book:</strong> ${order.book_title}</p>
           <p><strong>Languages:</strong> ${languages.map(l => LANGUAGE_NAMES[l]).join(', ')}</p>
           <p><strong>Status:</strong> ✅ Completed and delivered</p>
+        `,
+      })
+    })
+
+    // Step 8: Update author preferences (upsert style notes for returning orders)
+    await step.run('update-author-preferences', async () => {
+      const prevInstructions = order.special_instructions ? [order.special_instructions] : []
+      const { data: existing } = await supabaseAdmin
+        .from('author_preferences')
+        .select('previous_special_instructions')
+        .eq('email', order.email)
+        .maybeSingle()
+
+      const allInstructions = [
+        ...(existing?.previous_special_instructions || []),
+        ...prevInstructions,
+      ].slice(-10) // keep last 10
+
+      await supabaseAdmin
+        .from('author_preferences')
+        .upsert({
+          email: order.email,
+          previous_special_instructions: allInstructions,
+          terminology_notes: order.special_instructions || undefined,
+          last_updated: new Date().toISOString(),
+        }, { onConflict: 'email', ignoreDuplicates: false })
+    })
+
+    // Step 9: Wait 24h then send feedback request
+    await step.sleep('wait-for-feedback-window', '24h')
+
+    await step.run('send-feedback-email', async () => {
+      const stars = [1, 2, 3, 4, 5]
+      const starLinks = stars.map(n => {
+        const url = buildFeedbackUrl(orderId, n)
+        const emoji = '⭐'.repeat(n)
+        return `<a href="${url}" style="display:inline-block;margin:4px;padding:10px 16px;background:#7c3aed;color:white;border-radius:8px;text-decoration:none;font-size:20px;" title="${n} star${n > 1 ? 's' : ''}">${emoji}</a>`
+      }).join('')
+
+      await resend.emails.send({
+        from: 'BookLingua <orders@booklingua.io>',
+        to: order.email,
+        subject: `How was your ${languages.map(l => LANGUAGE_NAMES[l]).join(' & ')} translation? ⭐`,
+        html: `
+          <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto;">
+            <h2 style="color: #7c3aed;">How did we do? 📚</h2>
+            <p>Hi ${order.author_name},</p>
+            <p>You received your <strong>${order.book_title}</strong> translation${languages.length > 1 ? 's' : ''} yesterday. We'd love to know how it went!</p>
+
+            <div style="background: #f5f3ff; padding: 24px; border-radius: 12px; text-align: center; margin: 24px 0;">
+              <p style="margin: 0 0 16px; font-weight: bold; color: #374151;">How would you rate your translation?</p>
+              <div>${starLinks}</div>
+            </div>
+
+            <div style="background: #ecfdf5; padding: 20px; border-radius: 12px; margin: 24px 0; border-left: 4px solid #059669;">
+              <p style="margin: 0; color: #065f46;"><strong>📚 Got a backlist?</strong></p>
+              <p style="margin: 8px 0 0; color: #065f46;">
+                If you have more books to translate, we offer <strong>bulk pricing</strong> for backlist orders — 
+                often 20–30% off per language. 
+                <a href="mailto:hello@booklingua.io" style="color: #059669; font-weight: bold;">Get in touch for a custom quote →</a>
+              </p>
+            </div>
+
+            <p style="color: #6b7280; font-size: 14px;">Questions or feedback? Just reply to this email — we read every one.</p>
+            <p>The BookLingua Team</p>
+          </div>
         `,
       })
     })
