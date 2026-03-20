@@ -121,8 +121,8 @@ export async function POST(request: NextRequest) {
           
           <h3>What happens next?</h3>
           <ol>
-            <li><strong>Translation (2-3 days):</strong> Your book is being translated while preserving formatting</li>
-            <li><strong>Editorial Review (1-2 days):</strong> Premium review with changes highlighted in yellow</li>
+            <li><strong>Translation (1-2 hours):</strong> Our AI translates your manuscript while preserving formatting</li>
+            <li><strong>Editorial Review (30-60 mins):</strong> Premium AI reviews for cultural accuracy and natural phrasing</li>
             <li><strong>Delivery:</strong> You'll receive an email with download links</li>
           </ol>
           
