@@ -551,15 +551,28 @@ Focus on: cultural adaptations, slang/register choices, setting-specific decisio
 
     // Step 5: Update order status to completed (with actual cost metrics)
     await step.run('update-status-completed', async () => {
+      // Critical update — always runs
       await supabaseAdmin
         .from('orders')
         .update({ 
           status: 'completed',
           completed_at: new Date().toISOString(),
-          api_cost: parseFloat(actualCost.toFixed(4)),
-          margin_pct: parseFloat(((Number(order.amount_paid) - actualCost) / Number(order.amount_paid) * 100).toFixed(2)),
         })
         .eq('id', orderId)
+
+      // Best-effort cost tracking — won't block completion if columns don't exist yet
+      try {
+        await supabaseAdmin
+          .from('orders')
+          .update({
+            api_cost: parseFloat(actualCost.toFixed(4)),
+            margin_pct: parseFloat(((Number(order.amount_paid) - actualCost) / Number(order.amount_paid) * 100).toFixed(2)),
+          })
+          .eq('id', orderId)
+          .throwOnError()
+      } catch {
+        console.warn(`[BookLingua] Could not save cost metrics for order ${orderId} — columns may not exist yet. Run migration: ALTER TABLE orders ADD COLUMN IF NOT EXISTS api_cost numeric(10,4); ALTER TABLE orders ADD COLUMN IF NOT EXISTS margin_pct numeric(6,2);`)
+      }
     })
 
     // Step 6: Send completion email to customer
