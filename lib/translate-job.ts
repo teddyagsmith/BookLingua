@@ -1,6 +1,7 @@
 import { inngest } from '@/lib/inngest'
 import { supabaseAdmin } from '@/lib/supabase'
 import { buildDownloadUrl, buildFeedbackUrl } from '@/lib/download-token'
+import { generateLaunchStrategy } from '@/lib/launch-strategy'
 import Anthropic from '@anthropic-ai/sdk'
 import { Resend } from 'resend'
 
@@ -639,6 +640,107 @@ Focus on: cultural adaptations, slang/register choices, setting-specific decisio
         `,
       })
     })
+
+    // Step 6b: Generate and send Launch Strategy Pack (if purchased as upsell)
+    const upsells = (order.upsells as string[]) || []
+    if (upsells.includes('launch-pack')) {
+      await step.run('send-launch-pack', async () => {
+        const LANGUAGE_TARGET_MARKETS: Record<string, string> = {
+          'es-es': 'Spain',
+          'es-latam': 'Latin America (Mexico, Colombia, Argentina)',
+          es: 'Latin America',
+          fr: 'France',
+          de: 'Germany',
+          'pt-pt': 'Portugal',
+          'pt-br': 'Brazil',
+          pt: 'Brazil/Portugal',
+        }
+
+        // Use first ~500 words of the original content as book description
+        const bookDescriptionWords = fileContent.trim().split(/\s+/).slice(0, 500).join(' ')
+
+        // Generate one launch pack per language
+        const packSections: string[] = []
+        for (const langCode of languages) {
+          const langName = LANGUAGE_NAMES[langCode]
+          const targetMarket = LANGUAGE_TARGET_MARKETS[langCode] || langName
+
+          try {
+            const strategy = await generateLaunchStrategy({
+              bookTitle: order.book_title,
+              authorName: order.author_name,
+              genre: order.genre || 'Fiction',
+              bookDescription: bookDescriptionWords,
+              targetLanguage: langName,
+              targetMarket,
+            })
+
+            const section = `
+              <div style="margin-bottom:40px">
+                <h2 style="font-size:20px;color:#7c3aed;border-bottom:2px solid #ede9fe;padding-bottom:8px">
+                  ${langName} — ${targetMarket}
+                </h2>
+
+                <h3 style="font-size:16px;margin-top:20px">📦 Amazon Backend Keywords</h3>
+                <p style="color:#555;font-size:13px">Paste these into your 7 keyword boxes on KDP:</p>
+                <ol style="line-height:2;color:#333">
+                  ${strategy.backendKeywords.map(k => `<li>${k}</li>`).join('')}
+                </ol>
+
+                <h3 style="font-size:16px;margin-top:20px">🎯 Amazon Ads Keywords</h3>
+                <p style="line-height:2;color:#333">${strategy.adKeywords.join(' · ')}</p>
+
+                <h3 style="font-size:16px;margin-top:20px">📚 Recommended Categories</h3>
+                <ul style="line-height:2;color:#333">
+                  ${strategy.categories.map(c => `<li>${c}</li>`).join('')}
+                </ul>
+
+                <h3 style="font-size:16px;margin-top:20px">💶 Pricing Recommendation</h3>
+                <p><strong>eBook:</strong> ${strategy.pricingRecommendation.ebook} &nbsp;&nbsp; <strong>Paperback:</strong> ${strategy.pricingRecommendation.paperback}</p>
+                <p style="color:#777;font-size:13px">${strategy.pricingRecommendation.reasoning}</p>
+
+                <h3 style="font-size:16px;margin-top:20px">✍️ Optimised Book Description</h3>
+                <div style="background:#f9f9f9;padding:16px;border-radius:8px;line-height:1.7;color:#333">
+                  ${strategy.bookDescription.replace(/\n/g, '<br>')}
+                </div>
+
+                <h3 style="font-size:16px;margin-top:20px">⭐ Getting Your First Reviews</h3>
+                <ol style="line-height:2;color:#333">
+                  ${strategy.reviewStrategy.map(s => `<li>${s}</li>`).join('')}
+                </ol>
+
+                <h3 style="font-size:16px;margin-top:20px">✅ KDP Upload Checklist</h3>
+                <ul style="line-height:2;color:#333">
+                  ${strategy.kdpUploadChecklist.map(s => `<li>${s}</li>`).join('')}
+                </ul>
+              </div>
+            `
+            packSections.push(section)
+          } catch (err) {
+            console.error(`[BookLingua] Launch pack generation failed for ${langCode}:`, err)
+          }
+        }
+
+        if (packSections.length === 0) return // Nothing generated, skip email
+
+        await resend.emails.send({
+          from: 'BookLingua <orders@booklingua.io>',
+          to: order.email,
+          subject: `Your Launch Strategy Pack is ready: ${order.book_title} 🚀`,
+          html: `
+            <div style="font-family:Georgia,serif;max-width:640px;margin:0 auto;padding:32px 24px;color:#1a1a1a">
+              <h1 style="font-size:24px;font-weight:bold;color:#7c3aed">🚀 Your Launch Strategy Pack</h1>
+              <p style="color:#555">For <strong>${order.book_title}</strong> by ${order.author_name}</p>
+              <hr style="border:none;border-top:1px solid #eee;margin:24px 0">
+              ${packSections.join('<hr style="border:none;border-top:1px solid #eee;margin:32px 0">')}
+              <hr style="border:none;border-top:1px solid #eee;margin:24px 0">
+              <p style="color:#777;font-size:13px">Questions? Just reply to this email. Good luck with your launch! 🎉</p>
+              <p style="color:#777;font-size:13px"><a href="https://booklingua.io" style="color:#8b5cf6">booklingua.io</a></p>
+            </div>
+          `,
+        })
+      })
+    }
 
     // Step 7: Notify admin
     await step.run('notify-admin', async () => {
