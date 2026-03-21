@@ -103,22 +103,29 @@ export async function POST(request: NextRequest) {
       try {
         textContent = await extractEpubText(buffer)
         if (!textContent || textContent.length < 100) {
-          // Fallback if extraction yields too little
-          textContent = `[EPUB: ${file.name} — text extraction produced minimal content. Please re-upload as DOCX or TXT.]`
+          return NextResponse.json({
+            error: 'Could not extract text from this EPUB file. It may be DRM-protected or image-only. Please export your book as DOCX or TXT and re-upload.',
+          }, { status: 400 })
         }
       } catch (err) {
         console.error('EPUB extraction failed:', err)
-        textContent = `[EPUB: ${file.name} — extraction failed. Please re-upload as DOCX or TXT for best results.]`
+        return NextResponse.json({
+          error: 'Could not read this EPUB file. Please export your book as DOCX or TXT and re-upload.',
+        }, { status: 400 })
       }
     } else if (fileExtension === 'pdf') {
       try {
         textContent = await extractPdfText(buffer)
         if (!textContent || textContent.length < 100) {
-          textContent = `[PDF: ${file.name} — text extraction produced minimal content. Please re-upload as DOCX or TXT.]`
+          return NextResponse.json({
+            error: 'Could not extract text from this PDF. It may be a scanned image or have text-layer restrictions. Please export your book as DOCX or TXT and re-upload.',
+          }, { status: 400 })
         }
       } catch (err) {
         console.error('PDF extraction failed:', err)
-        textContent = `[PDF: ${file.name} — extraction failed. Please re-upload as DOCX or TXT for best results.]`
+        return NextResponse.json({
+          error: 'Could not read this PDF file. Please export your book as DOCX or TXT and re-upload.',
+        }, { status: 400 })
       }
     } else {
       return NextResponse.json({ error: `Unsupported file type: .${fileExtension}` }, { status: 400 })
