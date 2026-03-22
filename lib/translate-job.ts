@@ -65,7 +65,7 @@ const LANGUAGE_SETTINGS: Record<string, string> = {
   pt: `Use Brazilian Portuguese as the default for wider readability.`,
 }
 
-const MAX_CHUNK_WORDS = 15000
+const MAX_CHUNK_WORDS = 4000
 
 // ─── Profitability & Cost Tracking ───────────────────────────────────────────
 // Claude API pricing (USD per million tokens) — update if Anthropic changes pricing
