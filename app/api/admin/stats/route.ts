@@ -13,7 +13,7 @@ export async function GET(request: NextRequest) {
     const since = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString()
     const { data: orders, error } = await supabaseAdmin
       .from('orders')
-      .select('id, email, book_title, word_count, languages, tier, amount_paid, status, created_at, completed_at')
+      .select('id, email, book_title, word_count, languages, tier, amount_paid, api_cost, margin_pct, status, created_at, completed_at')
       .gte('created_at', since)
       .order('created_at', { ascending: false })
 
@@ -36,8 +36,11 @@ export async function GET(request: NextRequest) {
     const weekRevenue = weekOrders.reduce((s, o) => s + Number(o.amount_paid || 0), 0)
     const totalRevenue = orders?.reduce((s, o) => s + Number(o.amount_paid || 0), 0) || 0
 
-    const avgMargin = null // api_cost/margin_pct columns not yet migrated
-    const totalApiCost = 0
+    const marginsWithData = completedOrders.filter(o => o.margin_pct != null)
+    const avgMargin = marginsWithData.length > 0
+      ? marginsWithData.reduce((s, o) => s + Number(o.margin_pct), 0) / marginsWithData.length
+      : null
+    const totalApiCost = completedOrders.reduce((s, o) => s + Number(o.api_cost || 0), 0)
 
     return NextResponse.json({
       orders: orders || [],
