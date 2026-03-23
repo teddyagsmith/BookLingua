@@ -44,11 +44,48 @@ function stripHighlightMarkers(text: string): string {
 function isHeading(line: string): boolean {
   const t = line.trim()
   return (
+    /^#{1,3}\s/.test(t) ||  // Markdown # headings
     /^(chapter|chapitre|capítulo|kapitel|capitolo)\s+\d+/i.test(t) ||
     /^(prologue|epilogue|introduction|conclusion|foreword|preface|prólogo|épilogue|einleitung|schluss)/i.test(t) ||
     (t.length < 60 && t.length > 3 && t === t.toUpperCase()) ||
     /^\*{3}/.test(t)
   )
+}
+
+function stripMarkdownHeading(t: string): string {
+  return t.replace(/^#{1,3}\s+/, '')
+}
+
+// Parse inline *italic*, **bold**, _italic_ into TextRuns
+function parseInlineRuns(text: string): TextRun[] {
+  const runs: TextRun[] = []
+  // Match **bold**, *italic*, _italic_ — in that order (bold first to avoid partial match)
+  const pattern = /\*\*([^*]+)\*\*|\*([^*]+)\*|_([^_]+)_/g
+  let lastIndex = 0
+  let match: RegExpExecArray | null
+
+  while ((match = pattern.exec(text)) !== null) {
+    if (match.index > lastIndex) {
+      const before = text.slice(lastIndex, match.index)
+      if (before) runs.push(new TextRun({ text: before }))
+    }
+    if (match[1] !== undefined) {
+      runs.push(new TextRun({ text: match[1], bold: true }))
+    } else if (match[2] !== undefined) {
+      runs.push(new TextRun({ text: match[2], italics: true }))
+    } else if (match[3] !== undefined) {
+      runs.push(new TextRun({ text: match[3], italics: true }))
+    }
+    lastIndex = pattern.lastIndex
+  }
+
+  if (lastIndex < text.length) {
+    const rest = text.slice(lastIndex)
+    if (rest.trim()) runs.push(new TextRun({ text: rest }))
+  }
+
+  if (runs.length === 0 && text.trim()) runs.push(new TextRun({ text }))
+  return runs
 }
 
 function parseHighlightedRuns(text: string): TextRun[] {
@@ -135,11 +172,11 @@ function buildFinalDocx(content: string, bookTitle: string, langDisplay: string)
     if (!t) { paragraphs.push(new Paragraph({ text: '' })); continue }
 
     if (isHeading(t)) {
-      paragraphs.push(new Paragraph({ text: t, heading: HeadingLevel.HEADING_1 }))
+      paragraphs.push(new Paragraph({ text: stripMarkdownHeading(t), heading: HeadingLevel.HEADING_1 }))
     } else {
       for (const line of t.split('\n')) {
         if (!line.trim()) continue
-        paragraphs.push(new Paragraph({ children: [new TextRun({ text: line })], spacing: { after: 120 } }))
+        paragraphs.push(new Paragraph({ children: parseInlineRuns(line), spacing: { after: 120 } }))
       }
     }
   }
