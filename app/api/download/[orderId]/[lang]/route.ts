@@ -38,7 +38,7 @@ const LANG_DISPLAY: Record<string, string> = {
 
 function stripHighlightMarkers(text: string): string {
   // Remove [[ORIGINAL: ...]] — keep only the improved text that follows
-  return text.replace(/\[\[ORIGINAL:\s*.*?\]\]/g, '').replace(/\s{2,}/g, ' ')
+  return text.replace(/\[\[ORIGINAL:\s*.*?\]\]/g, '').replace(/[^\S\n]{2,}/g, ' ')
 }
 
 function isHeading(line: string): boolean {
