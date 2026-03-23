@@ -270,7 +270,7 @@ export default function AdminPage() {
                     <td className="px-4 py-3 text-right text-gray-600">{o.word_count?.toLocaleString()}</td>
                     <td className="px-4 py-3">
                       <div className="flex gap-1 flex-wrap">
-                        {(o.languages || []).map(l => (
+                        {(Array.isArray(o.languages) ? o.languages : JSON.parse(o.languages || '[]')).map(l => (
                           <span key={l} className="bg-violet-50 text-violet-700 text-xs px-1.5 py-0.5 rounded font-medium">
                             {LANG_NAMES[l] || l.toUpperCase()}
                           </span>
@@ -318,7 +318,7 @@ export default function AdminPage() {
                     </span>
                   )}
                   <div className="flex gap-1 ml-auto">
-                    {(o.languages || []).map(l => (
+                    {(Array.isArray(o.languages) ? o.languages : JSON.parse(o.languages || '[]')).map(l => (
                       <span key={l} className="bg-violet-50 text-violet-700 text-xs px-1.5 py-0.5 rounded font-medium">
                         {LANG_NAMES[l] || l.toUpperCase()}
                       </span>
