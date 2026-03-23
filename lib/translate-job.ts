@@ -232,11 +232,56 @@ function chunkText(text: string, maxWords: number = MAX_CHUNK_WORDS): string[] {
 }
 
 // Main translation job - triggered automatically after payment
+// ─── SQL Migration (run once in Supabase SQL editor) ─────────────────────────
+// CREATE TABLE IF NOT EXISTS translation_chunks (
+//   id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
+//   order_id uuid REFERENCES orders(id) ON DELETE CASCADE,
+//   lang_code text NOT NULL,
+//   chunk_index integer NOT NULL,
+//   pass text NOT NULL CHECK (pass IN ('sonnet', 'opus')),
+//   content text,
+//   input_tokens integer,
+//   output_tokens integer,
+//   status text DEFAULT 'completed',
+//   created_at timestamptz DEFAULT now(),
+//   UNIQUE(order_id, lang_code, chunk_index, pass)
+// );
+// CREATE INDEX IF NOT EXISTS idx_translation_chunks ON translation_chunks(order_id, lang_code, pass, chunk_index);
+// ─────────────────────────────────────────────────────────────────────────────
+
 export const translateBook = inngest.createFunction(
   { 
     id: 'translate-book',
     name: 'Translate Book',
     retries: 3,
+    onFailure: async ({ event, error }) => {
+      // Fire-and-forget alert email on job failure
+      // In onFailure, event is the failure event; original data is at event.data.event.data
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const origData = (event as any).data?.event?.data || {}
+      const orderId = origData.orderId || 'unknown'
+      try {
+        const { data: order } = await supabaseAdmin.from('orders').select('book_title, email, word_count').eq('id', orderId).single()
+        await resend.emails.send({
+          from: 'BookLingua <orders@booklingua.io>',
+          to: process.env.ADMIN_EMAIL || 'hello@booklingua.io',
+          subject: `⚠️ Translation failed — ${order?.book_title || orderId} (${order?.email || 'unknown'})`,
+          text: [
+            `Order ID: ${orderId}`,
+            `Book: ${order?.book_title || 'unknown'} (${order?.word_count?.toLocaleString() || '?'} words)`,
+            `Customer: ${order?.email || 'unknown'}`,
+            `Error: ${error?.message || 'Unknown error'}`,
+            ``,
+            `Action required: check Supabase and retry the job.`,
+            `https://supabase.com/dashboard/project/rtpoizdvgqwazizdqmyw/editor`,
+          ].join('\n'),
+        })
+        // Mark order as failed so customer knows
+        await supabaseAdmin.from('orders').update({ status: 'failed' }).eq('id', orderId)
+      } catch (e) {
+        console.error('[BookLingua] onFailure handler error:', e)
+      }
+    },
   },
   { event: 'book/translate.requested' },
   async ({ event, step }) => {
@@ -359,6 +404,16 @@ export const translateBook = inngest.createFunction(
         const chunkLabel = textChunks.length > 1 ? ` (chunk ${i + 1}/${textChunks.length})` : ''
 
         const translatedChunkResult = await step.run(`translate-${langCode}-chunk-${i}`, async () => {
+          // Check Supabase cache first — eliminates replay overhead for large books
+          const { data: cached } = await supabaseAdmin
+            .from('translation_chunks')
+            .select('content, input_tokens, output_tokens')
+            .eq('order_id', orderId).eq('lang_code', langCode).eq('chunk_index', i).eq('pass', 'sonnet')
+            .maybeSingle()
+          if (cached?.content) {
+            return { chunkIndex: i, inputTokens: cached.input_tokens || 0, outputTokens: cached.output_tokens || 0 }
+          }
+
           const response = await anthropic.messages.create({
             model: 'claude-sonnet-4-20250514',
             max_tokens: 8000,
@@ -403,19 +458,28 @@ Provide ONLY the translation, preserving all formatting. No explanations or note
             ],
           })
 
-          return {
-            text: response.content[0].type === 'text' ? response.content[0].text : '',
-            inputTokens: response.usage.input_tokens,
-            outputTokens: response.usage.output_tokens,
-          }
+          const text = response.content[0].type === 'text' ? response.content[0].text : ''
+          // Save to Supabase — step result only carries minimal metadata
+          await supabaseAdmin.from('translation_chunks').upsert({
+            order_id: orderId, lang_code: langCode, chunk_index: i, pass: 'sonnet',
+            content: text, input_tokens: response.usage.input_tokens, output_tokens: response.usage.output_tokens,
+          }, { onConflict: 'order_id,lang_code,chunk_index,pass' })
+          return { chunkIndex: i, inputTokens: response.usage.input_tokens, outputTokens: response.usage.output_tokens }
         })
 
         tokenUsage.sonnetIn  += translatedChunkResult.inputTokens
         tokenUsage.sonnetOut += translatedChunkResult.outputTokens
-        translatedChunks.push(translatedChunkResult.text)
+        // Text is read from Supabase at assembly — not from step result
       }
 
-      const translatedText = translatedChunks.join('\n\n')
+      // Assemble Pass 1 from Supabase (avoids carrying text through step results)
+      const { data: sonnetRows } = await supabaseAdmin
+        .from('translation_chunks')
+        .select('chunk_index, content')
+        .eq('order_id', orderId).eq('lang_code', langCode).eq('pass', 'sonnet')
+        .order('chunk_index')
+      const assembledSonnet = sonnetRows?.map(r => r.content).filter(Boolean) || translatedChunks
+      const translatedText = assembledSonnet.join('\n\n')
 
       // Pass 2: Editorial Review (Opus) — chunked to match Pass 1 chunks
       const editorialChunks: string[] = []
@@ -431,6 +495,16 @@ Provide ONLY the translation, preserving all formatting. No explanations or note
         const chunkLabel = translatedTextChunks.length > 1 ? ` (chunk ${i + 1}/${translatedTextChunks.length})` : ''
 
         const editorialChunkResult = await step.run(`editorial-${langCode}-chunk-${i}`, async () => {
+          // Check Supabase cache first
+          const { data: cachedOpus } = await supabaseAdmin
+            .from('translation_chunks')
+            .select('content, input_tokens, output_tokens')
+            .eq('order_id', orderId).eq('lang_code', langCode).eq('chunk_index', i).eq('pass', 'opus')
+            .maybeSingle()
+          if (cachedOpus?.content) {
+            return { chunkIndex: i, inputTokens: cachedOpus.input_tokens || 0, outputTokens: cachedOpus.output_tokens || 0 }
+          }
+
           const response = await anthropic.messages.create({
             model: 'claude-opus-4-20250514',
             max_tokens: 8000,
@@ -495,19 +569,27 @@ Focus on: cultural adaptations, slang/register choices, setting-specific decisio
             ],
           })
 
-          return {
-            text: response.content[0].type === 'text' ? response.content[0].text : translatedChunk,
-            inputTokens: response.usage.input_tokens,
-            outputTokens: response.usage.output_tokens,
-          }
+          const text = response.content[0].type === 'text' ? response.content[0].text : translatedChunk
+          await supabaseAdmin.from('translation_chunks').upsert({
+            order_id: orderId, lang_code: langCode, chunk_index: i, pass: 'opus',
+            content: text, input_tokens: response.usage.input_tokens, output_tokens: response.usage.output_tokens,
+          }, { onConflict: 'order_id,lang_code,chunk_index,pass' })
+          return { chunkIndex: i, inputTokens: response.usage.input_tokens, outputTokens: response.usage.output_tokens }
         })
 
         tokenUsage.opusIn  += editorialChunkResult.inputTokens
         tokenUsage.opusOut += editorialChunkResult.outputTokens
-        editorialChunks.push(editorialChunkResult.text)
+        // Text is read from Supabase at assembly
       }
 
-      const rawEditorial = editorialChunks.join('\n\n')
+      // Assemble Pass 2 from Supabase
+      const { data: opusRows } = await supabaseAdmin
+        .from('translation_chunks')
+        .select('chunk_index, content')
+        .eq('order_id', orderId).eq('lang_code', langCode).eq('pass', 'opus')
+        .order('chunk_index')
+      const assembledOpus = opusRows?.map(r => r.content).filter(Boolean) || editorialChunks
+      const rawEditorial = assembledOpus.join('\n\n')
 
       // Extract translation notes from the last chunk (appended after ===TRANSLATION_NOTES===)
       let editorialResult = rawEditorial
