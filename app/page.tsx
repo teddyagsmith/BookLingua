@@ -117,8 +117,7 @@ function normalizeGenreKey(genre: string): string {
 
 const SUPPORTED_FORMATS = [
   { ext: '.epub', name: 'EPUB', icon: '📱', desc: 'E-book format - formatting preserved' },
-  { ext: '.pdf', name: 'PDF', icon: '📄', desc: 'Paperback format - layout preserved' },
-  { ext: '.docx', name: 'DOCX', icon: '📝', desc: 'Word document' },
+  { ext: '.docx', name: 'DOCX', icon: '📝', desc: 'Word document - best formatting' },
   { ext: '.txt', name: 'TXT', icon: '📃', desc: 'Plain text' },
 ]
 
@@ -296,7 +295,7 @@ export default function Home() {
       if (ext === '.txt' || ext === '.docx') {
         const text = await file.text()
         words = text.trim().split(/\s+/).filter(word => word.length > 0).length
-      } else if (ext === '.epub' || ext === '.pdf') {
+      } else if (ext === '.epub') {
         words = Math.round(file.size / 6)
       }
 
@@ -697,7 +696,7 @@ export default function Home() {
                 },
                 {
                   q: 'What file formats do you support?',
-                  a: 'EPUB, PDF, DOCX, and TXT. We recommend DOCX for best results — it gives the most accurate word count and preserves formatting perfectly.',
+                  a: 'EPUB, DOCX, and TXT. We recommend DOCX for best results — it gives the most accurate word count and preserves formatting perfectly. PDF is not supported as formatting is lost during conversion.',
                 },
                 {
                   q: 'How long does translation take?',
@@ -781,7 +780,7 @@ export default function Home() {
           <>
             <div className="text-center mb-8">
               <h1 className="text-4xl font-bold text-gray-900 mb-4" style={serifFont}>Upload Your Book</h1>
-              <p className="text-gray-600 text-lg">EPUB, PDF, DOCX, or TXT — formatting preserved</p>
+              <p className="text-gray-600 text-lg">EPUB, DOCX, or TXT — formatting preserved</p>
             </div>
 
             {!uploadedFile ? (
@@ -796,7 +795,7 @@ export default function Home() {
               >
                 <input
                   type="file"
-                  accept=".epub,.pdf,.docx,.txt"
+                  accept=".epub,.docx,.txt"
                   onChange={handleDrop}
                   className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
                 />
@@ -825,7 +824,7 @@ export default function Home() {
                     <div className="flex items-start gap-6 mb-8 pb-8 border-b border-gray-100">
                       <div className="w-20 h-24 bg-gradient-to-br from-blue-500 to-violet-600 rounded-xl shadow-lg flex items-center justify-center">
                         <span className="text-white text-3xl">
-                          {fileFormat === '.epub' ? '📱' : fileFormat === '.pdf' ? '📄' : '📕'}
+                          {fileFormat === '.epub' ? '📱' : '📕'}
                         </span>
                       </div>
                       <div className="flex-1">
@@ -1128,7 +1127,7 @@ export default function Home() {
                   <div className="flex items-start gap-4 mb-6 pb-6 border-b border-gray-100">
                     <div className="w-16 h-20 bg-gradient-to-br from-blue-500 to-violet-600 rounded-xl shadow-lg flex items-center justify-center">
                       <span className="text-white text-2xl">
-                        {fileFormat === '.epub' ? '📱' : fileFormat === '.pdf' ? '📄' : '📕'}
+                        {fileFormat === '.epub' ? '📱' : '📕'}
                       </span>
                     </div>
                     <div className="flex-1">

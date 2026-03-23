@@ -52,13 +52,6 @@ async function extractEpubText(buffer: Buffer): Promise<string> {
   }
 }
 
-async function extractPdfText(buffer: Buffer): Promise<string> {
-  // eslint-disable-next-line @typescript-eslint/no-var-requires
-  const pdfParse = require('pdf-parse')
-  const data = await pdfParse(buffer)
-  return data.text
-}
-
 export async function POST(request: NextRequest) {
   try {
     const formData = await request.formData()
@@ -82,11 +75,19 @@ export async function POST(request: NextRequest) {
 
     const fileExtension = file.name.split('.').pop()?.toLowerCase()
 
-    // Whitelist allowed extensions
-    const ALLOWED_EXTENSIONS = ['txt', 'docx', 'epub', 'pdf']
-    if (!fileExtension || !ALLOWED_EXTENSIONS.includes(fileExtension)) {
-      return NextResponse.json({ error: `File type not supported. Allowed: ${ALLOWED_EXTENSIONS.join(', ')}` }, { status: 400 })
+    // PDF is not supported — formatting is lost during extraction
+    if (fileExtension === 'pdf') {
+      return NextResponse.json({
+        error: 'PDF files are not supported. Please upload your book as a DOCX, EPUB, or TXT file. PDF formatting cannot be preserved during translation.',
+      }, { status: 400 })
     }
+
+    // Whitelist allowed extensions
+    const ALLOWED_EXTENSIONS = ['txt', 'docx', 'epub']
+    if (!fileExtension || !ALLOWED_EXTENSIONS.includes(fileExtension)) {
+      return NextResponse.json({ error: `File type not supported. Please upload a DOCX, EPUB, or TXT file.` }, { status: 400 })
+    }
+
     let textContent = ''
     let wordCount = 0
 
@@ -99,6 +100,11 @@ export async function POST(request: NextRequest) {
     } else if (fileExtension === 'docx') {
       const result = await mammoth.extractRawText({ buffer })
       textContent = result.value
+      if (!textContent || textContent.length < 100) {
+        return NextResponse.json({
+          error: 'Could not extract text from this DOCX file. Please check the file is not corrupted and try again.',
+        }, { status: 400 })
+      }
     } else if (fileExtension === 'epub') {
       try {
         textContent = await extractEpubText(buffer)
@@ -113,22 +119,6 @@ export async function POST(request: NextRequest) {
           error: 'Could not read this EPUB file. Please export your book as DOCX or TXT and re-upload.',
         }, { status: 400 })
       }
-    } else if (fileExtension === 'pdf') {
-      try {
-        textContent = await extractPdfText(buffer)
-        if (!textContent || textContent.length < 100) {
-          return NextResponse.json({
-            error: 'Could not extract text from this PDF. It may be a scanned image or have text-layer restrictions. Please export your book as DOCX or TXT and re-upload.',
-          }, { status: 400 })
-        }
-      } catch (err) {
-        console.error('PDF extraction failed:', err)
-        return NextResponse.json({
-          error: 'Could not read this PDF file. Please export your book as DOCX or TXT and re-upload.',
-        }, { status: 400 })
-      }
-    } else {
-      return NextResponse.json({ error: `Unsupported file type: .${fileExtension}` }, { status: 400 })
     }
 
     // Calculate word count
