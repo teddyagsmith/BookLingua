@@ -89,6 +89,7 @@ export async function POST(request: NextRequest) {
     }
 
     let textContent = ''
+    let storedContent = '' // what gets saved to DB (may include binary for DOCX)
     let wordCount = 0
 
     const arrayBuffer = await file.arrayBuffer()
@@ -105,6 +106,8 @@ export async function POST(request: NextRequest) {
           error: 'Could not extract text from this DOCX file. Please check the file is not corrupted and try again.',
         }, { status: 400 })
       }
+      // Store original binary alongside text so we can preserve formatting on download
+      storedContent = JSON.stringify({ text: textContent, binary: buffer.toString('base64') })
     } else if (fileExtension === 'epub') {
       try {
         textContent = await extractEpubText(buffer)
@@ -121,8 +124,11 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Calculate word count
+    // Calculate word count from plain text (not the JSON wrapper)
     wordCount = textContent.trim().split(/\s+/).filter(w => w.length > 0).length
+
+    // For non-DOCX formats, storedContent is the same as textContent
+    if (!storedContent) storedContent = textContent
 
     // Store in temp_uploads for retrieval after payment
     const { error: contentError } = await supabaseAdmin
@@ -131,7 +137,7 @@ export async function POST(request: NextRequest) {
         session_id: sessionId,
         file_name: file.name,
         file_format: `.${fileExtension}`,
-        content: textContent,
+        content: storedContent,
         word_count: wordCount,
         created_at: new Date().toISOString(),
       })

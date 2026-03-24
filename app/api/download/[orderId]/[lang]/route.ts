@@ -11,6 +11,7 @@ import {
   ShadingType,
 } from 'docx'
 import { default as EPub } from 'epub-gen-memory'
+import JSZip from 'jszip'
 
 const LANG_NAMES: Record<string, string> = {
   'es-es':    'Spanish_Spain',
@@ -244,6 +245,72 @@ async function buildFinalEpub(
   return Buffer.from(buffer)
 }
 
+// ─── DOCX: In-place XML replacement (preserves original formatting) ─────────
+
+function escapeXml(str: string): string {
+  return str
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+}
+
+async function buildFormattedDocxFromOriginal(
+  originalBase64: string,
+  translatedContent: string,
+): Promise<Buffer | null> {
+  try {
+    const clean = stripHighlightMarkers(translatedContent)
+    // Split into non-empty paragraphs (handle both \n\n and single \n separators)
+    const translatedParas = clean.split(/\n{2,}/).flatMap(block =>
+      block.split('\n').map(l => l.trim()).filter(Boolean)
+    )
+
+    const buffer = Buffer.from(originalBase64, 'base64')
+    const zip = await JSZip.loadAsync(buffer)
+
+    const docXmlFile = zip.file('word/document.xml')
+    if (!docXmlFile) return null
+    const docXml = await docXmlFile.async('string')
+
+    let paraIndex = 0
+
+    // Match each <w:p ...>...</w:p> block (paragraphs don't nest in DOCX)
+    const newXml = docXml.replace(/<w:p[ >][\s\S]*?<\/w:p>/g, (match) => {
+      // Collect all text in this paragraph
+      const wtRe = /<w:t[^>]*>([\s\S]*?)<\/w:t>/g
+      const paraTexts: string[] = []
+      let wtMatch: RegExpExecArray | null
+      while ((wtMatch = wtRe.exec(match)) !== null) paraTexts.push(wtMatch[1])
+      const paraText = paraTexts.join('').trim()
+
+      // Skip formatting-only paragraphs (empty, section breaks, etc.)
+      if (!paraText) return match
+
+      const translated = translatedParas[paraIndex] ?? paraText // keep original if we run out
+      paraIndex++
+
+      // Replace text: put all translated text into the first <w:t>, empty the rest
+      let firstDone = false
+      return match.replace(/<w:t([^>]*)>([\s\S]*?)<\/w:t>/g, (_, attrs) => {
+        if (!firstDone) {
+          firstDone = true
+          const newAttrs = attrs.includes('xml:space') ? attrs : `${attrs} xml:space="preserve"`
+          return `<w:t${newAttrs}>${escapeXml(translated)}</w:t>`
+        }
+        return `<w:t${attrs}></w:t>`
+      })
+    })
+
+    zip.file('word/document.xml', newXml)
+    const result = await zip.generateAsync({ type: 'nodebuffer' })
+    return result
+  } catch (err) {
+    console.error('[BookLingua] XML DOCX replacement failed:', err)
+    return null
+  }
+}
+
 // ─── Route handler ───────────────────────────────────────────────────────────
 
 export async function GET(
@@ -316,9 +383,37 @@ export async function GET(
       })
     }
 
-    // DOCX or PDF → clean DOCX
-    const doc = buildFinalDocx(file.content, order.book_title, langDisplay)
-    const buffer = await Packer.toBuffer(doc)
+    // DOCX → try XML in-place replacement first (preserves original formatting)
+    // Fall back to rebuilt DOCX if binary is unavailable or replacement fails
+    let buffer: Buffer | null = null
+
+    // Fetch original file to get the binary
+    const { data: originalFile } = await supabaseAdmin
+      .from('files')
+      .select('content')
+      .eq('order_id', orderId)
+      .eq('type', 'original')
+      .single()
+
+    if (originalFile?.content) {
+      try {
+        const raw = originalFile.content as string
+        if (raw.startsWith('{"text":')) {
+          const parsed = JSON.parse(raw)
+          if (parsed.binary) {
+            buffer = await buildFormattedDocxFromOriginal(parsed.binary, file.content)
+          }
+        }
+      } catch {
+        // Fall through to rebuilt DOCX
+      }
+    }
+
+    if (!buffer) {
+      const doc = buildFinalDocx(file.content, order.book_title, langDisplay)
+      buffer = await Packer.toBuffer(doc)
+    }
+
     return new NextResponse(new Uint8Array(buffer), {
       headers: {
         'Content-Type': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',

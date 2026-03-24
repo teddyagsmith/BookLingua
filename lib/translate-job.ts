@@ -319,7 +319,19 @@ export const translateBook = inngest.createFunction(
         .single()
       
       if (error) throw new Error(`Original file not found: ${error.message}`)
-      return data.content
+
+      // DOCX files store content as JSON: { text: "...", binary: "base64..." }
+      // Extract just the text for translation
+      const raw = data.content as string
+      if (raw && raw.startsWith('{"text":')) {
+        try {
+          const parsed = JSON.parse(raw)
+          return parsed.text as string
+        } catch {
+          // Fall through to return raw content
+        }
+      }
+      return raw
     })
 
     // Step 3: Update order status to processing
