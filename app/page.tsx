@@ -34,11 +34,11 @@ const UPSELLS: Array<{id: string; name: string; price: number; description: stri
     name: 'Launch Strategy Pack', 
     price: 29,
     priceAll: 49,
-    description: 'Amazon keywords, ad strategy, category recommendations & review tactics for each market', 
+    description: 'Everything you need to launch and rank on Amazon in each foreign market — keywords, ads, categories, and launch plan.', 
     icon: '🚀',
     popular: true,
     perLanguage: true,
-    details: ['7 backend keywords per market', 'Ad targeting keywords', 'Category recommendations', 'Review strategy guide', 'KDP upload checklist'],
+    details: ['7 Amazon backend keywords (per market)', 'Foreign language ad targeting keywords', 'Local market category recommendations', 'Market-specific launch timeline', 'Review acquisition strategy', 'KDP upload checklist'],
   },
 ]
 
@@ -458,6 +458,19 @@ export default function Home() {
                   >
                     See Examples
                   </a>
+                </div>
+
+                {/* Supported languages */}
+                <div className="mt-8">
+                  <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">Available languages</p>
+                  <div className="flex flex-wrap gap-2">
+                    {CORE_LANGUAGES.map(l => (
+                      <span key={l.code} className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white border border-gray-200 rounded-full text-sm text-gray-700 shadow-sm">
+                        <span>{l.flag}</span>
+                        <span className="font-medium">{l.name}</span>
+                      </span>
+                    ))}
+                  </div>
                 </div>
               </div>
 
@@ -1167,9 +1180,13 @@ export default function Home() {
                         key={upsell.id}
                         onClick={() => toggleUpsell(upsell.id)}
                         className={`w-full p-5 rounded-2xl border-2 text-left transition-all ${
-                          selectedUpsells.includes(upsell.id)
-                            ? 'border-violet-500 bg-violet-50'
-                            : 'border-gray-200 hover:border-violet-300'
+                          upsell.id === 'launch-pack'
+                            ? selectedUpsells.includes(upsell.id)
+                              ? 'border-violet-500 bg-violet-50'
+                              : 'border-violet-200 bg-gradient-to-br from-violet-50/60 to-white hover:border-violet-400'
+                            : selectedUpsells.includes(upsell.id)
+                              ? 'border-violet-500 bg-violet-50'
+                              : 'border-gray-200 hover:border-violet-300'
                         }`}
                       >
                         <div className="flex items-start gap-4">
@@ -1189,10 +1206,13 @@ export default function Home() {
                               )}
                             </div>
                             <p className="text-sm text-gray-500">{upsell.description}</p>
-                            {upsell.id === 'launch-pack' && selectedUpsells.includes('launch-pack') && upsell.details && (
-                              <div className="mt-2 flex flex-wrap gap-1">
+                            {upsell.id === 'launch-pack' && upsell.details && (
+                              <div className="mt-3 grid grid-cols-1 gap-1">
                                 {upsell.details.map((d, i) => (
-                                  <span key={i} className="text-xs bg-violet-100 text-violet-700 px-2 py-0.5 rounded">✓ {d}</span>
+                                  <div key={i} className="flex items-center gap-2 text-xs text-gray-700">
+                                    <span className="text-violet-500 font-bold flex-shrink-0">✓</span>
+                                    <span>{d}</span>
+                                  </div>
                                 ))}
                               </div>
                             )}
