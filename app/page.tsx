@@ -751,6 +751,12 @@ export default function Home() {
               <Logo size="sm" />
               <span className="text-xl font-bold text-white" style={serifFont}>BookLingua</span>
             </div>
+            <p className="mb-2">
+              Questions? Email us at{' '}
+              <a href="mailto:hello@booklingua.io" className="text-violet-400 hover:text-violet-300 transition-colors">
+                hello@booklingua.io
+              </a>
+            </p>
             <p>© 2026 BookLingua. All rights reserved.</p>
           </div>
         </footer>
