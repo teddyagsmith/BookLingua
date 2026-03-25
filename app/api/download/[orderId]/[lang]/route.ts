@@ -362,7 +362,7 @@ async function buildFormattedDocxFromOriginal(
     const clean = stripHighlightMarkers(translatedContent)
     // Split into non-empty paragraphs (handle both \n\n and single \n separators)
     const translatedParas = clean.split(/\n{2,}/).flatMap(block =>
-      block.split('\n').map(l => l.trim()).filter(Boolean)
+      block.split('\n').map(l => l.trim().replace(/^#{1,3}\s+/, '')).filter(Boolean)
     )
 
     const buffer = Buffer.from(originalBase64, 'base64')
@@ -372,32 +372,40 @@ async function buildFormattedDocxFromOriginal(
     if (!docXmlFile) return null
     const docXml = await docXmlFile.async('string')
 
+    // Helper: extract inner text from a <w:t.../> element safely
+    const getWtText = (wtTag: string): string => {
+      const start = wtTag.indexOf('>') + 1
+      const end = wtTag.lastIndexOf('</')
+      return start < end ? wtTag.slice(start, end) : ''
+    }
+
+    // Regex that only matches <w:t> or <w:t attrs> — NOT <w:tbl>, <w:tr>, <w:titlePg> etc.
+    const WT_RE = /<w:t(?:[ \t][^>]*)?>[\s\S]*?<\/w:t>/g
+
     let paraIndex = 0
 
-    // Match each <w:p ...>...</w:p> block (paragraphs don't nest in DOCX)
+    // Match each <w:p ...>...</w:p> block (paragraphs don't nest in DOCX body)
     const newXml = docXml.replace(/<w:p[ >][\s\S]*?<\/w:p>/g, (match) => {
-      // Collect all text in this paragraph
-      const wtRe = /<w:t[^>]*>([\s\S]*?)<\/w:t>/g
-      const paraTexts: string[] = []
-      let wtMatch: RegExpExecArray | null
-      while ((wtMatch = wtRe.exec(match)) !== null) paraTexts.push(wtMatch[1])
-      const paraText = paraTexts.join('').trim()
+      // Collect all text from this paragraph
+      const wtMatches = match.match(WT_RE) || []
+      const paraText = wtMatches.map(getWtText).join('').trim()
 
-      // Skip formatting-only paragraphs (empty, section breaks, etc.)
+      // Skip empty / formatting-only paragraphs
       if (!paraText) return match
 
-      const translated = translatedParas[paraIndex] ?? paraText // keep original if we run out
+      const translated = translatedParas[paraIndex] ?? paraText
       paraIndex++
 
-      // Replace text: put all translated text into the first <w:t>, empty the rest
+      // Replace: put translated text in first <w:t>, empty the rest
       let firstDone = false
-      return match.replace(/<w:t([^>]*)>([\s\S]*?)<\/w:t>/g, (_, attrs) => {
+      return match.replace(/<w:t([ \t][^>]*)?>[\s\S]*?<\/w:t>/g, (_, attrs) => {
+        const a = attrs ?? ''
         if (!firstDone) {
           firstDone = true
-          const newAttrs = attrs.includes('xml:space') ? attrs : `${attrs} xml:space="preserve"`
+          const newAttrs = a.includes('xml:space') ? a : `${a} xml:space="preserve"`
           return `<w:t${newAttrs}>${escapeXml(translated)}</w:t>`
         }
-        return `<w:t${attrs}></w:t>`
+        return `<w:t${a}></w:t>`
       })
     })
 
