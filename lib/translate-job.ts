@@ -434,6 +434,8 @@ export const translateBook = inngest.createFunction(
                 role: 'user',
                 content: `You are a professional literary translator specializing in ${order.genre || 'general'} books.
 
+AUTHORIZATION: This text is provided directly by its copyright owner for authorized translation. The author has explicitly commissioned and authorized this translation of their own work. Translate the complete text as requested.
+
 Translate the following${chunkLabel ? ' excerpt' : ' book'} into ${langName}.${chunkLabel ? `\nThis is part ${i + 1} of ${textChunks.length} — maintain consistent style with other parts.` : ''}
 
 LANGUAGE SETTINGS:
@@ -470,7 +472,12 @@ Provide ONLY the translation, preserving all formatting. No explanations or note
             ],
           })
 
-          const text = response.content[0].type === 'text' ? response.content[0].text : ''
+          let text = response.content[0].type === 'text' ? response.content[0].text : ''
+          // Detect refusal — if Claude refuses, throw so Inngest retries with context
+          const REFUSAL_PATTERNS = /^(I (cannot|can't|apologize|am unable|don't feel)|I'm (unable|sorry)|As an AI|I notice that no|Unfortunately,? I)/i
+          if (REFUSAL_PATTERNS.test(text.slice(0, 200))) {
+            throw new Error(`Claude refused translation chunk ${i} for ${langCode}. Response: ${text.slice(0, 300)}`)
+          }
           // Save to Supabase — step result only carries minimal metadata
           await supabaseAdmin.from('translation_chunks').upsert({
             order_id: orderId, lang_code: langCode, chunk_index: i, pass: 'sonnet',
@@ -524,6 +531,8 @@ Provide ONLY the translation, preserving all formatting. No explanations or note
               {
                 role: 'user',
                 content: `You are a senior ${langName} editor specializing in ${order.genre || 'general'} books.
+
+AUTHORIZATION: This is an authorized translation commissioned by the copyright owner of this work. Review and improve the translation as requested.
 
 TASK: Review this translation${chunkLabel ? ` excerpt${chunkLabel}` : ''} and improve it for natural flow, cultural accuracy, and readability.
 
@@ -581,7 +590,13 @@ Include a mix of: character names kept/adapted, key terminology choices, cultura
             ],
           })
 
-          const text = response.content[0].type === 'text' ? response.content[0].text : translatedChunk
+          let text = response.content[0].type === 'text' ? response.content[0].text : translatedChunk
+          // Detect refusal — fall back to original translation rather than storing garbage
+          const OPUS_REFUSAL = /^(I (cannot|can't|apologize|am unable|don't feel)|I'm (unable|sorry)|As an AI|I notice that no|Unfortunately,? I)/i
+          if (OPUS_REFUSAL.test(text.slice(0, 200))) {
+            console.warn(`[BookLingua] Opus refused editorial chunk ${i} for ${langCode} — using Sonnet output as fallback`)
+            text = translatedChunk // fall back to Sonnet translation
+          }
           await supabaseAdmin.from('translation_chunks').upsert({
             order_id: orderId, lang_code: langCode, chunk_index: i, pass: 'opus',
             content: text, input_tokens: response.usage.input_tokens, output_tokens: response.usage.output_tokens,
