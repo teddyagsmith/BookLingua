@@ -376,6 +376,7 @@ export const translateBook = inngest.createFunction(
     const tokenUsage = { sonnetIn: 0, sonnetOut: 0, opusIn: 0, opusOut: 0 }
 
     // Step 4: Translate to each language
+    let translationPreview = '' // captured from first language for admin review email
     for (const langCode of languages) {
       const langName = LANGUAGE_NAMES[langCode]
       const langSettings = LANGUAGE_SETTINGS[langCode]
@@ -514,6 +515,10 @@ Provide ONLY the translation, preserving all formatting. No explanations or note
         // Throwing causes Inngest to retry this language automatically.
         // If retries are exhausted, onFailure will alert hello@booklingua.io.
         throw new Error(`Translation quality gate failed for ${langCode}: ${reason}`)
+      }
+      // Capture first 250 words of first successful language for admin preview email
+      if (!translationPreview) {
+        translationPreview = translatedText.split(/\s+/).slice(0, 250).join(' ') + '…'
       }
       // ──────────────────────────────────────────────────────────────────────
 
@@ -681,7 +686,7 @@ Include a mix of: character names kept/adapted, key terminology choices, cultura
       await supabaseAdmin
         .from('orders')
         .update({ 
-          status: 'completed',
+          status: 'pending_review',
           completed_at: new Date().toISOString(),
         })
         .eq('id', orderId)
@@ -701,82 +706,32 @@ Include a mix of: character names kept/adapted, key terminology choices, cultura
       }
     })
 
-    // Step 6: Send completion email to customer
-    await step.run('send-completion-email', async () => {
-      const downloadLinks = languages.map(lang => ({
-        language: LANGUAGE_NAMES[lang],
-        reviewUrl: buildDownloadUrl(orderId, lang, 'review'),
-        finalUrl: buildDownloadUrl(orderId, lang, 'final'),
-      }))
-
+    // Step 6: Notify admin for review — customer email sent only after approval
+    await step.run('notify-admin-for-review', async () => {
+      const preview = translationPreview || '(preview not available)'
       await resend.emails.send({
         from: 'BookLingua <orders@booklingua.io>',
-        to: order.email,
-        subject: `Your translations are ready: ${order.book_title} 🎉`,
+        to: 'hello@booklingua.io',
+        subject: `📋 Review needed: ${order.book_title} (${languages.map(l => LANGUAGE_NAMES[l]).join(', ')})`,
         html: `
           <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto;">
-            <h1 style="color: #7c3aed;">Your translations are ready! 📚</h1>
-            
-            <p>Hi ${order.author_name},</p>
-            
-            <p>Great news! Your translations for <strong>${order.book_title}</strong> are complete and ready for download.</p>
-            
-            <div style="background: #f5f3ff; padding: 20px; border-radius: 12px; margin: 20px 0;">
-              <h3 style="margin-top: 0;">Download Your Translations</h3>
-              ${downloadLinks.map(link => `
-                <div style="margin: 14px 0; padding: 12px; background: #fff; border-radius: 8px; border: 1px solid #e5e7eb;">
-                  <p style="margin: 0 0 8px 0; font-weight: bold; color: #111;">${link.language}</p>
-                  <p style="margin: 0 0 4px 0;">
-                    📝 <a href="${link.reviewUrl}" style="color: #7c3aed; text-decoration: none; font-weight: 500;">Review Version (with highlights)</a>
-                    <span style="color: #6b7280; font-size: 12px;"> — see every editorial change in yellow</span>
-                  </p>
-                  <p style="margin: 0;">
-                    ✅ <a href="${link.finalUrl}" style="color: #059669; text-decoration: none; font-weight: 500;">Final Version (clean, publish-ready)</a>
-                    <span style="color: #6b7280; font-size: 12px;"> — ready to upload to KDP or your publisher</span>
-                  </p>
-                </div>
-              `).join('')}
+            <h2 style="color: #7c3aed;">Translation ready for review</h2>
+            <table style="width:100%; border-collapse:collapse; margin-bottom:16px;">
+              <tr><td style="padding:6px 0; color:#6b7280; width:140px;">Book</td><td style="padding:6px 0; font-weight:bold;">${order.book_title}</td></tr>
+              <tr><td style="padding:6px 0; color:#6b7280;">Author</td><td style="padding:6px 0;">${order.author_name}</td></tr>
+              <tr><td style="padding:6px 0; color:#6b7280;">Customer</td><td style="padding:6px 0;">${order.email}</td></tr>
+              <tr><td style="padding:6px 0; color:#6b7280;">Languages</td><td style="padding:6px 0;">${languages.map(l => LANGUAGE_NAMES[l]).join(', ')}</td></tr>
+              <tr><td style="padding:6px 0; color:#6b7280;">Word count</td><td style="padding:6px 0;">${Number(order.word_count).toLocaleString()}</td></tr>
+              <tr><td style="padding:6px 0; color:#6b7280;">Amount paid</td><td style="padding:6px 0;">$${Number(order.amount_paid).toFixed(2)}</td></tr>
+            </table>
+            <div style="background:#f5f3ff; padding:16px; border-radius:8px; margin-bottom:20px;">
+              <strong style="color:#7c3aed;">Translation preview (first language):</strong>
+              <p style="margin:8px 0 0 0; color:#374151; font-style:italic; line-height:1.6;">${preview}</p>
             </div>
-            
-            <div style="background: #fef3c7; padding: 15px; border-radius: 8px; margin: 20px 0;">
-              <p style="margin: 0; color: #92400e;">
-                <strong>📝 Two files per language — here's how to use them:</strong><br><br>
-                <strong>Review Version</strong> — Yellow highlighted text is the first-pass translation. The clean text after it is our editorial improvement. Use this to approve every change before publishing.<br><br>
-                <strong>Final Version</strong> — Clean, publish-ready. No highlights. Ready to upload directly to KDP, Atticus, Vellum, or your publisher.
-              </p>
-            </div>
-
-            ${languages.map(lang => {
-              const notes = translations[lang]?.notes
-              if (!notes) return ''
-              const noteLines = notes.split('\n').filter((l: string) => l.startsWith('ORIGINAL:'))
-              if (noteLines.length === 0) return ''
-              return `
-              <div style="margin: 20px 0; border: 1px solid #e5e7eb; border-radius: 12px; overflow: hidden;">
-                <div style="background: #f5f3ff; padding: 12px 16px; border-bottom: 1px solid #e5e7eb;">
-                  <strong style="color: #7c3aed;">✏️ Translation Notes — ${LANGUAGE_NAMES[lang]}</strong>
-                  <span style="color: #6b7280; font-size: 13px; margin-left: 8px;">Key decisions our editors made</span>
-                </div>
-                <table style="width: 100%; border-collapse: collapse; font-size: 13px;">
-                  ${noteLines.map((line: string, i: number) => {
-                    const parts = line.replace('ORIGINAL: ', '').split(' | ')
-                    const original = parts[0] || ''
-                    const translated = (parts[1] || '').replace('TRANSLATED: ', '')
-                    const reason = (parts[2] || '').replace('REASON: ', '')
-                    return `<tr style="background: ${i % 2 === 0 ? '#fff' : '#fafafa'}; border-bottom: 1px solid #f3f4f6;">
-                      <td style="padding: 8px 12px; color: #6b7280; width: 28%;">${original}</td>
-                      <td style="padding: 8px 4px; color: #9ca3af; width: 4%;">→</td>
-                      <td style="padding: 8px 12px; color: #111827; width: 28%;"><strong>${translated}</strong></td>
-                      <td style="padding: 8px 12px; color: #6b7280; width: 40%; font-style: italic;">${reason}</td>
-                    </tr>`
-                  }).join('')}
-                </table>
-              </div>`
-            }).join('')}
-            
-            <p>Download links expire in 7 days. Need them resent? Just reply to this email.</p>
-            
-            <p>Happy publishing!<br>The BookLingua Team</p>
+            <a href="https://booklingua.io/admin" style="display:inline-block; background:#7c3aed; color:#fff; padding:12px 24px; border-radius:8px; text-decoration:none; font-weight:bold;">
+              Go to Admin Panel →
+            </a>
+            <p style="color:#9ca3af; font-size:12px; margin-top:16px;">Order ID: ${orderId}</p>
           </div>
         `,
       })

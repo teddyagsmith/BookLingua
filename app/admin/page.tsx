@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import React, { useState, useEffect, useCallback } from 'react'
 
 type Order = {
   id: string
@@ -12,7 +12,7 @@ type Order = {
   amount_paid: number
   api_cost: number | null
   margin_pct: number | null
-  status: 'pending' | 'processing' | 'completed' | 'failed'
+  status: 'pending' | 'processing' | 'completed' | 'failed' | 'pending_review' | 'needs_review'
   created_at: string
   completed_at: string | null
 }
@@ -26,6 +26,7 @@ type Stats = {
   totalOrders: number
   completedOrders: number
   failedOrders: number
+  pendingReview: number
   avgMargin: number | null
   totalApiCost: number
   alerts: Order[]
@@ -36,6 +37,8 @@ const STATUS_COLORS: Record<string, string> = {
   processing: 'bg-blue-100 text-blue-800',
   failed: 'bg-red-100 text-red-800',
   pending: 'bg-yellow-100 text-yellow-800',
+  pending_review: 'bg-orange-100 text-orange-800',
+  needs_review: 'bg-red-100 text-red-900',
 }
 
 const LANG_NAMES: Record<string, string> = {
@@ -65,6 +68,50 @@ export default function AdminPage() {
   const [filter, setFilter] = useState<string>('all')
   const [search, setSearch] = useState('')
   const [lastRefresh, setLastRefresh] = useState<Date | null>(null)
+  const [actionLoading, setActionLoading] = useState<string | null>(null)
+  const [actionMsg, setActionMsg] = useState<Record<string, string>>({})
+
+  const handleApprove = async (orderId: string) => {
+    setActionLoading(orderId)
+    try {
+      const res = await fetch(`/api/admin/orders/${orderId}/approve`, {
+        method: 'POST',
+        headers: { 'x-admin-password': password },
+      })
+      const data = await res.json()
+      if (data.success) {
+        setActionMsg(m => ({ ...m, [orderId]: '✅ Approved — customer emailed' }))
+        setOrders(prev => prev.map(o => o.id === orderId ? { ...o, status: 'completed' as const } : o))
+      } else {
+        setActionMsg(m => ({ ...m, [orderId]: `❌ ${data.error}` }))
+      }
+    } catch {
+      setActionMsg(m => ({ ...m, [orderId]: '❌ Request failed' }))
+    } finally {
+      setActionLoading(null)
+    }
+  }
+
+  const handleFlag = async (orderId: string) => {
+    setActionLoading(orderId)
+    try {
+      const res = await fetch(`/api/admin/orders/${orderId}/flag`, {
+        method: 'POST',
+        headers: { 'x-admin-password': password },
+      })
+      const data = await res.json()
+      if (data.success) {
+        setActionMsg(m => ({ ...m, [orderId]: '🚩 Flagged for manual review' }))
+        setOrders(prev => prev.map(o => o.id === orderId ? { ...o, status: 'needs_review' as const } : o))
+      } else {
+        setActionMsg(m => ({ ...m, [orderId]: `❌ ${data.error}` }))
+      }
+    } catch {
+      setActionMsg(m => ({ ...m, [orderId]: '❌ Request failed' }))
+    } finally {
+      setActionLoading(null)
+    }
+  }
 
   const fetchData = useCallback(async (pw: string) => {
     setLoading(true)
@@ -237,6 +284,12 @@ export default function AdminPage() {
                   {s}
                 </button>
               ))}
+              <button
+                onClick={() => setFilter('pending_review')}
+                className={`px-3 py-1.5 rounded-lg text-sm font-medium ${filter === 'pending_review' ? 'bg-orange-500 text-white' : 'bg-orange-100 text-orange-700 hover:bg-orange-200'}`}
+              >
+                Review{stats?.pendingReview ? ` (${stats.pendingReview})` : ''}
+              </button>
             </div>
           </div>
 
@@ -257,7 +310,8 @@ export default function AdminPage() {
               </thead>
               <tbody className="divide-y divide-gray-50">
                 {filteredOrders.map(o => (
-                  <tr key={o.id} className="hover:bg-gray-50 transition-colors">
+                  <React.Fragment key={o.id}>
+                  <tr className="hover:bg-gray-50 transition-colors">
                     <td className="px-4 py-3">
                       <p className="font-medium text-gray-900 truncate max-w-[200px]">{o.book_title}</p>
                       <p className="text-gray-400 text-xs truncate max-w-[200px]">{o.email}</p>
@@ -288,6 +342,33 @@ export default function AdminPage() {
                     </td>
                     <td className="px-4 py-3 text-gray-400 text-xs whitespace-nowrap">{fmtDate(o.created_at)}</td>
                   </tr>
+                  {o.status === 'pending_review' && (
+                    <tr className="bg-orange-50">
+                      <td colSpan={8} className="px-4 pb-3 pt-1">
+                        {actionMsg[o.id] ? (
+                          <span className="text-sm text-gray-700">{actionMsg[o.id]}</span>
+                        ) : (
+                          <div className="flex items-center gap-2">
+                            <button
+                              onClick={() => handleApprove(o.id)}
+                              disabled={actionLoading === o.id}
+                              className="px-3 py-1.5 bg-green-600 text-white rounded-lg text-sm font-medium hover:bg-green-700 disabled:opacity-50"
+                            >
+                              {actionLoading === o.id ? '…' : '✅ Approve & send to customer'}
+                            </button>
+                            <button
+                              onClick={() => handleFlag(o.id)}
+                              disabled={actionLoading === o.id}
+                              className="px-3 py-1.5 bg-red-100 text-red-700 rounded-lg text-sm font-medium hover:bg-red-200 disabled:opacity-50"
+                            >
+                              🚩 Flag
+                            </button>
+                          </div>
+                        )}
+                      </td>
+                    </tr>
+                  )}
+                  </React.Fragment>
                 ))}
               </tbody>
             </table>
@@ -326,6 +407,30 @@ export default function AdminPage() {
                   </div>
                 </div>
                 <p className="text-gray-400 text-xs">{fmtDate(o.created_at)}</p>
+                {o.status === 'pending_review' && (
+                  <div className="pt-2 border-t border-orange-100">
+                    {actionMsg[o.id] ? (
+                      <span className="text-sm text-gray-700">{actionMsg[o.id]}</span>
+                    ) : (
+                      <div className="flex gap-2">
+                        <button
+                          onClick={() => handleApprove(o.id)}
+                          disabled={actionLoading === o.id}
+                          className="flex-1 py-2 bg-green-600 text-white rounded-lg text-sm font-medium hover:bg-green-700 disabled:opacity-50"
+                        >
+                          {actionLoading === o.id ? '…' : '✅ Approve & send'}
+                        </button>
+                        <button
+                          onClick={() => handleFlag(o.id)}
+                          disabled={actionLoading === o.id}
+                          className="px-4 py-2 bg-red-100 text-red-700 rounded-lg text-sm font-medium hover:bg-red-200 disabled:opacity-50"
+                        >
+                          🚩 Flag
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
             ))}
             {filteredOrders.length === 0 && (

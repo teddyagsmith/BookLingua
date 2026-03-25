@@ -28,6 +28,7 @@ export async function GET(request: NextRequest) {
     const weekOrders = orders?.filter(o => o.created_at >= weekStart) || []
     const completedOrders = orders?.filter(o => o.status === 'completed') || []
     const failedOrders = orders?.filter(o => o.status === 'failed') || []
+    const pendingReviewOrders = orders?.filter(o => o.status === 'pending_review') || []
     const stuckOrders = orders?.filter(o => 
       o.status === 'processing' && o.created_at <= stuckThreshold
     ) || []
@@ -53,6 +54,7 @@ export async function GET(request: NextRequest) {
         totalOrders: orders?.length || 0,
         completedOrders: completedOrders.length,
         failedOrders: failedOrders.length,
+        pendingReview: pendingReviewOrders.length,
         avgMargin,
         totalApiCost,
         alerts: [...failedOrders, ...stuckOrders],
