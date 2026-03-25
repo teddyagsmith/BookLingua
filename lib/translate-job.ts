@@ -573,9 +573,9 @@ Respond with the full improved translation with highlights showing original phra
 After the translation, append this section EXACTLY (do not omit it):
 
 ===TRANSLATION_NOTES===
-List the 8-15 most significant translation decisions made across this translation. Each on its own line:
-ORIGINAL: [original English phrase] | TRANSLATED: [your choice] | REASON: [brief explanation of why]
-Focus on: cultural adaptations, slang/register choices, setting-specific decisions (e.g. preserving American legal terms), idiom adaptations, heat-level register choices.
+List 10-15 of the most notable translation decisions made across this translation. Each on its own line:
+ORIGINAL: [original English phrase or term] | TRANSLATED: [your choice] | REASON: [brief explanation]
+Include a mix of: character names kept/adapted, key terminology choices, cultural adaptations, idiom handling, register/tone decisions, any terms deliberately kept in English, and any phrases that required creative rewriting. Even if no editorial changes were needed, document the most important consistency decisions made.
 ===END_NOTES===` : ''}`,
               },
             ],

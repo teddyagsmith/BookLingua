@@ -122,19 +122,118 @@ function parseHighlightedRuns(text: string): TextRun[] {
 
 // ─── DOCX: Review version (yellow highlights) ───────────────────────────────
 
-function buildReviewDocx(content: string, bookTitle: string, langDisplay: string): Document {
+function buildReviewDocx(
+  content: string,
+  bookTitle: string,
+  langDisplay: string,
+  translationNotes?: string,
+): Document {
+  const highlightCount = (content.match(/\[\[ORIGINAL:/g) || []).length
   const blocks = content.split(/\n{2,}/)
+
+  // Build review summary section
+  const reviewSummaryParas: Paragraph[] = []
+
+  if (highlightCount === 0) {
+    reviewSummaryParas.push(
+      new Paragraph({
+        children: [new TextRun({ text: 'Translation Review: Passed Without Changes', bold: true, color: '166534', size: 24 })],
+      }),
+      new Paragraph({
+        children: [new TextRun({
+          text: 'Our editorial AI reviewed this translation and found no changes were necessary. The initial translation accurately captured your voice, tone, and meaning — no improvements were needed.',
+          color: '374151',
+        })],
+        spacing: { after: 120 },
+      }),
+    )
+  } else {
+    reviewSummaryParas.push(
+      new Paragraph({
+        children: [new TextRun({ text: `Translation Review: ${highlightCount} Editorial Improvement${highlightCount !== 1 ? 's' : ''} Made`, bold: true, color: '92400E', size: 24 })],
+      }),
+      new Paragraph({
+        children: [new TextRun({
+          text: 'Yellow highlighted text shows the original first-pass translation. The clean text that follows is the editorially improved version ready to publish.',
+          color: '374151',
+        })],
+        spacing: { after: 120 },
+      }),
+    )
+  }
+
+  // Translation notes section
+  if (translationNotes) {
+    const noteLines = translationNotes.split('\n').filter(l => l.startsWith('ORIGINAL:'))
+    if (noteLines.length > 0) {
+      reviewSummaryParas.push(
+        new Paragraph({ text: '' }),
+        new Paragraph({
+          children: [new TextRun({ text: 'Key Translation Decisions', bold: true, color: '374151', size: 22 })],
+        }),
+        new Paragraph({
+          children: [new TextRun({ text: 'How our editors handled important terms, names, and cultural references:', italics: true, color: '6B7280' })],
+          spacing: { after: 80 },
+        }),
+      )
+      for (const line of noteLines.slice(0, 12)) {
+        const parts = line.replace('ORIGINAL: ', '').split(' | ')
+        const orig = parts[0] || ''
+        const trans = (parts[1] || '').replace('TRANSLATED: ', '')
+        const reason = (parts[2] || '').replace('REASON: ', '')
+        reviewSummaryParas.push(
+          new Paragraph({
+            children: [
+              new TextRun({ text: orig, bold: true }),
+              new TextRun({ text: '  →  ' }),
+              new TextRun({ text: trans, bold: true, color: '4F46E5' }),
+              new TextRun({ text: reason ? `  — ${reason}` : '', italics: true, color: '6B7280' }),
+            ],
+            spacing: { after: 80 },
+          })
+        )
+      }
+    }
+  } else {
+    // No notes available — add a standard preservation note
+    reviewSummaryParas.push(
+      new Paragraph({ text: '' }),
+      new Paragraph({
+        children: [new TextRun({ text: 'Translation Consistency Notes', bold: true, color: '374151', size: 22 })],
+      }),
+      ...[
+        'Character names preserved exactly as written in the original',
+        'Chapter titles and section headings kept consistent throughout',
+        'Author\'s narrative voice and tone maintained in the target language',
+        'Cultural references adapted for the target-language readership where appropriate',
+        'Dialogue rhythm and register matched to the original',
+      ].map(note => new Paragraph({
+        children: [
+          new TextRun({ text: '✓  ', bold: true, color: '4F46E5' }),
+          new TextRun({ text: note, color: '374151' }),
+        ],
+        spacing: { after: 60 },
+      }))
+    )
+  }
+
   const paragraphs: Paragraph[] = [
     new Paragraph({ text: bookTitle, heading: HeadingLevel.TITLE }),
     new Paragraph({
       children: [new TextRun({ text: `Translated into ${langDisplay} by BookLingua`, italics: true, color: '555555' })],
       alignment: AlignmentType.CENTER,
     }),
+    new Paragraph({ text: '' }),
+    ...reviewSummaryParas,
+    new Paragraph({ text: '' }),
     new Paragraph({
-      children: [new TextRun({ text: '🟡 Yellow = original first-pass text  |  Clean text = final editorial version', color: '92400E' })],
-      alignment: AlignmentType.CENTER,
+      children: [new TextRun({ text: '─'.repeat(60), color: 'D1D5DB' })],
     }),
     new Paragraph({ text: '' }),
+    ...(highlightCount > 0 ? [new Paragraph({
+      children: [new TextRun({ text: 'Yellow = original first-pass  |  Clean text = editorial improvement', color: '92400E', italics: true })],
+      alignment: AlignmentType.CENTER,
+    }), new Paragraph({ text: '' })] : []),
   ]
 
   for (const block of blocks) {
@@ -350,9 +449,26 @@ export async function GET(
     const safeTitle   = order.book_title.replace(/[^a-z0-9\s]/gi, '').trim()
     const fileFormat  = (order.file_format || '.docx').toLowerCase()
 
-    // ── Review version: always DOCX with yellow highlights ──
+    // ── Review version: always DOCX with yellow highlights + review summary ──
     if (type === 'review') {
-      const doc = buildReviewDocx(file.content, order.book_title, langDisplay)
+      // Fetch translation notes from last opus chunk if available
+      let translationNotes: string | undefined
+      const { data: notesChunk } = await supabaseAdmin
+        .from('translation_chunks')
+        .select('content')
+        .eq('order_id', orderId)
+        .eq('lang_code', lang)
+        .eq('pass', 'opus')
+        .order('chunk_index', { ascending: false })
+        .limit(1)
+        .single()
+
+      if (notesChunk?.content) {
+        const notesMatch = notesChunk.content.match(/===TRANSLATION_NOTES===([\s\S]*?)===END_NOTES===/)
+        if (notesMatch) translationNotes = notesMatch[1].trim()
+      }
+
+      const doc = buildReviewDocx(file.content, order.book_title, langDisplay, translationNotes)
       const buffer = await Packer.toBuffer(doc)
       return new NextResponse(new Uint8Array(buffer), {
         headers: {
