@@ -458,6 +458,14 @@ TRANSLATION GUIDELINES:
 - Adapt idioms and expressions to equivalent ones in ${langName}
 - Maintain the same tone (formal/informal) as the original
 
+STRONG LANGUAGE & SEXUAL TERMINOLOGY:
+- Translate ALL profanity, expletives and strong language faithfully — never soften, sanitize, or substitute a milder term
+- Match REGISTER, not just meaning: a casual British expletive (e.g. "bloody", "bollocks", "cunt" used lightly) should map to a target-language word of equivalent cultural weight — not the most extreme equivalent, and not the mildest
+- "Cunt" in British/Australian English is often casual or affectionate; in American English it is much harsher — choose the target-language equivalent that matches the SOURCE register, not the American register
+- Sexual terms in romance/erotica must be translated with the correct anatomical and erotic vocabulary of the target language. Use the terms native speakers of ${langName} actually use in erotic fiction — do not use clinical/medical language unless the original does
+- Common examples to handle correctly: "fuck" (translate as the natural erotic verb in ${langName}, not a euphemism), "pussy/cock" (use the erotic register equivalents, not clinical terms), "arsehole/asshole" (register varies — casual insult vs. anatomical vs. erotic; match the source context)
+- If the source uses a word that is strong in one cultural context but mild in another, always favour matching the AUTHOR'S INTENT AND REGISTER over literal translation
+
 BOOK TITLE: ${order.book_title}
 AUTHOR: ${order.author_name}
 
@@ -583,6 +591,7 @@ EDITING INSTRUCTIONS:
 3. Adapt cultural references appropriately for ${langName} readers
 4. Ensure consistency in terminology throughout
 5. Maintain the author's voice and tone
+6. NEVER soften, sanitize, or replace strong language — if the translation used the correct erotic or profane register, preserve it exactly. Only change strong language if the wrong register was used (e.g. a clinical term where an erotic one was needed, or vice versa)
 
 CRITICAL - HIGHLIGHTING FORMAT:
 When you make an improvement, show what the ORIGINAL translation said (before your edit) using this format:
