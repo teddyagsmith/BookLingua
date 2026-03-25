@@ -27,7 +27,7 @@ const LANGUAGE_SETTINGS: Record<string, string> = {
 - Use "vosotros/vosotras" for second person plural informal address
 - Use "ordenador" for computer, "móvil" for mobile phone, "coche" for car
 - Follow RAE (Real Academia Española) spelling conventions
-- Use "coger" in appropriate Spanish contexts (e.g. coger el autobús)
+- Use Spain Spanish vocabulary and idioms throughout — avoid LatAm variants
 - Leísmo is acceptable in written Spanish Spain contexts`,
 
   'es-latam': `Use Latin American Spanish, targeting neutral LatAm readability (universally understood across Mexico, Colombia, Argentina, and beyond).
@@ -499,6 +499,23 @@ Provide ONLY the translation, preserving all formatting. No explanations or note
         .order('chunk_index')
       const assembledSonnet = sonnetRows?.map(r => r.content).filter(Boolean) || translatedChunks
       const translatedText = assembledSonnet.join('\n\n')
+
+      // ─── Delivery Quality Gate ─────────────────────────────────────────────
+      // Belt-and-suspenders check after assembly — catches refusals that slip
+      // through chunk-level detection (e.g. whitespace prefix before refusal phrase)
+      const DELIVERY_REFUSAL = /I (cannot|can't|am unable|won't|don't feel)|I'm (unable|sorry, I)|As an AI|unfortunately[, ]I/i
+      const refusalFound = sonnetRows?.find(r => DELIVERY_REFUSAL.test(r.content?.slice(0, 300) ?? ''))
+      const outputRatio = translatedText.length / (fileContent.length || 1)
+      if (refusalFound || outputRatio < 0.25) {
+        const reason = refusalFound
+          ? `Refusal in chunk ${refusalFound.chunk_index}: "${refusalFound.content?.slice(0, 150)}"`
+          : `Output too short: ${translatedText.length} chars vs ${fileContent.length} source chars (${(outputRatio * 100).toFixed(0)}%)`
+        console.error(`[BookLingua] Quality gate FAILED for ${orderId} ${langCode}: ${reason}`)
+        // Throwing causes Inngest to retry this language automatically.
+        // If retries are exhausted, onFailure will alert hello@booklingua.io.
+        throw new Error(`Translation quality gate failed for ${langCode}: ${reason}`)
+      }
+      // ──────────────────────────────────────────────────────────────────────
 
       // Pass 2: Editorial Review (Opus) — chunked to match Pass 1 chunks
       const editorialChunks: string[] = []

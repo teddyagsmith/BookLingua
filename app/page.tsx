@@ -151,6 +151,7 @@ export default function Home() {
   const [email, setEmail] = useState('')
   const [specialInstructions, setSpecialInstructions] = useState('')
   const [isProcessing, setIsProcessing] = useState(false)
+  const [copyrightConfirmed, setCopyrightConfirmed] = useState(false)
   const [checkoutStep, setCheckoutStep] = useState(1)
   const [dragActive, setDragActive] = useState(false)
   const [voucherCode, setVoucherCode] = useState('')
@@ -1347,10 +1348,22 @@ export default function Home() {
                     )}
                   </div>
 
+                  <label className="flex items-start gap-3 mb-4 cursor-pointer group">
+                    <input
+                      type="checkbox"
+                      checked={copyrightConfirmed}
+                      onChange={e => setCopyrightConfirmed(e.target.checked)}
+                      className="mt-0.5 w-4 h-4 rounded border-gray-300 text-violet-600 focus:ring-violet-500 cursor-pointer"
+                    />
+                    <span className="text-sm text-gray-500 group-hover:text-gray-700 leading-snug">
+                      I confirm I own the copyright to this content, or have permission to have it translated.
+                    </span>
+                  </label>
+
                   <button
                     onClick={handleCheckout}
-                    disabled={isProcessing}
-                    className="w-full py-4 bg-gradient-to-r from-blue-600 to-violet-600 text-white rounded-2xl font-bold text-lg shadow-xl hover:shadow-2xl transition-all mb-4 disabled:opacity-50"
+                    disabled={isProcessing || !copyrightConfirmed}
+                    className="w-full py-4 bg-gradient-to-r from-blue-600 to-violet-600 text-white rounded-2xl font-bold text-lg shadow-xl hover:shadow-2xl transition-all mb-4 disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     {isProcessing ? 'Processing...' : `Pay $${calculateFinalTotal()} →`}
                   </button>
