@@ -613,9 +613,27 @@ Respond with the full improved translation with highlights showing original phra
 After the translation, append this section EXACTLY (do not omit it):
 
 ===TRANSLATION_NOTES===
-List 10-15 of the most notable translation decisions made across this translation. Each on its own line:
-ORIGINAL: [original English phrase or term] | TRANSLATED: [your choice] | REASON: [brief explanation]
-Include a mix of: character names kept/adapted, key terminology choices, cultural adaptations, idiom handling, register/tone decisions, any terms deliberately kept in English, and any phrases that required creative rewriting. Even if no editorial changes were needed, document the most important consistency decisions made.
+Provide categorized translation decisions referencing actual terms and phrases from THIS specific text. Use only the category headers that apply — omit any with no relevant examples. Include 2–5 entries per category.
+
+--- Proper Nouns & Place Names ---
+ORIGINAL: [name/place] | TRANSLATED: [choice] | REASON: [why kept, adapted, or translated]
+
+--- Job Titles & Professional Terms ---
+ORIGINAL: [title/term] | TRANSLATED: [choice] | REASON: [brief explanation]
+
+--- Intimate & Sexual Language ---
+ORIGINAL: [word/phrase] | TRANSLATED: [choice] | REASON: [register match, cultural equivalent chosen]
+
+--- Idioms & Cultural Expressions ---
+ORIGINAL: [expression] | TRANSLATED: [equivalent] | REASON: [how meaning was preserved]
+
+--- Voice, Register & Tone ---
+ORIGINAL: [phrase or approach] | TRANSLATED: [choice] | REASON: [how author's voice was maintained]
+
+--- Terms Kept in English ---
+ORIGINAL: [term] | KEPT AS: [term] | REASON: [why untranslated]
+
+Be specific — use real examples from this text, not generic ones. Even if no editorial changes were needed, document the key decisions made to maintain consistency and accuracy.
 ===END_NOTES===` : ''}`,
               },
             ],

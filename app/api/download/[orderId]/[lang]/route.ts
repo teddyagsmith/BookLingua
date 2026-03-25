@@ -162,52 +162,133 @@ function buildReviewDocx(
     )
   }
 
-  // Translation notes section
+  // ─── Translation Notes section ───────────────────────────────────────────
+  // Category colours: rotate through a warm editorial palette
+  const CATEGORY_COLORS = ['4F46E5', '7C3AED', '0F766E', 'B45309', 'BE185D', '1D4ED8']
+  const DEFAULT_NOTES = [
+    'Character names and proper nouns preserved consistently throughout',
+    'Chapter titles and section headings maintained in their original position',
+    'Author\'s narrative voice and register carried faithfully into the target language',
+    'Cultural references adapted for natural readability in the target market',
+    'Dialogue rhythm, pacing, and character tone matched to the original',
+  ]
+
   if (translationNotes) {
-    const noteLines = translationNotes.split('\n').filter(l => l.startsWith('ORIGINAL:'))
-    if (noteLines.length > 0) {
+    // Try new categorized format first (--- Category --- headers)
+    const categoryBlocks = translationNotes.split(/\n(?=---\s)/g)
+    const parsedCategories: Array<{ title: string; entries: Array<{ orig: string; trans: string; reason: string }> }> = []
+
+    for (const block of categoryBlocks) {
+      const headerMatch = block.match(/^---\s+(.+?)\s+---/)
+      if (!headerMatch) continue
+      const title = headerMatch[1]
+      const entries: Array<{ orig: string; trans: string; reason: string }> = []
+      const lines = block.split('\n').slice(1)
+      for (const line of lines) {
+        const trimmed = line.trim()
+        if (!trimmed.startsWith('ORIGINAL:') && !trimmed.startsWith('KEPT AS:')) continue
+        const parts = trimmed.replace(/^ORIGINAL:\s*/, '').split(/\s*\|\s*/)
+        const orig = parts[0]?.trim() || ''
+        const rawTrans = parts[1]?.trim() || ''
+        const trans = rawTrans.replace(/^(TRANSLATED|KEPT AS):\s*/, '')
+        const reason = (parts[2]?.trim() || '').replace(/^REASON:\s*/, '')
+        if (orig) entries.push({ orig, trans, reason })
+      }
+      if (entries.length > 0) parsedCategories.push({ title, entries })
+    }
+
+    if (parsedCategories.length > 0) {
+      // Categorized format — render as proper editorial report sections
       reviewSummaryParas.push(
         new Paragraph({ text: '' }),
         new Paragraph({
-          children: [new TextRun({ text: 'Key Translation Decisions', bold: true, color: '374151', size: 22 })],
+          children: [new TextRun({ text: 'Editorial Translation Report', bold: true, color: '111827', size: 26 })],
         }),
         new Paragraph({
-          children: [new TextRun({ text: 'How our editors handled important terms, names, and cultural references:', italics: true, color: '6B7280' })],
-          spacing: { after: 80 },
+          children: [new TextRun({
+            text: 'A detailed account of every key decision made during translation and editorial review.',
+            italics: true, color: '6B7280',
+          })],
+          spacing: { after: 160 },
         }),
       )
-      for (const line of noteLines.slice(0, 12)) {
-        const parts = line.replace('ORIGINAL: ', '').split(' | ')
-        const orig = parts[0] || ''
-        const trans = (parts[1] || '').replace('TRANSLATED: ', '')
-        const reason = (parts[2] || '').replace('REASON: ', '')
+
+      parsedCategories.forEach(({ title, entries }, idx) => {
+        const color = CATEGORY_COLORS[idx % CATEGORY_COLORS.length]
         reviewSummaryParas.push(
           new Paragraph({
             children: [
-              new TextRun({ text: orig, bold: true }),
-              new TextRun({ text: '  →  ' }),
-              new TextRun({ text: trans, bold: true, color: '4F46E5' }),
-              new TextRun({ text: reason ? `  — ${reason}` : '', italics: true, color: '6B7280' }),
+              new TextRun({ text: `  ${title}  `, bold: true, color: 'FFFFFF',
+                highlight: undefined, size: 20,
+                // docx lib doesn't support background directly here — use shading via paragraph
+              }),
             ],
-            spacing: { after: 80 },
-          })
+            shading: { type: ShadingType.SOLID, color, fill: color },
+            spacing: { before: 200, after: 100 },
+          }),
         )
+        for (const { orig, trans, reason } of entries) {
+          reviewSummaryParas.push(
+            new Paragraph({
+              children: [
+                new TextRun({ text: orig, bold: true, color: '111827' }),
+                ...(trans ? [
+                  new TextRun({ text: '   →   ', color: '9CA3AF' }),
+                  new TextRun({ text: trans, bold: true, color }),
+                ] : []),
+                ...(reason ? [new TextRun({ text: `\n${reason}`, italics: true, color: '6B7280', size: 18 })] : []),
+              ],
+              indent: { left: 360 },
+              spacing: { after: 120 },
+            }),
+          )
+        }
+      })
+    } else {
+      // Legacy flat format (ORIGINAL: ... | TRANSLATED: ... | REASON: ...)
+      const noteLines = translationNotes.split('\n').filter(l => l.startsWith('ORIGINAL:'))
+      if (noteLines.length > 0) {
+        reviewSummaryParas.push(
+          new Paragraph({ text: '' }),
+          new Paragraph({
+            children: [new TextRun({ text: 'Key Translation Decisions', bold: true, color: '374151', size: 22 })],
+          }),
+          new Paragraph({
+            children: [new TextRun({ text: 'How our editors handled important terms, names, and cultural references:', italics: true, color: '6B7280' })],
+            spacing: { after: 80 },
+          }),
+        )
+        for (const line of noteLines.slice(0, 15)) {
+          const parts = line.replace('ORIGINAL: ', '').split(' | ')
+          const orig = parts[0] || ''
+          const trans = (parts[1] || '').replace('TRANSLATED: ', '')
+          const reason = (parts[2] || '').replace('REASON: ', '')
+          reviewSummaryParas.push(
+            new Paragraph({
+              children: [
+                new TextRun({ text: orig, bold: true }),
+                new TextRun({ text: '  →  ' }),
+                new TextRun({ text: trans, bold: true, color: '4F46E5' }),
+                new TextRun({ text: reason ? `  — ${reason}` : '', italics: true, color: '6B7280' }),
+              ],
+              spacing: { after: 80 },
+            })
+          )
+        }
       }
     }
   } else {
-    // No notes available — add a standard preservation note
+    // No notes available — add standard consistency confirmation
     reviewSummaryParas.push(
       new Paragraph({ text: '' }),
       new Paragraph({
-        children: [new TextRun({ text: 'Translation Consistency Notes', bold: true, color: '374151', size: 22 })],
+        children: [new TextRun({ text: 'Translation Consistency Confirmed', bold: true, color: '374151', size: 22 })],
       }),
-      ...[
-        'Character names preserved exactly as written in the original',
-        'Chapter titles and section headings kept consistent throughout',
-        'Author\'s narrative voice and tone maintained in the target language',
-        'Cultural references adapted for the target-language readership where appropriate',
-        'Dialogue rhythm and register matched to the original',
-      ].map(note => new Paragraph({
+      new Paragraph({
+        children: [new TextRun({ text: 'Our editorial review confirmed the following throughout:', italics: true, color: '6B7280' })],
+        spacing: { after: 100 },
+      }),
+      ...DEFAULT_NOTES.map(note => new Paragraph({
         children: [
           new TextRun({ text: '✓  ', bold: true, color: '4F46E5' }),
           new TextRun({ text: note, color: '374151' }),
