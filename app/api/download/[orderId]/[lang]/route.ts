@@ -521,7 +521,7 @@ export async function GET(
       .single()
 
     if (!order) return NextResponse.json({ error: 'Order not found' }, { status: 404 })
-    if (order.status !== 'completed') return NextResponse.json({ error: 'Translation not yet complete' }, { status: 400 })
+    if (order.status !== 'completed' && order.status !== 'pending_review') return NextResponse.json({ error: 'Translation not yet complete' }, { status: 400 })
 
     const { data: file } = await supabaseAdmin
       .from('files')
