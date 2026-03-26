@@ -195,13 +195,34 @@ export default function Home() {
     return (translationCost + upsellCost).toFixed(2)
   }
 
-  const calculateFinalTotal = () => {
-    const subtotal = parseFloat(calculateTotal())
-    if (voucherApplied) {
-      const discountAmount = parseFloat(voucherApplied.discountAmount)
-      return Math.max(subtotal - discountAmount, 1).toFixed(2)
+  // Returns the amount that CAN be discounted (excludes MRR shoutout which is never discounted)
+  const calculateVoucherableSubtotal = () => {
+    return parseFloat(calculateTotal()) - (selectedUpsells.includes('mrr-shoutout') ? 69 : 0)
+  }
+
+  // Returns the actual voucher discount amount to display (recalculates dynamically)
+  const getVoucherDiscountAmount = () => {
+    if (!voucherApplied) return '0.00'
+    const voucherableSubtotal = calculateVoucherableSubtotal()
+    if (voucherApplied.type === 'percent') {
+      return (voucherableSubtotal * voucherApplied.discount / 100).toFixed(2)
     }
-    return subtotal.toFixed(2)
+    return Math.min(parseFloat(voucherApplied.discountAmount), voucherableSubtotal).toFixed(2)
+  }
+
+  const calculateFinalTotal = () => {
+    const mrrCost = selectedUpsells.includes('mrr-shoutout') ? 69 : 0
+    const voucherableSubtotal = calculateVoucherableSubtotal()
+    if (voucherApplied) {
+      let discountAmount: number
+      if (voucherApplied.type === 'percent') {
+        discountAmount = voucherableSubtotal * (voucherApplied.discount / 100)
+      } else {
+        discountAmount = Math.min(parseFloat(voucherApplied.discountAmount), voucherableSubtotal)
+      }
+      return Math.max(voucherableSubtotal - discountAmount + mrrCost, 1).toFixed(2)
+    }
+    return (voucherableSubtotal + mrrCost).toFixed(2)
   }
 
   const applyVoucher = async () => {
@@ -216,7 +237,7 @@ export default function Home() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
           code: voucherCode, 
-          subtotal: parseFloat(calculateTotal()) 
+          subtotal: calculateVoucherableSubtotal() 
         }),
       })
       
@@ -1093,10 +1114,10 @@ export default function Home() {
                     <span className="text-gray-600">Price per language</span>
                     <span className="font-semibold text-gray-900">${WORD_TIERS[selectedTier].basePrice}</span>
                   </div>
-                  {BUNDLE_DISCOUNTS[Math.min(selectedLanguages.length, 4) as keyof typeof BUNDLE_DISCOUNTS].discount > 0 && (
+                  {BUNDLE_DISCOUNTS[Math.min(selectedLanguages.length, 6) as keyof typeof BUNDLE_DISCOUNTS].discount > 0 && (
                     <div className="flex justify-between items-center mb-4 text-green-600">
                       <span>Bundle discount</span>
-                      <span className="font-semibold">-{BUNDLE_DISCOUNTS[Math.min(selectedLanguages.length, 4) as keyof typeof BUNDLE_DISCOUNTS].discount}%</span>
+                      <span className="font-semibold">-{BUNDLE_DISCOUNTS[Math.min(selectedLanguages.length, 6) as keyof typeof BUNDLE_DISCOUNTS].discount}%</span>
                     </div>
                   )}
                   <div className="border-t border-gray-200 pt-4 flex justify-between items-center">
@@ -1255,11 +1276,10 @@ export default function Home() {
                             <h4 className="font-bold text-gray-900 text-sm">Romance Reader Shoutout</h4>
                             <span className="px-2 py-0.5 bg-pink-100 text-pink-700 text-xs font-semibold rounded-full">Romance Special</span>
                           </div>
-                          <p className="text-xs text-gray-600 mb-3">Get your translated romance featured to 20,000+ romance readers. English-language audience. Perfect for building your international reader base.</p>
+                          <p className="text-xs text-gray-600 mb-3">Get your translated romance featured to 20,000+ romance readers via My Romance Reads. English version live at myromancereads.com — MRR Europe coming soon.</p>
                           <div className="flex items-center justify-between">
                             <div className="flex items-center gap-2">
                               <span className="text-lg font-bold text-gray-900">$69</span>
-                              <span className="text-xs text-gray-400 line-through">$90</span>
                             </div>
                             <button
                               onClick={() => toggleUpsell('mrr-shoutout')}
@@ -1300,7 +1320,7 @@ export default function Home() {
                           Voucher ({voucherApplied.code})
                           <button onClick={removeVoucher} className="text-red-500 hover:text-red-700 text-xs">✕</button>
                         </span>
-                        <span className="font-medium">-${voucherApplied.discountAmount}</span>
+                        <span className="font-medium">-${getVoucherDiscountAmount()}</span>
                       </div>
                     )}
                     <div className="border-t border-gray-200 pt-3 flex justify-between">
