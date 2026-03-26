@@ -1279,6 +1279,7 @@ export default function Home() {
                           <p className="text-xs text-gray-600 mb-3">Get your translated romance featured to 20,000+ romance readers via My Romance Reads. English version live at myromancereads.com — MRR Europe coming soon.</p>
                           <div className="flex items-center justify-between">
                             <div className="flex items-center gap-2">
+                              <span className="text-sm text-gray-400 line-through mr-1">$90</span>
                               <span className="text-lg font-bold text-gray-900">$69</span>
                             </div>
                             <button

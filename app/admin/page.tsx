@@ -15,6 +15,7 @@ type Order = {
   status: 'pending' | 'processing' | 'completed' | 'failed' | 'pending_review' | 'needs_review'
   created_at: string
   completed_at: string | null
+  upsells: string[] | null
 }
 
 type Stats = {
@@ -313,7 +314,12 @@ export default function AdminPage() {
                   <React.Fragment key={o.id}>
                   <tr className="hover:bg-gray-50 transition-colors">
                     <td className="px-4 py-3">
-                      <p className="font-medium text-gray-900 truncate max-w-[200px]">{o.book_title}</p>
+                      <div className="flex items-center gap-1.5">
+                        <p className="font-medium text-gray-900 truncate max-w-[200px]">{o.book_title}</p>
+                        {(Array.isArray(o.upsells) ? o.upsells : JSON.parse(o.upsells as unknown as string || '[]')).includes('mrr-shoutout') && (
+                          <span title="MRR Romance Shoutout purchased" className="text-base">🌶️</span>
+                        )}
+                      </div>
                       <p className="text-gray-400 text-xs truncate max-w-[200px]">{o.email}</p>
                     </td>
                     <td className="px-4 py-3">
@@ -383,7 +389,12 @@ export default function AdminPage() {
               <div key={o.id} className="p-4 space-y-2">
                 <div className="flex items-start justify-between gap-2">
                   <div className="min-w-0">
-                    <p className="font-medium text-gray-900 truncate">{o.book_title}</p>
+                    <div className="flex items-center gap-1.5">
+                      <p className="font-medium text-gray-900 truncate">{o.book_title}</p>
+                      {(Array.isArray(o.upsells) ? o.upsells : JSON.parse(o.upsells as unknown as string || '[]')).includes('mrr-shoutout') && (
+                        <span title="MRR Romance Shoutout purchased" className="text-base">🌶️</span>
+                      )}
+                    </div>
                     <p className="text-gray-400 text-xs truncate">{o.email}</p>
                   </div>
                   <span className={`px-2 py-1 rounded-full text-xs font-medium shrink-0 ${STATUS_COLORS[o.status] || 'bg-gray-100 text-gray-600'}`}>
