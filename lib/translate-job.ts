@@ -66,6 +66,9 @@ const LANGUAGE_SETTINGS: Record<string, string> = {
 }
 
 const MAX_CHUNK_WORDS = 4000
+// Editorial chunks are smaller so each Sonnet call completes within Vercel's 60s function timeout
+// At ~70 tokens/sec output, 1500 words ≈ 2000 tokens ≈ 28 seconds — safe margin
+const MAX_EDITORIAL_CHUNK_WORDS = 1500
 
 // ─── Profitability & Cost Tracking ───────────────────────────────────────────
 // Claude API pricing (USD per million tokens) — update if Anthropic changes pricing
@@ -558,9 +561,9 @@ Provide ONLY the translation, preserving all formatting. No explanations or note
       }
       // ──────────────────────────────────────────────────────────────────────
 
-      // Pass 2: Editorial Review (Opus) — chunked to match Pass 1 chunks
+      // Pass 2: Editorial Review — use smaller chunks so each call fits within Vercel's 60s function timeout
       const editorialChunks: string[] = []
-      const translatedTextChunks = chunkText(translatedText, MAX_CHUNK_WORDS)
+      const translatedTextChunks = chunkText(translatedText, MAX_EDITORIAL_CHUNK_WORDS)
 
       for (let i = 0; i < translatedTextChunks.length; i++) {
         const translatedChunk = translatedTextChunks[i]
