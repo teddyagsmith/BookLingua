@@ -768,6 +768,17 @@ Be specific — use real examples from this text, not generic ones. Even if no e
     // Step 6: Notify admin for review — customer email sent only after approval
     await step.run('notify-admin-for-review', async () => {
       const preview = translationPreview || '(preview not available)'
+      // Build download links for all languages
+      const downloadLinksHtml = languages.map(l => {
+        const reviewUrl = buildDownloadUrl(orderId, l, 'review')
+        const finalUrl  = buildDownloadUrl(orderId, l, 'final')
+        return `<tr>
+          <td style="padding:6px 8px; color:#374151;">${LANGUAGE_NAMES[l]}</td>
+          <td style="padding:6px 8px;"><a href="${reviewUrl}" style="color:#7c3aed; font-weight:bold;">Review DOCX</a> (highlighted changes)</td>
+          <td style="padding:6px 8px;"><a href="${finalUrl}" style="color:#059669;">Final file</a></td>
+        </tr>`
+      }).join('')
+
       await resend.emails.send({
         from: 'BookLingua <orders@booklingua.io>',
         to: 'hello@booklingua.io',
@@ -787,8 +798,17 @@ Be specific — use real examples from this text, not generic ones. Even if no e
               <strong style="color:#7c3aed;">Translation preview (first language):</strong>
               <p style="margin:8px 0 0 0; color:#374151; font-style:italic; line-height:1.6;">${preview}</p>
             </div>
+            <h3 style="color:#374151; margin-bottom:8px;">📥 Download to review:</h3>
+            <table style="width:100%; border-collapse:collapse; margin-bottom:20px; background:#f9fafb; border-radius:8px;">
+              <thead><tr>
+                <th style="padding:8px; text-align:left; color:#6b7280; font-size:12px;">Language</th>
+                <th style="padding:8px; text-align:left; color:#6b7280; font-size:12px;">Review copy</th>
+                <th style="padding:8px; text-align:left; color:#6b7280; font-size:12px;">Final copy</th>
+              </tr></thead>
+              <tbody>${downloadLinksHtml}</tbody>
+            </table>
             <a href="https://booklingua.io/admin" style="display:inline-block; background:#7c3aed; color:#fff; padding:12px 24px; border-radius:8px; text-decoration:none; font-weight:bold;">
-              Go to Admin Panel →
+              Approve in Admin Panel →
             </a>
             <p style="color:#9ca3af; font-size:12px; margin-top:16px;">Order ID: ${orderId}</p>
           </div>
