@@ -11,6 +11,7 @@
     "@anthropic-ai/sdk": "^0.24.0",
     "@supabase/supabase-js": "^2.39.0",
     "@types/pdf-parse": "^1.1.5",
+    "@vercel/analytics": "^2.0.1",
     "docx": "^8.5.0",
     "epub-gen-memory": "^1.1.2",
     "epub2": "^3.0.2",
