@@ -529,7 +529,9 @@ export async function GET(
       .eq('order_id', orderId)
       .eq('language', lang)
       .eq('type', 'translated')
-      .single()
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle()
 
     if (!file) return NextResponse.json({ error: 'Translation not found' }, { status: 404 })
 

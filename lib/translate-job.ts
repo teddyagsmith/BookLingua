@@ -715,6 +715,10 @@ Be specific — use real examples from this text, not generic ones. Even if no e
 
       // Save translation to database
       await step.run(`save-translation-${langCode}`, async () => {
+        // Delete any stale translated files for this language (from previous retry runs)
+        await supabaseAdmin.from('files')
+          .delete()
+          .eq('order_id', orderId).eq('type', 'translated').eq('language', langCode)
         await supabaseAdmin.from('files').insert({
           order_id: orderId,
           type: 'translated',
