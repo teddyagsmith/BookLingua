@@ -2,6 +2,7 @@
 
 import { useState, useCallback, useRef } from 'react'
 import Image from 'next/image'
+import EmailSignupPopup from '@/components/EmailSignupPopup'
 
 // Updated pricing tiers
 const WORD_TIERS = {
@@ -132,6 +133,69 @@ const Logo = ({ size = 'md' }: { size?: 'sm' | 'md' | 'lg' }) => {
       height={sizes[size]}
       className="object-contain"
     />
+  )
+}
+
+function FooterSignup({ serifFont }: { serifFont: React.CSSProperties }) {
+  const [email, setEmail] = useState('')
+  const [state, setState] = useState<'idle' | 'loading' | 'done' | 'error'>('idle')
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!email) return
+    setState('loading')
+    try {
+      const res = await fetch('/api/subscribe', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, source: 'footer' }),
+      })
+      if (!res.ok) throw new Error()
+      setState('done')
+    } catch {
+      setState('error')
+    }
+  }
+
+  return (
+    <div className="border-b border-gray-800 py-16 px-8">
+      <div className="max-w-2xl mx-auto text-center">
+        <h3 className="text-2xl font-bold text-white mb-2" style={serifFont}>
+          Tips for publishing your book globally 🌍
+        </h3>
+        <p className="text-gray-400 mb-8 text-sm">
+          Join indie authors already reaching readers in 6 languages. Get launch tips, market insights, and exclusive discounts — no spam.
+        </p>
+
+        {state === 'done' ? (
+          <div className="inline-flex items-center gap-2 px-6 py-3 bg-green-900/40 border border-green-700 rounded-2xl text-green-400 font-medium">
+            <span>✓</span> You're subscribed — thanks!
+          </div>
+        ) : (
+          <form onSubmit={handleSubmit} className="flex flex-col sm:flex-row gap-3 max-w-md mx-auto">
+            <input
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="your@email.com"
+              required
+              className="flex-1 px-4 py-3 rounded-xl bg-gray-800 border border-gray-700 text-white placeholder-gray-500 focus:border-violet-500 focus:outline-none text-sm"
+            />
+            <button
+              type="submit"
+              disabled={state === 'loading'}
+              className="px-6 py-3 bg-gradient-to-r from-blue-600 to-violet-600 text-white rounded-xl font-bold text-sm shadow-lg hover:shadow-violet-500/25 transition-all disabled:opacity-60 whitespace-nowrap"
+            >
+              {state === 'loading' ? 'Subscribing…' : 'Subscribe free →'}
+            </button>
+          </form>
+        )}
+
+        {state === 'error' && (
+          <p className="text-red-400 text-xs mt-2">Something went wrong — please try again.</p>
+        )}
+      </div>
+    </div>
   )
 }
 
@@ -401,6 +465,8 @@ export default function Home() {
       <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-violet-50">
         {/* Google Font */}
         <style>{`@import url('https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&display=swap');`}</style>
+
+        <EmailSignupPopup />
 
         {/* Top pricing bar */}
         <div className="bg-gradient-to-r from-blue-600 to-violet-600 text-white text-sm py-2 px-4 text-center">
@@ -767,8 +833,11 @@ export default function Home() {
         </section>
 
         {/* Footer */}
-        <footer className="bg-gray-900 text-gray-400 py-12">
-          <div className="max-w-7xl mx-auto px-8 text-center">
+        <footer className="bg-gray-900 text-gray-400">
+          {/* Newsletter signup strip */}
+          <FooterSignup serifFont={serifFont} />
+
+          <div className="max-w-7xl mx-auto px-8 py-10 text-center border-t border-gray-800">
             <div className="flex items-center justify-center gap-3 mb-4">
               <Logo size="sm" />
               <span className="text-xl font-bold text-white" style={serifFont}>BookLingua</span>
