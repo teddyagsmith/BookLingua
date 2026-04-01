@@ -18,6 +18,14 @@ type Order = {
   upsells: string[] | null
 }
 
+type AbandonedUpload = {
+  session_id: string
+  file_name: string
+  file_format: string
+  word_count: number
+  created_at: string
+}
+
 type Stats = {
   todayRevenue: number
   todayOrders: number
@@ -31,6 +39,7 @@ type Stats = {
   avgMargin: number | null
   totalApiCost: number
   alerts: Order[]
+  abandonedCount: number
 }
 
 const STATUS_COLORS: Record<string, string> = {
@@ -65,8 +74,10 @@ export default function AdminPage() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [orders, setOrders] = useState<Order[]>([])
+  const [abandonedUploads, setAbandonedUploads] = useState<AbandonedUpload[]>([])
   const [stats, setStats] = useState<Stats | null>(null)
   const [filter, setFilter] = useState<string>('all')
+  const [activeTab, setActiveTab] = useState<'orders' | 'abandoned'>('orders')
   const [search, setSearch] = useState('')
   const [lastRefresh, setLastRefresh] = useState<Date | null>(null)
   const [actionLoading, setActionLoading] = useState<string | null>(null)
@@ -125,6 +136,7 @@ export default function AdminPage() {
       if (!res.ok) throw new Error('Failed to load')
       const data = await res.json()
       setOrders(data.orders)
+      setAbandonedUploads(data.abandonedUploads || [])
       setStats(data.stats)
       setAuthed(true)
       setLastRefresh(new Date())
@@ -264,7 +276,90 @@ export default function AdminPage() {
           </div>
         )}
 
+        {/* Tab bar */}
+        <div className="flex gap-2">
+          <button
+            onClick={() => setActiveTab('orders')}
+            className={`px-4 py-2 rounded-lg text-sm font-medium ${activeTab === 'orders' ? 'bg-violet-600 text-white' : 'bg-white text-gray-600 border border-gray-200 hover:bg-gray-50'}`}
+          >
+            Orders
+          </button>
+          <button
+            onClick={() => setActiveTab('abandoned')}
+            className={`px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-1.5 ${activeTab === 'abandoned' ? 'bg-amber-500 text-white' : 'bg-white text-gray-600 border border-gray-200 hover:bg-gray-50'}`}
+          >
+            👻 Abandoned Uploads
+            {stats && stats.abandonedCount > 0 && (
+              <span className={`text-xs px-1.5 py-0.5 rounded-full font-bold ${activeTab === 'abandoned' ? 'bg-white/30 text-white' : 'bg-amber-100 text-amber-700'}`}>
+                {stats.abandonedCount}
+              </span>
+            )}
+          </button>
+        </div>
+
+        {/* Abandoned Uploads Panel */}
+        {activeTab === 'abandoned' && (
+          <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+            <div className="p-4 border-b border-gray-100">
+              <h2 className="font-semibold text-gray-800">👻 Abandoned Uploads</h2>
+              <p className="text-sm text-gray-500 mt-0.5">Users who uploaded a book but didn&apos;t complete checkout (older than 1 hour)</p>
+            </div>
+            {abandonedUploads.length === 0 ? (
+              <div className="text-center py-12 text-gray-400">No abandoned uploads 🎉</div>
+            ) : (
+              <>
+                {/* Desktop table */}
+                <div className="hidden sm:block overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead className="bg-gray-50 text-gray-500 text-xs uppercase">
+                      <tr>
+                        <th className="px-4 py-3 text-left">File</th>
+                        <th className="px-4 py-3 text-left">Format</th>
+                        <th className="px-4 py-3 text-right">Words</th>
+                        <th className="px-4 py-3 text-left">Uploaded</th>
+                        <th className="px-4 py-3 text-left">Time ago</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-50">
+                      {abandonedUploads.map(u => (
+                        <tr key={u.session_id} className="hover:bg-amber-50 transition-colors">
+                          <td className="px-4 py-3">
+                            <p className="font-medium text-gray-900 truncate max-w-[280px]">{u.file_name}</p>
+                            <p className="text-gray-400 text-xs font-mono truncate max-w-[280px]">{u.session_id.slice(0, 16)}…</p>
+                          </td>
+                          <td className="px-4 py-3">
+                            <span className="bg-gray-100 text-gray-600 text-xs px-2 py-0.5 rounded font-medium uppercase">
+                              {u.file_format.replace('.', '')}
+                            </span>
+                          </td>
+                          <td className="px-4 py-3 text-right text-gray-600">{u.word_count?.toLocaleString()}</td>
+                          <td className="px-4 py-3 text-gray-400 text-xs whitespace-nowrap">{fmtDate(u.created_at)}</td>
+                          <td className="px-4 py-3 text-gray-500 text-xs">{ago(u.created_at)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                {/* Mobile cards */}
+                <div className="sm:hidden divide-y divide-gray-100">
+                  {abandonedUploads.map(u => (
+                    <div key={u.session_id} className="p-4 space-y-1">
+                      <p className="font-medium text-gray-900 truncate">{u.file_name}</p>
+                      <div className="flex items-center gap-3 text-sm text-gray-500">
+                        <span className="bg-gray-100 text-gray-600 text-xs px-2 py-0.5 rounded uppercase">{u.file_format.replace('.', '')}</span>
+                        <span>{u.word_count?.toLocaleString()} words</span>
+                        <span className="ml-auto">{ago(u.created_at)}</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </>
+            )}
+          </div>
+        )}
+
         {/* Orders */}
+        {activeTab === 'orders' && (
         <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
           {/* Filters */}
           <div className="p-4 border-b border-gray-100 flex flex-col sm:flex-row gap-3">
@@ -449,6 +544,7 @@ export default function AdminPage() {
             )}
           </div>
         </div>
+        )}
       </div>
     </div>
   )

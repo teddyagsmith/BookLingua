@@ -19,6 +19,14 @@ export async function GET(request: NextRequest) {
 
     if (error) throw error
 
+    // Fetch abandoned uploads: temp_uploads older than 1 hour (still in checkout = not abandoned yet)
+    const abandonedThreshold = new Date(Date.now() - 60 * 60 * 1000).toISOString()
+    const { data: abandonedUploads } = await supabaseAdmin
+      .from('temp_uploads')
+      .select('session_id, file_name, file_format, word_count, created_at')
+      .lte('created_at', abandonedThreshold)
+      .order('created_at', { ascending: false })
+
     const now = new Date()
     const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate()).toISOString()
     const weekStart = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString()
@@ -45,6 +53,7 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({
       orders: orders || [],
+      abandonedUploads: abandonedUploads || [],
       stats: {
         todayRevenue,
         todayOrders: todayOrders.length,
@@ -58,6 +67,7 @@ export async function GET(request: NextRequest) {
         avgMargin,
         totalApiCost,
         alerts: [...failedOrders, ...stuckOrders],
+        abandonedCount: abandonedUploads?.length || 0,
       },
     })
   } catch (err) {
