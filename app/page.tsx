@@ -25,6 +25,9 @@ const CORE_LANGUAGES = [
   { code: 'es-latam', name: 'Spanish (Latin America)', flag: '🌎', market: 'Mexico, Colombia, Argentina+' },
   { code: 'fr', name: 'French', flag: '🇫🇷', market: '300M+ speakers' },
   { code: 'de', name: 'German', flag: '🇩🇪', market: '100M+ speakers' },
+  { code: 'it', name: 'Italian', flag: '🇮🇹', market: '65M+ speakers' },
+  { code: 'pl', name: 'Polish', flag: '🇵🇱', market: '50M+ speakers' },
+  { code: 'ja', name: 'Japanese', flag: '🇯🇵', market: '125M+ speakers' },
   { code: 'pt-pt', name: 'Portuguese (Portugal)', flag: '🇵🇹', market: 'Portugal · European' },
   { code: 'pt-br', name: 'Portuguese (Brazil)', flag: '🇧🇷', market: 'Brazil · 215M speakers' },
 ]
@@ -1142,7 +1145,7 @@ export default function Home() {
                 <div className="flex items-center justify-between">
                   <div>
                     <h3 className="text-xl font-bold mb-1">🎉 Bundle All 6 Languages & Save 40%</h3>
-                    <p className="text-white/80">Spanish, French, German & Portuguese</p>
+                    <p className="text-white/80">Spanish, French, German, Italian, Polish, Japanese & Portuguese</p>
                   </div>
                   <button
                     onClick={selectAllCore}

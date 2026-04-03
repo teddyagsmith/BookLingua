@@ -20,6 +20,9 @@ const LANGUAGE_NAMES: Record<string, string> = {
   'pt-pt': 'Portuguese (Portugal)',
   'pt-br': 'Portuguese (Brazil)',
   pt: 'Portuguese', // legacy fallback
+  it: 'Italian',
+  pl: 'Polish',
+  ja: 'Japanese',
 }
 
 const LANGUAGE_SETTINGS: Record<string, string> = {
@@ -63,6 +66,27 @@ const LANGUAGE_SETTINGS: Record<string, string> = {
 - Use Brazilian idioms and expressions where appropriate`,
 
   pt: `Use Brazilian Portuguese as the default for wider readability.`,
+
+  it: `Use standard Italian (italiano standard) — clear, modern prose that reads naturally across Italy.
+- Use "Lei" for formal register and "tu" for informal — match the register of the source text
+- Italian punctuation: no space before : ; ! ? (unlike French)
+- Preserve rhythm and sentence flow — Italian prose favours shorter, more musical phrasing than English
+- Avoid translating idioms literally; find the Italian equivalent expression`,
+
+  pl: `Use standard Polish (język polski) — modern, literary register appropriate to the source genre.
+- Polish is a heavily inflected language — ensure noun cases, verb aspects, and adjective agreement are correct
+- Use formal "Pan/Pani" for formal register; "ty" for informal — match the source text's register
+- Preserve genre-appropriate vocabulary (e.g. romantic, literary, or commercial register)
+- Polish quotation marks: „like this" (lower opening, upper closing)
+- Avoid calques from English — find natural Polish expressions`,
+
+  ja: `Use natural, fluent Japanese appropriate to the source genre and register.
+- Use standard Japanese (標準語) with appropriate keigo (敬語) levels matching the source text's formality
+- For fiction/romance: use polite but natural contemporary Japanese prose (です/ます or plain form depending on narrative style)
+- Render dialogue naturally — Japanese dialogue conventions differ significantly from English
+- Retain proper nouns (character names, place names) unless a Japanese equivalent is well established
+- Use Japanese quotation marks: 「like this」for dialogue
+- Numbers: use Arabic numerals for modern prose (not Chinese numerals) unless stylistically appropriate`,
 }
 
 const MAX_CHUNK_WORDS = 4000

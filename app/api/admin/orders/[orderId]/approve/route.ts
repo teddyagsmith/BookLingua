@@ -14,6 +14,9 @@ const LANGUAGE_NAMES: Record<string, string> = {
   'pt-pt': 'Portuguese (Portugal)',
   'pt-br': 'Portuguese (Brazil)',
   pt: 'Portuguese',
+  it: 'Italian',
+  pl: 'Polish',
+  ja: 'Japanese',
 }
 
 export async function POST(

@@ -22,6 +22,9 @@ const LANG_NAMES: Record<string, string> = {
   'pt-pt':    'Portuguese_Portugal',
   'pt-br':    'Portuguese_Brazil',
   'pt':       'Portuguese',
+  'it':       'Italian',
+  'pl':       'Polish',
+  'ja':       'Japanese',
 }
 
 const LANG_DISPLAY: Record<string, string> = {
@@ -33,6 +36,9 @@ const LANG_DISPLAY: Record<string, string> = {
   'pt-pt':    'Portuguese (Portugal)',
   'pt-br':    'Portuguese (Brazil)',
   'pt':       'Portuguese',
+  'it':       'Italian',
+  'pl':       'Polish',
+  'ja':       'Japanese',
 }
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
