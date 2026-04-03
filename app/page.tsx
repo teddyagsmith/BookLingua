@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useCallback, useRef } from 'react'
+import { useState, useCallback, useRef, useEffect } from 'react'
 import Image from 'next/image'
 import EmailSignupPopup from '@/components/EmailSignupPopup'
 
@@ -348,6 +348,19 @@ export default function Home() {
       prev.includes(id) ? prev.filter(u => u !== id) : [...prev, id]
     )
   }
+
+  // Debounced email save — captures email in temp_uploads for abandoned checkout recovery
+  useEffect(() => {
+    if (!uploadComplete || !email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return
+    const timer = setTimeout(() => {
+      fetch('/api/save-email', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, sessionId: sessionIdRef.current }),
+      }).catch(() => {/* silent fail */})
+    }, 800)
+    return () => clearTimeout(timer)
+  }, [email, uploadComplete])
 
   const handleDrag = useCallback((e: React.DragEvent) => {
     e.preventDefault()

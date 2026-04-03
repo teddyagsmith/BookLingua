@@ -23,7 +23,7 @@ export async function GET(request: NextRequest) {
     const abandonedThreshold = new Date(Date.now() - 60 * 60 * 1000).toISOString()
     const { data: abandonedUploads } = await supabaseAdmin
       .from('temp_uploads')
-      .select('session_id, file_name, file_format, word_count, created_at')
+      .select('session_id, file_name, file_format, word_count, email, created_at')
       .lte('created_at', abandonedThreshold)
       .order('created_at', { ascending: false })
 

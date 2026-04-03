@@ -23,6 +23,7 @@ type AbandonedUpload = {
   file_name: string
   file_format: string
   word_count: number
+  email?: string | null
   created_at: string
 }
 
@@ -315,6 +316,7 @@ export default function AdminPage() {
                       <tr>
                         <th className="px-4 py-3 text-left">File</th>
                         <th className="px-4 py-3 text-left">Format</th>
+                        <th className="px-4 py-3 text-left">Email</th>
                         <th className="px-4 py-3 text-right">Words</th>
                         <th className="px-4 py-3 text-left">Uploaded</th>
                         <th className="px-4 py-3 text-left">Time ago</th>
@@ -332,6 +334,13 @@ export default function AdminPage() {
                               {u.file_format.replace('.', '')}
                             </span>
                           </td>
+                          <td className="px-4 py-3">
+                            {u.email ? (
+                              <a href={`mailto:${u.email}`} className="text-violet-600 hover:underline text-sm">{u.email}</a>
+                            ) : (
+                              <span className="text-gray-300 text-xs italic">no email</span>
+                            )}
+                          </td>
                           <td className="px-4 py-3 text-right text-gray-600">{u.word_count?.toLocaleString()}</td>
                           <td className="px-4 py-3 text-gray-400 text-xs whitespace-nowrap">{fmtDate(u.created_at)}</td>
                           <td className="px-4 py-3 text-gray-500 text-xs">{ago(u.created_at)}</td>
@@ -345,6 +354,11 @@ export default function AdminPage() {
                   {abandonedUploads.map(u => (
                     <div key={u.session_id} className="p-4 space-y-1">
                       <p className="font-medium text-gray-900 truncate">{u.file_name}</p>
+                      {u.email ? (
+                        <a href={`mailto:${u.email}`} className="text-violet-600 text-sm hover:underline block">{u.email}</a>
+                      ) : (
+                        <p className="text-gray-300 text-xs italic">no email captured</p>
+                      )}
                       <div className="flex items-center gap-3 text-sm text-gray-500">
                         <span className="bg-gray-100 text-gray-600 text-xs px-2 py-0.5 rounded uppercase">{u.file_format.replace('.', '')}</span>
                         <span>{u.word_count?.toLocaleString()} words</span>
