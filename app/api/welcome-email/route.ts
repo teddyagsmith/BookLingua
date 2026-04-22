@@ -393,7 +393,7 @@ export async function POST(req: NextRequest) {
       to: email,
       subject: sequence.subject,
       html: sequence.getHtml(email),
-      replyTo: 'hello@booklingua.io',
+      reply_to: 'hello@booklingua.io',
     })
 
     if (error) {

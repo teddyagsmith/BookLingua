@@ -5,6 +5,7 @@ const nextConfig = {
       bodySizeLimit: '10mb',
     },
   },
+  serverExternalPackages: ['epub2', 'zipfile'],
 }
 
 module.exports = nextConfig
