@@ -56,7 +56,7 @@ const originalText = [
 ]
 
 type LangCode = 'es' | 'fr' | 'de' | 'pt'
-type ActiveTab = LangCode | 'notes' | 'launch'
+type ActiveTab = LangCode | 'notes' | 'launch' | 'scan'
 
 interface TranslationSegment {
   id: number
@@ -286,6 +286,147 @@ const LANGUAGES = [
   { code: 'de' as LangCode, label: 'DE', name: 'German', flag: '🇩🇪' },
   { code: 'pt' as LangCode, label: 'PT', name: 'Portuguese', flag: '🇵🇹' },
 ]
+
+const scanExampleTerms = [
+  {
+    term: 'W-4 form',
+    type: 'country_specific',
+    context: '...employment in the United States, you\'ll need to fill out a W-4 form...',
+    question: 'Your text mentions "W-4" — a US-specific term. For your Portuguese translation, how should we handle it?',
+    options: [
+      { label: 'Keep original', desc: 'Keep "W-4" in English with brief Portuguese explanation' },
+      { label: 'Adapt to local equivalent', desc: 'Replace with nearest Portuguese equivalent (may change meaning)' },
+      { label: 'Keep with inline bracket', desc: 'Keep English + add local equivalent in brackets on first mention' },
+    ],
+  },
+  {
+    term: 'FICA',
+    type: 'country_specific',
+    context: '...pay stub will show... FICA contributions for Social Security and Medicare...',
+    question: 'Your text mentions "FICA" — a US-specific term. For your Portuguese translation, how should we handle it?',
+    options: [
+      { label: 'Keep original', desc: 'Keep "FICA" in English with brief Portuguese explanation' },
+      { label: 'Adapt to local equivalent', desc: 'Replace with nearest Portuguese equivalent (may change meaning)' },
+      { label: 'Keep with inline bracket', desc: 'Keep English + add local equivalent in brackets on first mention' },
+    ],
+  },
+  {
+    term: '50 miles',
+    type: 'potentially_ambiguous',
+    context: '...She drove 50 miles to the store...',
+    question: 'Your text uses "miles" (length). For Portuguese readers, should we convert to km?',
+    options: [
+      { label: 'Convert to km', desc: 'Replace with metric equivalent throughout' },
+      { label: 'Keep original', desc: 'Keep "miles" as-is (e.g. if story is set in the US/UK)' },
+      { label: 'Convert with note', desc: 'Use km + add Translation Note' },
+    ],
+  },
+]
+
+function PreScanTab() {
+  return (
+    <div className="max-w-5xl mx-auto">
+      {/* Header card */}
+      <div className="bg-white rounded-3xl shadow-xl border border-blue-100 overflow-hidden mb-8">
+        <div className="px-6 py-4 bg-gradient-to-r from-amber-50 to-orange-50 border-b border-amber-100 flex items-center gap-4">
+          <div className="w-10 h-12 bg-gradient-to-br from-amber-500 to-orange-600 rounded-lg flex items-center justify-center shadow">
+            <span className="text-white text-xl">🔍</span>
+          </div>
+          <div>
+            <h2 className="font-bold text-gray-900 text-lg" style={serifFont}>
+              Pre-Translation Scan — How It Works
+            </h2>
+            <p className="text-sm text-gray-500">Smart detection of country-specific terms before translation begins</p>
+          </div>
+        </div>
+        <div className="px-6 py-5">
+          <p className="text-gray-600 text-[15px] leading-relaxed">
+            Before translating, BookLingua scans your manuscript for terms that may need your input — 
+            US/UK-specific concepts, measurements, brand names, and education terms. 
+            You choose how each one is handled, and your preferences are applied to the translation.
+          </p>
+        </div>
+      </div>
+
+      {/* Example scan results */}
+      <div className="bg-white rounded-3xl shadow-xl border border-amber-100 overflow-hidden mb-8">
+        <div className="px-6 py-4 bg-gradient-to-r from-amber-500 to-orange-500 text-white">
+          <h3 className="font-bold text-lg" style={serifFont}>Example: We found 8 items to review</h3>
+          <p className="text-white/80 text-sm">Your choices will be saved and applied to the translation</p>
+        </div>
+        <div className="p-6 space-y-6">
+          {scanExampleTerms.map((finding, idx) => (
+            <div key={idx} className="bg-amber-50/50 rounded-xl p-5 border border-amber-100">
+              <div className="flex items-start gap-3 mb-3">
+                <span className={`text-xs font-bold px-2 py-1 rounded-full flex-shrink-0 ${
+                  finding.type === 'country_specific' ? 'bg-red-100 text-red-700' : 'bg-gray-100 text-gray-700'
+                }`}>
+                  {finding.type === 'country_specific' ? 'COUNTRY-SPECIFIC' : 'MEASUREMENT'}
+                </span>
+                <div className="flex-1">
+                  <p className="font-semibold text-gray-900 text-sm">{finding.question}</p>
+                  <p className="text-xs text-gray-500 mt-1 italic">Context: "{finding.context}"</p>
+                </div>
+              </div>
+              <div className="grid gap-2">
+                {finding.options.map((opt, optIdx) => (
+                  <div key={optIdx} className={`flex items-start gap-3 p-3 rounded-xl border-2 ${
+                    optIdx === 0 ? 'border-violet-500 bg-violet-50' : 'border-gray-200'
+                  }`}>
+                    <div className={`w-4 h-4 rounded-full border-2 mt-0.5 flex-shrink-0 ${
+                      optIdx === 0 ? 'border-violet-500 bg-violet-500' : 'border-gray-300'
+                    }`}>
+                      {optIdx === 0 && <div className="w-2 h-2 bg-white rounded-full m-0.5" />}
+                    </div>
+                    <div>
+                      <p className="font-medium text-sm text-gray-900">{opt.label}</p>
+                      <p className="text-xs text-gray-500">{opt.desc}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* How it works steps */}
+      <div className="grid sm:grid-cols-3 gap-5 mb-8">
+        {[
+          {
+            icon: '📤',
+            title: '1. Upload',
+            desc: 'Upload your manuscript (EPUB, DOCX, or TXT). We extract the text automatically.',
+          },
+          {
+            icon: '🌍',
+            title: '2. Pick Languages',
+            desc: 'Choose your target language(s). The scan uses your selection to ask the right questions.',
+          },
+          {
+            icon: '✅',
+            title: '3. Review & Pay',
+            desc: 'Review flagged terms, choose how each is handled, then proceed to checkout.',
+          },
+        ].map((step, i) => (
+          <div key={i} className="bg-white rounded-2xl shadow-lg border border-gray-100 p-5">
+            <div className="text-3xl mb-3">{step.icon}</div>
+            <h4 className="font-bold text-gray-900 mb-2">{step.title}</h4>
+            <p className="text-sm text-gray-600">{step.desc}</p>
+          </div>
+        ))}
+      </div>
+
+      {/* Footer */}
+      <div className="flex items-center gap-3 px-6 py-4 bg-gradient-to-r from-amber-50 to-orange-50 rounded-2xl border border-amber-200">
+        <span className="text-amber-600 text-xl flex-shrink-0">✅</span>
+        <p className="text-[15px] text-gray-700 font-medium">
+          Pre-translation scan is included with every BookLingua order — no extra charge.
+        </p>
+      </div>
+    </div>
+  )
+}
 
 const translationNoteRows = [
   {
@@ -659,7 +800,8 @@ export default function ExamplesPage() {
           </h1>
 
           <p className="text-xl text-gray-600 leading-relaxed max-w-2xl mx-auto mb-4">
-            Every BookLingua translation goes through two passes: an AI translation layer, then an{' '}
+            Every BookLingua translation goes through three steps: a{' '}
+            <strong className="text-amber-700">smart cultural scan</strong>, an AI translation layer, then an{' '}
             <strong className="text-violet-700">editorial review</strong> that refines idioms, adapts cultural
             conventions, and ensures your book reads as if it were written for that market.
           </p>
@@ -696,6 +838,19 @@ export default function ExamplesPage() {
             {/* Divider */}
             <div className="w-px h-8 bg-gray-200 mx-1 flex-shrink-0" />
 
+            {/* Pre-Scan tab */}
+            <button
+              onClick={() => setActiveTab('scan')}
+              className={`flex items-center gap-2 px-5 py-2.5 rounded-full font-semibold text-sm transition-all whitespace-nowrap ${
+                activeTab === 'scan'
+                  ? 'bg-gradient-to-r from-blue-600 to-violet-600 text-white shadow-md'
+                  : 'bg-white border-2 border-gray-200 text-gray-600 hover:border-violet-300'
+              }`}
+            >
+              <span>🔍</span>
+              <span>Pre-Scan</span>
+            </button>
+
             {/* Translation Notes tab */}
             <button
               onClick={() => setActiveTab('notes')}
@@ -727,6 +882,9 @@ export default function ExamplesPage() {
 
       {/* Main Content */}
       <section className="max-w-7xl mx-auto px-8 py-12">
+
+        {/* ── Pre-Scan tab ── */}
+        {activeTab === 'scan' && <PreScanTab />}
 
         {/* ── Translation Notes tab ── */}
         {activeTab === 'notes' && <TranslationNotesTab />}

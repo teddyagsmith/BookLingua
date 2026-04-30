@@ -597,7 +597,7 @@ export default function Home() {
                 </h1>
 
                 <p className="text-xl text-gray-600 leading-relaxed mb-10 max-w-lg">
-                  Professional AI translation for indie authors. From $99 per language — vs $5,000–$20,000 with a human agency. Two-pass editorial review included.
+                  Professional AI translation for indie authors. From $99 per language — vs $5,000–$20,000 with a human agency. Smart cultural scan + two-pass editorial review included.
                 </p>
 
                 <div className="flex flex-wrap gap-3 mb-8">
@@ -687,6 +687,10 @@ export default function Home() {
           <div className="max-w-7xl mx-auto px-8">
             <div className="flex flex-col md:flex-row items-center justify-center gap-8 md:gap-20">
               <div className="flex items-center gap-3 text-gray-700 font-semibold text-lg">
+                <span className="text-2xl">🔍</span>
+                <span>Smart cultural scan</span>
+              </div>
+              <div className="flex items-center gap-3 text-gray-700 font-semibold text-lg">
                 <span className="text-2xl">⚡</span>
                 <span>Delivered in hours</span>
               </div>
@@ -707,13 +711,33 @@ export default function Home() {
           <div className="max-w-7xl mx-auto px-8">
             <div className="text-center mb-16">
               <h2 className="text-4xl font-bold text-gray-900 mb-4" style={serifFont}>How BookLingua Works</h2>
-              <p className="text-xl text-gray-600">Our two-pass system ensures your translated book reads naturally</p>
+              <p className="text-xl text-gray-600">Three steps from upload to a translation that reads naturally in any language</p>
             </div>
 
-            <div className="grid md:grid-cols-2 gap-8 mb-16">
+            <div className="grid md:grid-cols-3 gap-6 mb-16">
+              <div className="bg-gradient-to-br from-amber-50 to-orange-50 rounded-3xl p-8 border border-amber-200">
+                <div className="flex items-center gap-4 mb-6">
+                  <div className="w-14 h-14 bg-amber-500 rounded-2xl flex items-center justify-center text-white text-2xl font-bold shadow-lg">1</div>
+                  <div>
+                    <h3 className="text-xl font-bold text-gray-900" style={serifFont}>Pre-Translation Scan</h3>
+                    <p className="text-sm text-amber-600">Smart cultural detection</p>
+                  </div>
+                </div>
+                <p className="text-gray-700 mb-4">
+                  Before we translate, we scan your manuscript for country-specific terms, measurements, and cultural references that need your input.
+                </p>
+                <ul className="space-y-2">
+                  {['Flags US/UK-specific terms (W-4, NHS, GPA)', 'Spots measurements (miles → km, pounds → kg)', 'Finds brand names & education terms', 'You choose: keep, adapt, or explain in brackets'].map((item, i) => (
+                    <li key={i} className="flex items-center gap-2 text-gray-700 text-sm">
+                      <span className="text-amber-600">✓</span>{item}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+
               <div className="bg-gradient-to-br from-blue-50 to-blue-100 rounded-3xl p-8 border border-blue-200">
                 <div className="flex items-center gap-4 mb-6">
-                  <div className="w-14 h-14 bg-blue-600 rounded-2xl flex items-center justify-center text-white text-2xl font-bold shadow-lg">1</div>
+                  <div className="w-14 h-14 bg-blue-600 rounded-2xl flex items-center justify-center text-white text-2xl font-bold shadow-lg">2</div>
                   <div>
                     <h3 className="text-xl font-bold text-gray-900" style={serifFont}>Translation Pass</h3>
                     <p className="text-sm text-blue-600">AI-powered accuracy</p>
@@ -733,7 +757,7 @@ export default function Home() {
 
               <div className="bg-gradient-to-br from-violet-50 to-violet-100 rounded-3xl p-8 border border-violet-200">
                 <div className="flex items-center gap-4 mb-6">
-                  <div className="w-14 h-14 bg-violet-600 rounded-2xl flex items-center justify-center text-white text-2xl font-bold shadow-lg">2</div>
+                  <div className="w-14 h-14 bg-violet-600 rounded-2xl flex items-center justify-center text-white text-2xl font-bold shadow-lg">3</div>
                   <div>
                     <h3 className="text-xl font-bold text-gray-900" style={serifFont}>Editorial Review</h3>
                     <p className="text-sm text-violet-600">Premium quality check</p>
