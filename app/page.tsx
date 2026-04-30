@@ -1261,15 +1261,15 @@ export default function Home() {
                     )}
 
                     <button
-                      onClick={runPreTranslationScan}
-                      disabled={!email || !bookTitle || !uploadComplete || scanLoading}
+                      onClick={() => setCheckoutStep(2)}
+                      disabled={!email || !bookTitle || !uploadComplete}
                       className={`w-full py-4 rounded-2xl font-bold text-lg transition-all ${
-                        email && bookTitle && uploadComplete && !scanLoading
+                        email && bookTitle && uploadComplete
                           ? 'bg-gradient-to-r from-blue-600 to-violet-600 text-white shadow-xl hover:shadow-2xl'
                           : 'bg-gray-200 text-gray-400 cursor-not-allowed'
                       }`}
                     >
-                      {scanLoading ? 'Scanning your manuscript…' : 'Continue to Language Selection →'}
+                      Continue to Language Selection →
                     </button>
                   </>
                 )}
