@@ -500,6 +500,7 @@ CULTURAL ADAPTATION — NO DIRECT EQUIVALENT:
 When the source text contains country-specific concepts, institutions, forms, or systems that have no direct equivalent in the target language/culture:
 - Adapt the concept to the nearest meaningful equivalent in the target culture (e.g., for German readers, a US "W-4 form" becomes "Steueridentifikationsnummer" or "Lohnsteuerkarte"; "pay stub" becomes "Lohnabrechnung"; "Social Security" becomes "Rentenversicherung")
 - If the original term is essential to the story's setting or authenticity (e.g., a character in New York literally holding a W-4), keep the original English term but add a brief target-language parenthetical on first mention so readers understand
+- If the author requests "Keep with inline bracket" for a term: first mention = "original English term (target-language equivalent)", all subsequent mentions = just "original English term" with no brackets
 - For non-fiction aimed at local readers, always prefer the local equivalent they will actually encounter in daily life
 - Do NOT leave culturally-specific terms untranslated and unexplained unless they are proper nouns or internationally recognized terms
 - IMPORTANT: If you replace a source-culture concept with a target-culture equivalent that is NOT functionally identical (different rules, different system, not exactly the same thing), wrap the original English term in this marker format: [[ADAPTED: original English term]] then provide the adapted equivalent. Example: "Your employer will ask for your [[ADAPTED:W-4 form]]Steueridentifikationsnummer." This signals the editorial pass that this is a content modification, not a direct translation.
@@ -697,6 +698,9 @@ ORIGINAL: [phrase or approach] | TRANSLATED: [choice] | REASON: [how author's vo
 
 --- Terms Kept in English ---
 ORIGINAL: [term] | KEPT AS: [term] | REASON: [why untranslated]
+
+--- Terms Kept with Inline Brackets ---
+ORIGINAL: [term] | KEPT AS: [term (target-language equivalent on first mention)] | REASON: [author requested "Keep with inline bracket" — English term kept, local equivalent added in brackets on first occurrence only]
 
 --- ⚠️ Content Modifications (Author Review Recommended) ---
 ORIGINAL: [source concept] | CHANGED TO: [target equivalent] | WARNING: [why this is NOT a direct equivalent — different rules, different system, or meaning altered. Flag for author confirmation if unsure.]

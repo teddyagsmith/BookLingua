@@ -178,7 +178,7 @@ function keywordScan(text: string, languages: string[]): Finding[] {
           question: `Your text mentions "${term}" — a US/UK education term. For ${langName} readers, keep or explain?`,
           options: [
             { label: 'Keep original', value: 'keep', description: `Keep "${term}" — appropriate if story stays in original education system` },
-            { label: 'Add brief explanation', value: 'footnote', description: `Keep term + add Translation Note` },
+            { label: 'Add brief explanation', value: 'footnote', description: `Keep English + add local equivalent in brackets on first mention (e.g. "${term} (${langName} equivalent)"), then just "${term}" afterwards` },
             { label: 'Use local equivalent', value: 'adapt', description: `Replace with nearest ${langName} equivalent` },
           ],
           defaultOption: 'keep',
@@ -201,7 +201,7 @@ function keywordScan(text: string, languages: string[]): Finding[] {
           options: [
             { label: 'Keep original', value: 'keep', description: `Keep "${term}" in English with brief ${langName} explanation` },
             { label: 'Adapt to local equivalent', value: 'adapt', description: `Replace with nearest ${langName} equivalent (may change meaning)` },
-            { label: 'Keep with footnote', value: 'footnote', description: `Keep original + add Translation Note` },
+            { label: 'Keep with inline bracket', value: 'footnote', description: `Keep English + add local equivalent in brackets on first mention (e.g. "${term} (${langName} equivalent)"), then just "${term}" afterwards` },
           ],
           defaultOption: 'keep',
         })
@@ -223,7 +223,7 @@ function keywordScan(text: string, languages: string[]): Finding[] {
           options: [
             { label: 'Keep original', value: 'keep', description: `Keep "${term}" in English with brief explanation` },
             { label: 'Adapt to local equivalent', value: 'adapt', description: `Replace with nearest ${langName} equivalent` },
-            { label: 'Keep with footnote', value: 'footnote', description: `Keep original + add Translation Note` },
+            { label: 'Keep with inline bracket', value: 'footnote', description: `Keep English + add local equivalent in brackets on first mention (e.g. "${term} (${langName} equivalent)"), then just "${term}" afterwards` },
           ],
           defaultOption: 'keep',
         })

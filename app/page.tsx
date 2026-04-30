@@ -480,7 +480,7 @@ export default function Home() {
       } else if (response === 'convert') {
         instructionLines.push(`Convert "${finding.original}" to metric equivalent`)
       } else if (response === 'footnote') {
-        instructionLines.push(`Keep "${finding.original}" in English and add Translation Note`)
+        instructionLines.push(`Keep "${finding.original}" in English + add local equivalent in brackets on first mention, then just the English term afterwards`)
       }
     })
     
