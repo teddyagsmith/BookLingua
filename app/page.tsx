@@ -228,6 +228,10 @@ export default function Home() {
   const sessionIdRef = useRef<string>(crypto.randomUUID())
   const [uploadComplete, setUploadComplete] = useState(false)
   const [uploadError, setUploadError] = useState('')
+  const [scanFindings, setScanFindings] = useState<any[]>([])
+  const [scanResponses, setScanResponses] = useState<Record<string, string>>({})
+  const [scanLoading, setScanLoading] = useState(false)
+  const [showScanStep, setShowScanStep] = useState(false)
 
   const determineTier = (words: number): 'small' | 'medium' | 'large' => {
     if (words <= 30000) return 'small'
@@ -430,6 +434,104 @@ export default function Home() {
       setIsProcessing(false)
     }
   }, [])
+
+  const runPreTranslationScan = async () => {
+    if (!uploadComplete) return
+    setScanLoading(true)
+    try {
+      // Get text from the uploaded file or temp storage
+      const formData = new FormData()
+      if (uploadedFile) {
+        formData.append('file', uploadedFile)
+      }
+      
+      // We'll use the text content we already have from upload
+      // For txt/docx we have text, for epub we estimate
+      let textToScan = ''
+      if (fileFormat === '.txt' || fileFormat === '.docx') {
+        textToScan = await uploadedFile!.text()
+      } else if (fileFormat === '.epub') {
+        // For epub, we'll need to fetch from temp_uploads or re-extract
+        // For now, show a message that epub scanning is limited
+        textToScan = ''
+      }
+      
+      if (textToScan.length < 100) {
+        // For epub or if text extraction failed, skip scan
+        setShowScanStep(false)
+        setCheckoutStep(2)
+        setScanLoading(false)
+        return
+      }
+
+      const response = await fetch('/api/scan-text', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          text: textToScan.slice(0, 15000), // limit scan length
+          genre: selectedGenre,
+          language: 'de', // default to German for scan; could be first selected language
+          maxFindings: 6,
+        }),
+      })
+
+      if (!response.ok) throw new Error('Scan failed')
+      const { findings } = await response.json()
+
+      if (findings.length > 0) {
+        setScanFindings(findings)
+        // Set default responses
+        const defaults: Record<string, string> = {}
+        findings.forEach((f: any) => {
+          defaults[f.original] = f.defaultOption
+        })
+        setScanResponses(defaults)
+        setShowScanStep(true)
+      } else {
+        // No findings, proceed directly
+        setShowScanStep(false)
+        setCheckoutStep(2)
+      }
+    } catch (err) {
+      console.error('Pre-translation scan error:', err)
+      // On error, just proceed
+      setShowScanStep(false)
+      setCheckoutStep(2)
+    }
+    setScanLoading(false)
+  }
+
+  const applyScanResponses = () => {
+    // Compile scan responses into special instructions
+    const instructionLines: string[] = []
+    scanFindings.forEach((finding) => {
+      const response = scanResponses[finding.original]
+      if (response === 'keep') {
+        instructionLines.push(`Keep "${finding.original}" in English — do not translate or adapt`)
+      } else if (response === 'adapt') {
+        instructionLines.push(`Adapt "${finding.original}" to the nearest ${targetLanguageName()} equivalent`)
+      } else if (response === 'footnote') {
+        instructionLines.push(`Keep "${finding.original}" in English and add a Translation Note explaining the term`)
+      }
+    })
+    
+    if (instructionLines.length > 0) {
+      const scanBlock = `AUTO-DETECTED TRANSLATION PREFERENCES:\n${instructionLines.join('\n')}`
+      setSpecialInstructions(prev => prev ? `${prev}\n\n${scanBlock}` : scanBlock)
+    }
+    
+    setShowScanStep(false)
+    setCheckoutStep(2)
+  }
+
+  const targetLanguageName = () => {
+    // Default to first language or German
+    if (selectedLanguages.length > 0) {
+      const lang = CORE_LANGUAGES.find(l => l.code === selectedLanguages[0])
+      return lang?.name || 'target language'
+    }
+    return 'target language'
+  }
 
   const handleCheckout = async () => {
     if (!uploadComplete) {
@@ -1114,16 +1216,92 @@ export default function Home() {
                       </div>
                     )}
 
+                    {/* Pre-Translation Scan Results */}
+                    {showScanStep && scanFindings.length > 0 && (
+                      <div className="mb-8 bg-gradient-to-br from-amber-50 to-orange-50 rounded-2xl p-6 border-2 border-amber-200">
+                        <div className="flex items-center gap-3 mb-4">
+                          <span className="text-2xl">🔍</span>
+                          <div>
+                            <h3 className="font-bold text-gray-900">We scanned your manuscript</h3>
+                            <p className="text-sm text-gray-600">We found {scanFindings.length} item{scanFindings.length > 1 ? 's' : ''} that may need your input before translation</p>
+                          </div>
+                        </div>
+                        
+                        <div className="space-y-4">
+                          {scanFindings.map((finding, idx) => (
+                            <div key={idx} className="bg-white rounded-xl p-4 border border-amber-100">
+                              <div className="flex items-start gap-3 mb-3">
+                                <span className={`text-xs font-bold px-2 py-1 rounded-full ${
+                                  finding.type === 'country_specific' ? 'bg-red-100 text-red-700' :
+                                  finding.type === 'proper_name' ? 'bg-blue-100 text-blue-700' :
+                                  finding.type === 'fantasy_element' ? 'bg-purple-100 text-purple-700' :
+                                  'bg-gray-100 text-gray-700'
+                                }`}>
+                                  {finding.type === 'country_specific' ? 'COUNTRY-SPECIFIC' :
+                                   finding.type === 'proper_name' ? 'PROPER NAME' :
+                                   finding.type === 'fantasy_element' ? 'FANTASY' : 'AMBIGUOUS'}
+                                </span>
+                                <div className="flex-1">
+                                  <p className="font-semibold text-gray-900 text-sm">{finding.question}</p>
+                                  {finding.context && (
+                                    <p className="text-xs text-gray-500 mt-1 italic">Context: "{finding.context.slice(0, 120)}..."</p>
+                                  )}
+                                </div>
+                              </div>
+                              
+                              <div className="grid gap-2">
+                                {finding.options.map((opt: any) => (
+                                  <label key={opt.value} className={`flex items-start gap-3 p-3 rounded-xl border-2 cursor-pointer transition-all ${
+                                    scanResponses[finding.original] === opt.value
+                                      ? 'border-violet-500 bg-violet-50'
+                                      : 'border-gray-200 hover:border-violet-300'
+                                  }`}>
+                                    <input
+                                      type="radio"
+                                      name={`finding-${idx}`}
+                                      value={opt.value}
+                                      checked={scanResponses[finding.original] === opt.value}
+                                      onChange={() => setScanResponses(prev => ({ ...prev, [finding.original]: opt.value }))}
+                                      className="mt-1 w-4 h-4 text-violet-600"
+                                    />
+                                    <div>
+                                      <p className="font-medium text-sm text-gray-900">{opt.label}</p>
+                                      <p className="text-xs text-gray-500">{opt.description}</p>
+                                    </div>
+                                  </label>
+                                ))}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                        
+                        <div className="flex gap-3 mt-6">
+                          <button
+                            onClick={() => { setShowScanStep(false); setScanFindings([]) }}
+                            className="px-4 py-3 border-2 border-gray-200 text-gray-600 rounded-xl font-medium text-sm"
+                          >
+                            Skip & Continue →
+                          </button>
+                          <button
+                            onClick={applyScanResponses}
+                            className="flex-1 py-3 bg-gradient-to-r from-blue-600 to-violet-600 text-white rounded-xl font-bold text-sm shadow-lg hover:shadow-xl transition-all"
+                          >
+                            Save Preferences & Continue →
+                          </button>
+                        </div>
+                      </div>
+                    )}
+
                     <button
-                      onClick={() => setCheckoutStep(2)}
-                      disabled={!email || !bookTitle || !uploadComplete}
+                      onClick={runPreTranslationScan}
+                      disabled={!email || !bookTitle || !uploadComplete || scanLoading}
                       className={`w-full py-4 rounded-2xl font-bold text-lg transition-all ${
-                        email && bookTitle && uploadComplete
+                        email && bookTitle && uploadComplete && !scanLoading
                           ? 'bg-gradient-to-r from-blue-600 to-violet-600 text-white shadow-xl hover:shadow-2xl'
                           : 'bg-gray-200 text-gray-400 cursor-not-allowed'
                       }`}
                     >
-                      Continue to Language Selection →
+                      {scanLoading ? 'Scanning your manuscript…' : 'Continue to Language Selection →'}
                     </button>
                   </>
                 )}
