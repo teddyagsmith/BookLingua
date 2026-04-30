@@ -15,7 +15,7 @@
     "docx": "^8.5.0",
     "epub-gen-memory": "^1.1.2",
     "epub2": "^3.0.2",
-    "inngest": "^4.2.6",
+    "inngest": "^3.54.0",
     "jszip": "^3.10.1",
     "mammoth": "^1.6.0",
     "next": "14.2.0",
