@@ -67,7 +67,7 @@ function keywordScan(text: string): Finding[] {
   // Scan for country-specific terms
   for (const term of US_TERMS) {
     const regex = new RegExp(`\\b${term.replace(/[()]/g, '\\\\$&')}\\b`, 'gi')
-    const matches = [...text.matchAll(regex)]
+    const matches = Array.from(text.matchAll(regex))
     for (const match of matches.slice(0, 3)) { // max 3 instances per term
       const start = Math.max(0, match.index! - 80)
       const end = Math.min(text.length, match.index! + term.length + 80)
@@ -95,7 +95,7 @@ function keywordScan(text: string): Finding[] {
   // Scan for UK terms
   for (const term of UK_TERMS) {
     const regex = new RegExp(`\\b${term.replace(/[()]/g, '\\\\$&')}\\b`, 'gi')
-    const matches = [...text.matchAll(regex)]
+    const matches = Array.from(text.matchAll(regex))
     for (const match of matches.slice(0, 1)) {
       const start = Math.max(0, match.index! - 80)
       const end = Math.min(text.length, match.index! + term.length + 80)

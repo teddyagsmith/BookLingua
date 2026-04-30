@@ -654,7 +654,7 @@ EDITING INSTRUCTIONS:
 6. NEVER soften, sanitize, or replace strong language — if the translation used the correct erotic or profane register, preserve it exactly. Only change strong language if the wrong register was used (e.g. a clinical term where an erotic one was needed, or vice versa)
 7. CULTURAL ADAPTATION REVIEW: Scan for [[ADAPTED:original term]] markers. These indicate the translator replaced a source-culture concept with a target-culture equivalent that is NOT functionally identical (different rules, different system). For each one:
    a. Verify the adapted equivalent makes sense for ${langName} readers
-   b. Convert the marker to the standard highlight format: `[[ORIGINAL: original English term]]adapted equivalent` so it appears yellow-highlighted in the Review DOCX
+   b. Convert the marker to the standard highlight format: \`[[ORIGINAL: original English term]]adapted equivalent\` so it appears yellow-highlighted in the Review DOCX
    c. If the adaptation changes the meaning significantly (e.g., tax rules, legal systems differ materially), add it to the ⚠️ Content Modifications section in Translation Notes
    d. If the adaptation is wrong or unsafe, revert to the original English term with a brief parenthetical explanation instead
 
@@ -825,14 +825,14 @@ Be specific — use real examples from this text, not generic ones. Even if no e
         const notes = translations[langCode]?.notes || ''
         const modMatch = notes.match(/--- ⚠️ Content Modifications \(Author Review Recommended\) ---([\s\S]*?)(?=---|$)/)
         if (modMatch) {
-          const entries = modMatch[1].trim().split(/\n(?=ORIGINAL:)/).filter(e => e.trim())
+          const entries = modMatch[1].trim().split(/\n(?=ORIGINAL:)/).filter((e: string) => e.trim())
           if (entries.length > 0) {
             contentWarningsHtml += `
               <div style="background:#fffbeb; border:2px solid #f59e0b; border-radius:8px; padding:16px; margin:16px 0;">
                 <h4 style="color:#b45309; margin:0 0 8px;">⚠️ Content Modifications — ${LANGUAGE_NAMES[langCode]}</h4>
                 <p style="color:#78350f; margin:0 0 12px; font-size:13px;">The translator replaced source-culture concepts with target-culture equivalents that are NOT functionally identical. These require author confirmation.</p>
                 <ul style="margin:0; padding-left:20px; color:#78350f; font-size:13px;">
-                  ${entries.map(e => `<li style="margin-bottom:8px;">${e.replace(/\n/g, '<br>')}</li>`).join('')}
+                  ${entries.map((e: string) => `<li style="margin-bottom:8px;">${e.replace(/\n/g, '<br>')}</li>`).join('')}
                 </ul>
               </div>
             `
