@@ -496,6 +496,14 @@ TRANSLATION GUIDELINES:
 - Adapt idioms and expressions to equivalent ones in ${langName}
 - Maintain the same tone (formal/informal) as the original
 
+CULTURAL ADAPTATION — NO DIRECT EQUIVALENT:
+When the source text contains country-specific concepts, institutions, forms, or systems that have no direct equivalent in the target language/culture:
+- Adapt the concept to the nearest meaningful equivalent in the target culture (e.g., for German readers, a US "W-4 form" becomes "Steueridentifikationsnummer" or "Lohnsteuerkarte"; "pay stub" becomes "Lohnabrechnung"; "Social Security" becomes "Rentenversicherung")
+- If the original term is essential to the story's setting or authenticity (e.g., a character in New York literally holding a W-4), keep the original English term but add a brief target-language parenthetical on first mention so readers understand
+- For non-fiction aimed at local readers, always prefer the local equivalent they will actually encounter in daily life
+- Do NOT leave culturally-specific terms untranslated and unexplained unless they are proper nouns or internationally recognized terms
+- IMPORTANT: If you replace a source-culture concept with a target-culture equivalent that is NOT functionally identical (different rules, different system, not exactly the same thing), wrap the original English term in this marker format: [[ADAPTED: original English term]] then provide the adapted equivalent. Example: "Your employer will ask for your [[ADAPTED:W-4 form]]Steueridentifikationsnummer." This signals the editorial pass that this is a content modification, not a direct translation.
+
 STRONG LANGUAGE & SEXUAL TERMINOLOGY:
 - Translate ALL profanity, expletives and strong language faithfully — never soften, sanitize, or substitute a milder term
 - Match REGISTER, not just meaning: a casual British expletive (e.g. "bloody", "bollocks", "cunt" used lightly) should map to a target-language word of equivalent cultural weight — not the most extreme equivalent, and not the mildest
@@ -644,6 +652,11 @@ EDITING INSTRUCTIONS:
 4. Ensure consistency in terminology throughout
 5. Maintain the author's voice and tone
 6. NEVER soften, sanitize, or replace strong language — if the translation used the correct erotic or profane register, preserve it exactly. Only change strong language if the wrong register was used (e.g. a clinical term where an erotic one was needed, or vice versa)
+7. CULTURAL ADAPTATION REVIEW: Scan for [[ADAPTED:original term]] markers. These indicate the translator replaced a source-culture concept with a target-culture equivalent that is NOT functionally identical (different rules, different system). For each one:
+   a. Verify the adapted equivalent makes sense for ${langName} readers
+   b. Convert the marker to the standard highlight format: `[[ORIGINAL: original English term]]adapted equivalent` so it appears yellow-highlighted in the Review DOCX
+   c. If the adaptation changes the meaning significantly (e.g., tax rules, legal systems differ materially), add it to the ⚠️ Content Modifications section in Translation Notes
+   d. If the adaptation is wrong or unsafe, revert to the original English term with a brief parenthetical explanation instead
 
 CRITICAL - HIGHLIGHTING FORMAT:
 When you make an improvement, show what the ORIGINAL translation said (before your edit) using this format:
@@ -684,6 +697,9 @@ ORIGINAL: [phrase or approach] | TRANSLATED: [choice] | REASON: [how author's vo
 
 --- Terms Kept in English ---
 ORIGINAL: [term] | KEPT AS: [term] | REASON: [why untranslated]
+
+--- ⚠️ Content Modifications (Author Review Recommended) ---
+ORIGINAL: [source concept] | CHANGED TO: [target equivalent] | WARNING: [why this is NOT a direct equivalent — different rules, different system, or meaning altered. Flag for author confirmation if unsure.]
 
 Be specific — use real examples from this text, not generic ones. Even if no editorial changes were needed, document the key decisions made to maintain consistency and accuracy.
 ===END_NOTES===` : ''}`,
@@ -803,6 +819,27 @@ Be specific — use real examples from this text, not generic ones. Even if no e
         </tr>`
       }).join('')
 
+      // Scan translation notes for content modifications requiring author review
+      let contentWarningsHtml = ''
+      for (const langCode of languages) {
+        const notes = translations[langCode]?.notes || ''
+        const modMatch = notes.match(/--- ⚠️ Content Modifications \(Author Review Recommended\) ---([\s\S]*?)(?=---|$)/)
+        if (modMatch) {
+          const entries = modMatch[1].trim().split(/\n(?=ORIGINAL:)/).filter(e => e.trim())
+          if (entries.length > 0) {
+            contentWarningsHtml += `
+              <div style="background:#fffbeb; border:2px solid #f59e0b; border-radius:8px; padding:16px; margin:16px 0;">
+                <h4 style="color:#b45309; margin:0 0 8px;">⚠️ Content Modifications — ${LANGUAGE_NAMES[langCode]}</h4>
+                <p style="color:#78350f; margin:0 0 12px; font-size:13px;">The translator replaced source-culture concepts with target-culture equivalents that are NOT functionally identical. These require author confirmation.</p>
+                <ul style="margin:0; padding-left:20px; color:#78350f; font-size:13px;">
+                  ${entries.map(e => `<li style="margin-bottom:8px;">${e.replace(/\n/g, '<br>')}</li>`).join('')}
+                </ul>
+              </div>
+            `
+          }
+        }
+      }
+
       await resend.emails.send({
         from: 'BookLingua <orders@booklingua.io>',
         to: 'hello@booklingua.io',
@@ -822,6 +859,7 @@ Be specific — use real examples from this text, not generic ones. Even if no e
               <strong style="color:#7c3aed;">Translation preview (first language):</strong>
               <p style="margin:8px 0 0 0; color:#374151; font-style:italic; line-height:1.6;">${preview}</p>
             </div>
+            ${contentWarningsHtml}
             <h3 style="color:#374151; margin-bottom:8px;">📥 Download to review:</h3>
             <table style="width:100%; border-collapse:collapse; margin-bottom:20px; background:#f9fafb; border-radius:8px;">
               <thead><tr>
