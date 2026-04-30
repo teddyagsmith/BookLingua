@@ -43,12 +43,93 @@ const AU_TERMS = [
   'HSC', 'VCE', 'ATAR',
 ]
 
-// Fantasy indicators
-const FANTASY_INDICATORS = [
-  'magic', 'wizard', 'sorcerer', 'spell', 'enchanted', 'kingdom',
-  'dragon', 'elf', 'elves', 'dwarf', 'dwarves', 'orc',
-  'quest', 'prophecy', 'chosen one', 'dark lord',
+// Measurement units that should be converted for EU/metric audiences
+const MEASUREMENT_TERMS = [
+  { term: 'inch', unit: 'cm', context: 'length' },
+  { term: 'inches', unit: 'cm', context: 'length' },
+  { term: 'foot', unit: 'm', context: 'length' },
+  { term: 'feet', unit: 'm', context: 'length' },
+  { term: 'yard', unit: 'm', context: 'length' },
+  { term: 'yards', unit: 'm', context: 'length' },
+  { term: 'mile', unit: 'km', context: 'length' },
+  { term: 'miles', unit: 'km', context: 'length' },
+  { term: 'pound', unit: 'kg', context: 'weight' },
+  { term: 'pounds', unit: 'kg', context: 'weight' },
+  { term: 'lb', unit: 'kg', context: 'weight' },
+  { term: 'lbs', unit: 'kg', context: 'weight' },
+  { term: 'ounce', unit: 'g', context: 'weight' },
+  { term: 'ounces', unit: 'g', context: 'weight' },
+  { term: 'oz', unit: 'g', context: 'weight' },
+  { term: 'gallon', unit: 'litres', context: 'volume' },
+  { term: 'gallons', unit: 'litres', context: 'volume' },
+  { term: 'quart', unit: 'litres', context: 'volume' },
+  { term: 'pint', unit: 'ml', context: 'volume' },
+  { term: 'cup', unit: 'ml', context: 'volume' },
+  { term: 'tablespoon', unit: 'ml', context: 'volume' },
+  { term: 'teaspoon', unit: 'ml', context: 'volume' },
+  { term: 'Fahrenheit', unit: 'Celsius', context: 'temperature' },
+  { term: 'F', unit: 'C', context: 'temperature' },
+  { term: 'mph', unit: 'km/h', context: 'speed' },
+  { term: 'square foot', unit: 'm\u00b2', context: 'area' },
+  { term: 'square feet', unit: 'm\u00b2', context: 'area' },
+  { term: 'acre', unit: 'hectares', context: 'area' },
+  { term: 'acres', unit: 'hectares', context: 'area' },
 ]
+
+// Global brands that may have local names
+const BRAND_NAMES = [
+  'Walmart', 'Target', 'Costco', 'Best Buy', 'Home Depot',
+  'CVS', 'Walgreens', 'Rite Aid', 'Duane Reade',
+  'McDonald\'s', 'Burger King', 'Wendy\'s', 'Applebee\'s', 'Denny\'s', 'IHOP',
+  'Starbucks', 'Dunkin\'', 'Tim Hortons',
+  'Subway', 'KFC', 'Pizza Hut', 'Domino\'s',
+  'Nike', 'Adidas', 'Under Armour',
+  'Ford', 'Chevrolet', 'Dodge', 'Jeep', 'Chrysler', 'Buick', 'Cadillac',
+  'AT\u0026T', 'Verizon', 'T-Mobile', 'Sprint',
+  'Comcast', 'Spectrum', 'Xfinity',
+  'FedEx', 'UPS', 'USPS',
+  'Bank of America', 'Wells Fargo', 'Chase', 'Citibank',
+  'Exxon', 'Shell', 'BP', 'Chevron',
+]
+
+// Education system terms
+const EDUCATION_TERMS = [
+  'high school', 'middle school', 'elementary school', 'junior high',
+  'college', 'university', 'community college', 'trade school',
+  'sophomore', 'junior', 'senior', 'freshman',
+  'GPA', 'valedictorian', 'salutatorian',
+  'SAT', 'ACT', 'LSAT', 'MCAT', 'GRE', 'GMAT',
+  'AP class', 'AP exam', 'Advanced Placement',
+  'bachelor\'s degree', 'master\'s degree', 'PhD', 'MBA',
+  'fraternity', 'sorority', 'Greek life',
+  'homecoming', 'prom', 'detention',
+]
+
+// Currency references
+const CURRENCY_TERMS = [
+  { term: '$', name: 'dollar', context: 'US currency' },
+  { term: 'USD', name: 'US dollar', context: 'currency' },
+  { term: 'dollars', name: 'dollar', context: 'US currency' },
+  { term: '\u00a3', name: 'pound', context: 'UK currency' },
+  { term: 'GBP', name: 'British pound', context: 'currency' },
+  { term: 'pounds', name: 'pound', context: 'UK currency' },
+]
+
+const LANGUAGE_NAMES: Record<string, string> = {
+  'es-es': 'Spanish',
+  'es-latam': 'Spanish (Latin America)',
+  'fr': 'French',
+  'de': 'German',
+  'pt-pt': 'Portuguese',
+  'pt-br': 'Portuguese (Brazil)',
+  'it': 'Italian',
+  'pl': 'Polish',
+  'ja': 'Japanese',
+}
+
+function getLangName(code: string): string {
+  return LANGUAGE_NAMES[code] || code
+}
 
 interface Finding {
   type: 'country_specific' | 'proper_name' | 'fantasy_element' | 'potentially_ambiguous'
@@ -59,16 +140,99 @@ interface Finding {
   defaultOption: string
 }
 
-function keywordScan(text: string): Finding[] {
+function keywordScan(text: string, languages: string[]): Finding[] {
   const findings: Finding[] = []
-  const sentences = text.split(/(?<=[.!?])\s+/).filter(s => s.length > 20)
-  const textLower = text.toLowerCase()
+  const langName = getLangName(languages[0] || 'de')
 
-  // Scan for country-specific terms
+  // Scan for measurement units
+  for (const { term, unit, context } of MEASUREMENT_TERMS) {
+    const regex = new RegExp(`\\b${term}\\b`, 'gi')
+    const matches = Array.from(text.matchAll(regex))
+    for (const match of matches.slice(0, 2)) {
+      const start = Math.max(0, match.index! - 60)
+      const end = Math.min(text.length, match.index! + term.length + 60)
+      const ctx = text.slice(start, end).replace(/\n+/g, ' ')
+
+      const existing = findings.find(f => f.original.toLowerCase() === term.toLowerCase())
+      if (!existing) {
+        findings.push({
+          type: 'potentially_ambiguous',
+          original: term,
+          context: `...${ctx}...`,
+          question: `Your text uses "${term}" (${context}). For ${langName} readers, should we convert to ${unit}?`,
+          options: [
+            { label: `Convert to ${unit}`, value: 'convert', description: `Replace "${term}" with metric equivalent throughout` },
+            { label: 'Keep original', value: 'keep', description: `Keep "${term}" as-is (appropriate if story stays in original country)` },
+            { label: 'Convert with note', value: 'footnote', description: `Use ${unit} + add Translation Note explaining original measurement` },
+          ],
+          defaultOption: 'convert',
+        })
+      }
+      break
+    }
+  }
+
+  // Scan for brand names
+  for (const brand of BRAND_NAMES) {
+    const regex = new RegExp(`\\b${brand.replace(/[']/g, "\\'")}\\b`, 'gi')
+    const matches = Array.from(text.matchAll(regex))
+    for (const match of matches.slice(0, 2)) {
+      const start = Math.max(0, match.index! - 60)
+      const end = Math.min(text.length, match.index! + brand.length + 60)
+      const ctx = text.slice(start, end).replace(/\n+/g, ' ')
+
+      const existing = findings.find(f => f.original === brand)
+      if (!existing) {
+        findings.push({
+          type: 'potentially_ambiguous',
+          original: brand,
+          context: `...${ctx}...`,
+          question: `Your text mentions "${brand}". How should we handle this brand name?`,
+          options: [
+            { label: 'Keep original', value: 'keep', description: `Keep "${brand}" in English — global brand recognition` },
+            { label: 'Use local equivalent', value: 'adapt', description: `Replace with nearest local equivalent store/brand (may change cultural context)` },
+            { label: 'Keep with explanation', value: 'footnote', description: `Keep "${brand}" + brief description for foreign readers` },
+          ],
+          defaultOption: 'keep',
+        })
+      }
+      break
+    }
+  }
+
+  // Scan for education terms
+  for (const term of EDUCATION_TERMS) {
+    const regex = new RegExp(`\\b${term.replace(/[()]/g, '\\\\$&')}\\b`, 'gi')
+    const matches = Array.from(text.matchAll(regex))
+    for (const match of matches.slice(0, 2)) {
+      const start = Math.max(0, match.index! - 60)
+      const end = Math.min(text.length, match.index! + term.length + 60)
+      const ctx = text.slice(start, end).replace(/\n+/g, ' ')
+
+      const existing = findings.find(f => f.original.toLowerCase() === term.toLowerCase())
+      if (!existing) {
+        findings.push({
+          type: 'country_specific',
+          original: term,
+          context: `...${ctx}...`,
+          question: `Your text mentions "${term}" — a US/UK education term. For ${langName} readers, should we keep or explain it?`,
+          options: [
+            { label: 'Keep original', value: 'keep', description: `Keep "${term}" — appropriate if story stays in original education system` },
+            { label: 'Add brief explanation', value: 'footnote', description: `Keep term + add Translation Note explaining the system` },
+            { label: 'Use local equivalent', value: 'adapt', description: `Replace with nearest ${langName} education equivalent (may change meaning)` },
+          ],
+          defaultOption: 'keep',
+        })
+      }
+      break
+    }
+  }
+
+  // Scan for country-specific terms (US)
   for (const term of US_TERMS) {
     const regex = new RegExp(`\\b${term.replace(/[()]/g, '\\\\$&')}\\b`, 'gi')
     const matches = Array.from(text.matchAll(regex))
-    for (const match of matches.slice(0, 3)) { // max 3 instances per term
+    for (const match of matches.slice(0, 3)) {
       const start = Math.max(0, match.index! - 80)
       const end = Math.min(text.length, match.index! + term.length + 80)
       const context = text.slice(start, end).replace(/\n+/g, ' ')
@@ -79,11 +243,11 @@ function keywordScan(text: string): Finding[] {
           type: 'country_specific',
           original: term,
           context: `...${context}...`,
-          question: `Your text mentions "${term}" — a US-specific term. How should we handle this?`,
+          question: `Your text mentions "${term}" — a US-specific term. For your ${langName} translation, how should we handle this?`,
           options: [
-            { label: 'Keep original', value: 'keep', description: `Keep "${term}" in English with a brief German explanation` },
-            { label: 'Adapt to German equivalent', value: 'adapt', description: `Replace with the nearest German equivalent (may change meaning)` },
-            { label: 'Keep with footnote', value: 'footnote', description: `Keep original + add Translation Note explaining the term` },
+            { label: 'Keep original', value: 'keep', description: `Keep "${term}" in English with brief ${langName} explanation` },
+            { label: 'Adapt to local equivalent', value: 'adapt', description: `Replace with nearest ${langName} equivalent (may change meaning)` },
+            { label: 'Keep with footnote', value: 'footnote', description: `Keep original + add Translation Note` },
           ],
           defaultOption: 'keep',
         })
@@ -107,10 +271,10 @@ function keywordScan(text: string): Finding[] {
           type: 'country_specific',
           original: term,
           context: `...${context}...`,
-          question: `Your text mentions "${term}" — a UK-specific term. How should we handle this?`,
+          question: `Your text mentions "${term}" — a UK-specific term. For your ${langName} translation, how should we handle this?`,
           options: [
             { label: 'Keep original', value: 'keep', description: `Keep "${term}" in English with brief explanation` },
-            { label: 'Adapt to German equivalent', value: 'adapt', description: `Replace with nearest German equivalent` },
+            { label: 'Adapt to local equivalent', value: 'adapt', description: `Replace with nearest ${langName} equivalent` },
             { label: 'Keep with footnote', value: 'footnote', description: `Keep original + add Translation Note` },
           ],
           defaultOption: 'keep',
@@ -125,19 +289,19 @@ function keywordScan(text: string): Finding[] {
 
 export async function POST(request: NextRequest) {
   try {
-    const { text, genre, language, maxFindings = 8 } = await request.json()
+    const { text, genre, languages, maxFindings = 8 } = await request.json()
+    const targetLang = languages?.[0] || 'de'
 
     if (!text || text.length < 50) {
       return NextResponse.json({ findings: [] })
     }
 
-    // Phase 1: Fast keyword scan
-    const keywordFindings = keywordScan(text)
+    // Phase 1: Fast keyword scan (language-aware)
+    const keywordFindings = keywordScan(text, languages || ['de'])
 
     // Phase 2: AI-enhanced scan for proper names and fantasy elements
-    // Only run for longer texts or when genre suggests we should
     let aiFindings: Finding[] = []
-    const targetLangName = language === 'de' ? 'German' : language === 'es-es' ? 'Spanish' : language || 'the target language'
+    const targetLangName = getLangName(targetLang)
 
     try {
       const sampleText = text.length > 3000 ? text.slice(0, 3000) + '...' : text
@@ -148,7 +312,7 @@ export async function POST(request: NextRequest) {
         messages: [{
           role: 'user',
           content: `Scan this text for translation-relevant items. Return ONLY a JSON array of findings. Each finding should have:
-- "type": "proper_name" | "fantasy_element" | "potentially_ambiguous" | "country_specific"
+- "type": "proper_name" | "fantasy_element" | "potentially_ambiguous"
 - "original": the exact term or phrase
 - "question": what to ask the author
 - "options": array of {label, value, description} choices
@@ -157,7 +321,6 @@ export async function POST(request: NextRequest) {
 Focus on:
 1. PROPER NAMES (people names, place names, fictional locations) — ask if they should be translated, kept, or adapted
 2. FANTASY ELEMENTS (if genre is fantasy/sci-fi) — invented terms, magic systems, creature names — ask if untranslatable
-3. POTENTIALLY AMBIGUOUS terms that might confuse translators
 
 Do NOT flag common words, everyday vocabulary, or obvious choices. Only flag items where author guidance genuinely helps quality.
 

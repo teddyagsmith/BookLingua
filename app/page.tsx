@@ -436,30 +436,16 @@ export default function Home() {
   }, [])
 
   const runPreTranslationScan = async () => {
-    if (!uploadComplete) return
+    if (!uploadComplete || selectedLanguages.length === 0) return
     setScanLoading(true)
     try {
-      // Get text from the uploaded file or temp storage
-      const formData = new FormData()
-      if (uploadedFile) {
-        formData.append('file', uploadedFile)
-      }
-      
-      // We'll use the text content we already have from upload
-      // For txt/docx we have text, for epub we estimate
       let textToScan = ''
-      if (fileFormat === '.txt' || fileFormat === '.docx') {
-        textToScan = await uploadedFile!.text()
-      } else if (fileFormat === '.epub') {
-        // For epub, we'll need to fetch from temp_uploads or re-extract
-        // For now, show a message that epub scanning is limited
-        textToScan = ''
+      if (uploadedFile && (fileFormat === '.txt' || fileFormat === '.docx')) {
+        textToScan = await uploadedFile.text()
       }
       
       if (textToScan.length < 100) {
-        // For epub or if text extraction failed, skip scan
-        setShowScanStep(false)
-        setCheckoutStep(2)
+        setCheckoutStep(4)
         setScanLoading(false)
         return
       }
@@ -468,9 +454,9 @@ export default function Home() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          text: textToScan.slice(0, 15000), // limit scan length
+          text: textToScan.slice(0, 15000),
           genre: selectedGenre,
-          language: 'de', // default to German for scan; could be first selected language
+          languages: selectedLanguages,
           maxFindings: 6,
         }),
       })
@@ -480,38 +466,32 @@ export default function Home() {
 
       if (findings.length > 0) {
         setScanFindings(findings)
-        // Set default responses
         const defaults: Record<string, string> = {}
-        findings.forEach((f: any) => {
-          defaults[f.original] = f.defaultOption
-        })
+        findings.forEach((f: any) => { defaults[f.original] = f.defaultOption })
         setScanResponses(defaults)
-        setShowScanStep(true)
+        setCheckoutStep(3)
       } else {
-        // No findings, proceed directly
-        setShowScanStep(false)
-        setCheckoutStep(2)
+        setCheckoutStep(4)
       }
     } catch (err) {
-      console.error('Pre-translation scan error:', err)
-      // On error, just proceed
-      setShowScanStep(false)
-      setCheckoutStep(2)
+      console.error('Scan error:', err)
+      setCheckoutStep(4)
     }
     setScanLoading(false)
   }
 
   const applyScanResponses = () => {
-    // Compile scan responses into special instructions
     const instructionLines: string[] = []
     scanFindings.forEach((finding) => {
       const response = scanResponses[finding.original]
       if (response === 'keep') {
         instructionLines.push(`Keep "${finding.original}" in English — do not translate or adapt`)
       } else if (response === 'adapt') {
-        instructionLines.push(`Adapt "${finding.original}" to the nearest ${targetLanguageName()} equivalent`)
+        instructionLines.push(`Adapt "${finding.original}" to the nearest local equivalent`)
+      } else if (response === 'convert') {
+        instructionLines.push(`Convert "${finding.original}" to metric equivalent`)
       } else if (response === 'footnote') {
-        instructionLines.push(`Keep "${finding.original}" in English and add a Translation Note explaining the term`)
+        instructionLines.push(`Keep "${finding.original}" in English and add Translation Note`)
       }
     })
     
@@ -519,18 +499,6 @@ export default function Home() {
       const scanBlock = `AUTO-DETECTED TRANSLATION PREFERENCES:\n${instructionLines.join('\n')}`
       setSpecialInstructions(prev => prev ? `${prev}\n\n${scanBlock}` : scanBlock)
     }
-    
-    setShowScanStep(false)
-    setCheckoutStep(2)
-  }
-
-  const targetLanguageName = () => {
-    // Default to first language or German
-    if (selectedLanguages.length > 0) {
-      const lang = CORE_LANGUAGES.find(l => l.code === selectedLanguages[0])
-      return lang?.name || 'target language'
-    }
-    return 'target language'
   }
 
   const handleCheckout = async () => {
@@ -985,18 +953,18 @@ export default function Home() {
         </button>
 
         <div className="flex items-center gap-4">
-          {['Upload', 'Languages', 'Checkout'].map((step, i) => (
+          {['Upload', 'Languages', 'Review', 'Checkout'].map((step, i) => (
             <div key={step} className="flex items-center gap-2">
               <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold ${
-                checkoutStep > i ? 'bg-green-500 text-white' :
+                checkoutStep > i + 1 ? 'bg-green-500 text-white' :
                 checkoutStep === i + 1 ? 'bg-violet-600 text-white' : 'bg-gray-200 text-gray-500'
               }`}>
-                {checkoutStep > i ? '✓' : i + 1}
+                {checkoutStep > i + 1 ? '✓' : i + 1}
               </div>
               <span className={`font-medium ${checkoutStep === i + 1 ? 'text-gray-900' : 'text-gray-400'}`}>
                 {step}
               </span>
-              {i < 2 && <div className="w-8 h-0.5 bg-gray-200 mx-2" />}
+              {i < 3 && <div className="w-8 h-0.5 bg-gray-200 mx-2" />}
             </div>
           ))}
         </div>
@@ -1400,23 +1368,114 @@ export default function Home() {
                   ← Back
                 </button>
                 <button
-                  onClick={() => setCheckoutStep(3)}
-                  disabled={selectedLanguages.length === 0}
+                  onClick={runPreTranslationScan}
+                  disabled={selectedLanguages.length === 0 || scanLoading}
                   className={`flex-1 py-4 rounded-2xl font-bold text-lg transition-all ${
-                    selectedLanguages.length > 0
+                    selectedLanguages.length > 0 && !scanLoading
                       ? 'bg-gradient-to-r from-blue-600 to-violet-600 text-white shadow-xl'
                       : 'bg-gray-200 text-gray-400 cursor-not-allowed'
                   }`}
                 >
-                  Continue to Checkout →
+                  {scanLoading ? 'Scanning…' : 'Continue to Review →'}
                 </button>
               </div>
             </div>
           </>
         )}
 
-        {/* Step 3: Checkout with Upsells */}
+        {/* Step 3: Review Scanner Findings */}
         {checkoutStep === 3 && (
+          <>
+            <div className="text-center mb-8">
+              <h1 className="text-4xl font-bold text-gray-900 mb-4" style={serifFont}>Review Translation Preferences</h1>
+              <p className="text-gray-600 text-lg">We scanned your manuscript for terms that need your input</p>
+            </div>
+
+            <div className="max-w-3xl mx-auto">
+              <div className="mb-8 bg-gradient-to-br from-amber-50 to-orange-50 rounded-2xl p-6 border-2 border-amber-200">
+                <div className="flex items-center gap-3 mb-4">
+                  <span className="text-2xl">🔍</span>
+                  <div>
+                    <h3 className="font-bold text-gray-900">We found {scanFindings.length} items to review</h3>
+                    <p className="text-sm text-gray-600">Your choices will be saved and applied to the translation</p>
+                  </div>
+                </div>
+                
+                <div className="space-y-4">
+                  {scanFindings.map((finding, idx) => (
+                    <div key={idx} className="bg-white rounded-xl p-4 border border-amber-100">
+                      <div className="flex items-start gap-3 mb-3">
+                        <span className={`text-xs font-bold px-2 py-1 rounded-full ${
+                          finding.type === 'country_specific' ? 'bg-red-100 text-red-700' :
+                          finding.type === 'proper_name' ? 'bg-blue-100 text-blue-700' :
+                          finding.type === 'fantasy_element' ? 'bg-purple-100 text-purple-700' :
+                          'bg-gray-100 text-gray-700'
+                        }`}>
+                          {finding.type === 'country_specific' ? 'COUNTRY-SPECIFIC' :
+                           finding.type === 'proper_name' ? 'PROPER NAME' :
+                           finding.type === 'fantasy_element' ? 'FANTASY' : 'MEASUREMENT/BRAND'}
+                        </span>
+                        <div className="flex-1">
+                          <p className="font-semibold text-gray-900 text-sm">{finding.question}</p>
+                          {finding.context && (
+                            <p className="text-xs text-gray-500 mt-1 italic">Context: "{finding.context.slice(0, 120)}..."</p>
+                          )}
+                        </div>
+                      </div>
+                      
+                      <div className="grid gap-2">
+                        {finding.options.map((opt: any) => (
+                          <label key={opt.value} className={`flex items-start gap-3 p-3 rounded-xl border-2 cursor-pointer transition-all ${
+                            scanResponses[finding.original] === opt.value
+                              ? 'border-violet-500 bg-violet-50'
+                              : 'border-gray-200 hover:border-violet-300'
+                          }`}>
+                            <input
+                              type="radio"
+                              name={`finding-${idx}`}
+                              value={opt.value}
+                              checked={scanResponses[finding.original] === opt.value}
+                              onChange={() => setScanResponses(prev => ({ ...prev, [finding.original]: opt.value }))}
+                              className="mt-1 w-4 h-4 text-violet-600"
+                            />
+                            <div>
+                              <p className="font-medium text-sm text-gray-900">{opt.label}</p>
+                              <p className="text-xs text-gray-500">{opt.description}</p>
+                            </div>
+                          </label>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                
+                <div className="flex gap-3 mt-6">
+                  <button
+                    onClick={() => setCheckoutStep(2)}
+                    className="px-4 py-3 border-2 border-gray-200 text-gray-600 rounded-xl font-medium text-sm"
+                  >
+                    ← Back to Languages
+                  </button>
+                  <button
+                    onClick={() => { setScanFindings([]); setCheckoutStep(4); }}
+                    className="px-4 py-3 border-2 border-gray-200 text-gray-600 rounded-xl font-medium text-sm"
+                  >
+                    Skip & Continue →
+                  </button>
+                  <button
+                    onClick={() => { applyScanResponses(); setCheckoutStep(4); }}
+                    className="flex-1 py-3 bg-gradient-to-r from-blue-600 to-violet-600 text-white rounded-xl font-bold text-sm shadow-lg hover:shadow-xl transition-all"
+                  >
+                    Save Preferences & Continue →
+                  </button>
+                </div>
+              </div>
+            </div>
+          </>
+        )}
+
+        {/* Step 4: Checkout with Upsells */}
+        {checkoutStep === 4 && (
           <>
             <div className="text-center mb-8">
               <h1 className="text-4xl font-bold text-gray-900 mb-4" style={serifFont}>Complete Your Order</h1>
@@ -1653,10 +1712,10 @@ export default function Home() {
                   </button>
 
                   <button
-                    onClick={() => setCheckoutStep(2)}
+                    onClick={() => setCheckoutStep(3)}
                     className="w-full py-3 text-gray-500 hover:text-gray-700 font-medium"
                   >
-                    ← Back to Languages
+                    ← Back to Review
                   </button>
 
                   <div className="mt-6 pt-6 border-t border-gray-100">
