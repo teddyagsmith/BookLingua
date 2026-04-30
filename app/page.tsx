@@ -439,25 +439,14 @@ export default function Home() {
     if (!uploadComplete || selectedLanguages.length === 0) return
     setScanLoading(true)
     try {
-      let textToScan = ''
-      if (uploadedFile && (fileFormat === '.txt' || fileFormat === '.docx')) {
-        textToScan = await uploadedFile.text()
-      }
-      
-      if (textToScan.length < 100) {
-        setCheckoutStep(4)
-        setScanLoading(false)
-        return
-      }
-
       const response = await fetch('/api/scan-text', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          text: textToScan.slice(0, 15000),
+          sessionId: sessionIdRef.current,
           genre: selectedGenre,
           languages: selectedLanguages,
-          maxFindings: 6,
+          maxFindings: 8,
         }),
       })
 

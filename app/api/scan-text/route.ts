@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { supabaseAdmin } from '@/lib/supabase'
 import Anthropic from '@anthropic-ai/sdk'
 
 const anthropic = new Anthropic({
@@ -54,9 +55,9 @@ const MEASUREMENT_TERMS = [
 // Global brands
 const BRAND_NAMES = [
   'Walmart', 'Target', 'Costco', 'Best Buy', 'Home Depot',
-  'McDonald\'s', 'Burger King', 'Wendy\'s', 'Applebee\'s', 'Denny\'s', 'IHOP',
-  'Starbucks', 'Dunkin\'', 'Tim Hortons',
-  'KFC', 'Pizza Hut', 'Domino\'s',
+  "McDonald's", 'Burger King', "Wendy's", "Applebee's", "Denny's", 'IHOP',
+  'Starbucks', "Dunkin'", 'Tim Hortons',
+  'KFC', 'Pizza Hut', "Domino's",
   'Bank of America', 'Wells Fargo', 'Citibank',
   'FedEx', 'UPS', 'USPS',
 ]
@@ -235,21 +236,53 @@ function keywordScan(text: string, languages: string[]): Finding[] {
 
 export async function POST(request: NextRequest) {
   try {
-    const { text, genre, languages, maxFindings = 8 } = await request.json()
+    const { sessionId, text, genre, languages, maxFindings = 8 } = await request.json()
 
-    if (!text || text.length < 50) {
+    let textToScan = ''
+
+    // If sessionId provided, fetch from database (handles all formats)
+    if (sessionId) {
+      const { data, error } = await supabaseAdmin
+        .from('temp_uploads')
+        .select('content, file_format')
+        .eq('session_id', sessionId)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .single()
+
+      if (error || !data) {
+        console.error('Scan: failed to fetch upload:', error)
+        return NextResponse.json({ findings: [] })
+      }
+
+      if (data.file_format === '.docx') {
+        // DOCX content is JSON with { text, binary }
+        try {
+          const parsed = JSON.parse(data.content)
+          textToScan = parsed.text || ''
+        } catch {
+          textToScan = data.content
+        }
+      } else {
+        textToScan = data.content || ''
+      }
+    } else if (text) {
+      textToScan = text
+    }
+
+    if (!textToScan || textToScan.length < 50) {
       return NextResponse.json({ findings: [] })
     }
 
     // Phase 1: Fast keyword scan
-    const keywordFindings = keywordScan(text, languages || ['de'])
+    const keywordFindings = keywordScan(textToScan, languages || ['de'])
 
     // Phase 2: AI scan for proper names and fantasy elements
     let aiFindings: Finding[] = []
     const targetLangName = getLangName(languages?.[0] || 'de')
 
     try {
-      const sampleText = text.length > 3000 ? text.slice(0, 3000) + '...' : text
+      const sampleText = textToScan.length > 3000 ? textToScan.slice(0, 3000) + '...' : textToScan
       const response = await anthropic.messages.create({
         model: 'claude-sonnet-4-20250514',
         max_tokens: 1000,
