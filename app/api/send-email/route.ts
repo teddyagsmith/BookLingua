@@ -43,7 +43,7 @@ export async function POST(req: NextRequest) {
       to: recipients,
       subject,
       html,
-      replyTo: replyTo || 'hello@booklingua.io',
+      reply_to: replyTo || 'hello@booklingua.io',
     })
 
     if (error) {
