@@ -33,16 +33,24 @@ const CORE_LANGUAGES = [
 ]
 
 const UPSELLS: Array<{id: string; name: string; price: number; description: string; icon: string; popular?: boolean; perLanguage?: boolean; details?: string[]; priceAll?: number; savings?: string; originalPrice?: number}> = [
-  { 
-    id: 'launch-pack', 
-    name: 'Launch Strategy Pack', 
+  {
+    id: 'launch-pack',
+    name: 'Launch Strategy Pack',
     price: 29,
     priceAll: 49,
-    description: 'Everything you need to launch and rank on Amazon in each foreign market — keywords, ads, categories, and launch plan.', 
+    description: 'Everything you need to launch and rank on Amazon in each foreign market — keywords, ads, categories, and launch plan.',
     icon: '🚀',
     popular: true,
     perLanguage: true,
     details: ['7 Amazon backend keywords (per market)', 'Foreign language ad targeting keywords', 'Local market category recommendations', 'Market-specific launch timeline', 'Review acquisition strategy', 'KDP upload checklist'],
+  },
+  {
+    id: 'dual-format',
+    name: 'Dual Format Delivery',
+    price: 29,
+    description: 'Get your translated book in both EPUB and DOCX formats. Upload one, receive both — ready for ebook and print.',
+    icon: '📦',
+    details: ['Final EPUB (ebook-ready)', 'Final DOCX (print-ready)', 'No extra translation cost'],
   },
 ]
 
@@ -55,15 +63,15 @@ const BOOK_GENRES = [
 const GENRE_INSTRUCTION_TIPS: Record<string, string[]> = {
   romance: [
     'Keep my pet names between characters exactly as written',
-    'Use "member" consistently — do not vary intimate terminology',
+    'Use "member" consistently - do not vary intimate terminology',
     'Preserve all terms of endearment in English',
   ],
   'very_steamy': [
     'Match the heat and explicitness of intimate scenes exactly',
-    'Keep intimate slang consistent — pick one word and use it throughout',
+    'Keep intimate slang consistent - pick one word and use it throughout',
   ],
   erotica: [
-    'Translate explicit content fully — do not soften or censor',
+    'Translate explicit content fully - do not soften or censor',
     'Keep intimate terminology consistent throughout',
   ],
   fantasy: [
@@ -73,7 +81,7 @@ const GENRE_INSTRUCTION_TIPS: Record<string, string[]> = {
     'Keep all place names and character names exactly as written',
   ],
   thriller: [
-    'Keep American legal terms (DA, Miranda, etc.) — do not replace with local equivalents',
+    'Keep American legal terms (DA, Miranda, etc.) - do not replace with local equivalents',
     'Preserve law enforcement terminology (FBI, precinct, etc.) as American',
     'Keep weapon names in their standard form',
   ],
@@ -87,11 +95,11 @@ const GENRE_INSTRUCTION_TIPS: Record<string, string[]> = {
     'Preserve period-appropriate titles and honorifics',
   ],
   children: [
-    'Recreate rhymes and wordplay in the spirit of the original — do not translate literally',
+    'Recreate rhymes and wordplay in the spirit of the original - do not translate literally',
     'Keep character names exactly as written',
   ],
   literary: [
-    'Preserve all intentional stylistic choices — fragments, unusual punctuation, run-ons',
+    'Preserve all intentional stylistic choices - fragments, unusual punctuation, run-ons',
     'Recreate wordplay and alliteration in the spirit of the original',
   ],
   'non-fiction': [
@@ -129,10 +137,10 @@ const SUPPORTED_FORMATS = [
 const Logo = ({ size = 'md' }: { size?: 'sm' | 'md' | 'lg' }) => {
   const sizes = { sm: 32, md: 48, lg: 64 }
   return (
-    <Image 
-      src="/logo.png" 
-      alt="BookLingua" 
-      width={sizes[size]} 
+    <Image
+      src="/logo.png"
+      alt="BookLingua"
+      width={sizes[size]}
       height={sizes[size]}
       className="object-contain"
     />
@@ -167,12 +175,12 @@ function FooterSignup({ serifFont }: { serifFont: React.CSSProperties }) {
           Tips for publishing your book globally 🌍
         </h3>
         <p className="text-gray-400 mb-8 text-sm">
-          Join indie authors already reaching readers in 6 languages. Get launch tips, market insights, and exclusive discounts — no spam.
+          Join indie authors already reaching readers in 6 languages. Get launch tips, market insights, and exclusive discounts - no spam.
         </p>
 
         {state === 'done' ? (
           <div className="inline-flex items-center gap-2 px-6 py-3 bg-green-900/40 border border-green-700 rounded-2xl text-green-400 font-medium">
-            <span>✓</span> You're subscribed — thanks!
+            <span>✓</span> You're subscribed - thanks!
           </div>
         ) : (
           <form onSubmit={handleSubmit} className="flex flex-col sm:flex-row gap-3 max-w-md mx-auto">
@@ -195,7 +203,7 @@ function FooterSignup({ serifFont }: { serifFont: React.CSSProperties }) {
         )}
 
         {state === 'error' && (
-          <p className="text-red-400 text-xs mt-2">Something went wrong — please try again.</p>
+          <p className="text-red-400 text-xs mt-2">Something went wrong - please try again.</p>
         )}
       </div>
     </div>
@@ -298,22 +306,22 @@ export default function Home() {
 
   const applyVoucher = async () => {
     if (!voucherCode.trim()) return
-    
+
     setVoucherLoading(true)
     setVoucherError('')
-    
+
     try {
       const response = await fetch('/api/validate-voucher', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-          code: voucherCode, 
-          subtotal: calculateVoucherableSubtotal() 
+        body: JSON.stringify({
+          code: voucherCode,
+          subtotal: calculateVoucherableSubtotal()
         }),
       })
-      
+
       const result = await response.json()
-      
+
       if (result.valid) {
         setVoucherApplied({
           code: result.code,
@@ -330,7 +338,7 @@ export default function Home() {
       setVoucherError('Failed to validate voucher')
       setVoucherApplied(null)
     }
-    
+
     setVoucherLoading(false)
   }
 
@@ -356,7 +364,7 @@ export default function Home() {
     )
   }
 
-  // Debounced email save — captures email in temp_uploads for abandoned checkout recovery
+  // Debounced email save - captures email in temp_uploads for abandoned checkout recovery
   useEffect(() => {
     if (!uploadComplete || !email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return
     const timer = setTimeout(() => {
@@ -384,10 +392,10 @@ export default function Home() {
     if ('stopPropagation' in e) e.stopPropagation()
     setDragActive(false)
 
-    const file = 'dataTransfer' in e 
-      ? e.dataTransfer?.files?.[0] 
+    const file = 'dataTransfer' in e
+      ? e.dataTransfer?.files?.[0]
       : (e.target as HTMLInputElement)?.files?.[0]
-    
+
     if (file) {
       const ext = '.' + file.name.split('.').pop()?.toLowerCase()
       setFileFormat(ext)
@@ -407,7 +415,7 @@ export default function Home() {
 
       setWordCount(words)
       setSelectedTier(determineTier(words))
-      
+
       const titleFromFile = file.name.replace(/\.[^/.]+$/, '').replace(/_/g, ' ')
       setBookTitle(titleFromFile)
 
@@ -474,7 +482,7 @@ export default function Home() {
     scanFindings.forEach((finding) => {
       const response = scanResponses[finding.original]
       if (response === 'keep') {
-        instructionLines.push(`Keep "${finding.original}" in English — do not translate or adapt`)
+        instructionLines.push(`Keep "${finding.original}" in English - do not translate or adapt`)
       } else if (response === 'adapt') {
         instructionLines.push(`Adapt "${finding.original}" to the nearest local equivalent`)
       } else if (response === 'convert') {
@@ -483,7 +491,7 @@ export default function Home() {
         instructionLines.push(`Keep "${finding.original}" in English + add local equivalent in brackets on first mention, then just the English term afterwards`)
       }
     })
-    
+
     if (instructionLines.length > 0) {
       const scanBlock = `AUTO-DETECTED TRANSLATION PREFERENCES:\n${instructionLines.join('\n')}`
       setSpecialInstructions(prev => prev ? `${prev}\n\n${scanBlock}` : scanBlock)
@@ -496,7 +504,7 @@ export default function Home() {
       return
     }
     setIsProcessing(true)
-    
+
     try {
       const response = await fetch('/api/checkout', {
         method: 'POST',
@@ -527,7 +535,7 @@ export default function Home() {
       console.error('Checkout error:', error)
       alert('Something went wrong. Please try again.')
     }
-    
+
     setIsProcessing(false)
   }
 
@@ -597,7 +605,7 @@ export default function Home() {
                 </h1>
 
                 <p className="text-xl text-gray-600 leading-relaxed mb-10 max-w-lg">
-                  Professional AI translation for indie authors. From $99 per language — vs $5,000–$20,000 with a human agency. Smart cultural scan + two-pass editorial review included.
+                  Professional AI translation for indie authors. From $99 per language - vs $5,000-$20,000 with a human agency. Smart cultural scan + two-pass editorial review included.
                 </p>
 
                 <div className="flex flex-wrap gap-3 mb-8">
@@ -805,9 +813,45 @@ export default function Home() {
                 </div>
                 <div className="bg-violet-50 px-4 py-3 border-t border-violet-100">
                   <p className="text-sm text-violet-700">
-                    <span className="font-semibold">💡 2 editorial improvements highlighted</span> — Review and approve each change
+                    <span className="font-semibold">💡 2 editorial improvements highlighted</span> - Review and approve each change
                   </p>
                 </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        {/* Format Info */}
+        <section className="py-16 bg-white border-t border-gray-100">
+          <div className="max-w-4xl mx-auto px-8">
+            <div className="text-center mb-10">
+              <h2 className="text-2xl font-bold text-gray-900 mb-2" style={serifFont}>What You Get Back</h2>
+              <p className="text-gray-600">Depending on what you upload</p>
+            </div>
+            <div className="grid md:grid-cols-2 gap-6">
+              <div className="bg-gradient-to-br from-blue-50 to-white rounded-2xl p-6 border border-blue-100">
+                <div className="flex items-center gap-3 mb-4">
+                  <span className="text-2xl">📱</span>
+                  <h3 className="font-bold text-gray-900">If you upload EPUB</h3>
+                </div>
+                <p className="text-gray-700 text-sm leading-relaxed mb-3">
+                  Your translated EPUB will look great and read naturally - in the clean, standard ebook style readers are used to. Chapter structure and paragraphs are preserved.
+                </p>
+                <p className="text-gray-500 text-sm">
+                  If your original has custom styling (special fonts, drop caps, complex layouts), you'll want to review and apply those in your formatting tool before publishing. Many authors go straight from BookLingua to KDP upload.
+                </p>
+              </div>
+              <div className="bg-gradient-to-br from-violet-50 to-white rounded-2xl p-6 border border-violet-100">
+                <div className="flex items-center gap-3 mb-4">
+                  <span className="text-2xl">📕</span>
+                  <h3 className="font-bold text-gray-900">If you upload DOCX</h3>
+                </div>
+                <p className="text-gray-700 text-sm leading-relaxed mb-3">
+                  We do our best to keep your original formatting - fonts, spacing, headings, bold and italic text - so your translated file looks as close to the original as possible.
+                </p>
+                <p className="text-gray-500 text-sm">
+                  Most customers can go straight from BookLingua to KDP or print setup, but it's worth a quick review to make sure you're fully happy before going to print.
+                </p>
               </div>
             </div>
           </div>
@@ -892,19 +936,19 @@ export default function Home() {
               {[
                 {
                   q: 'Is this better than Google Translate?',
-                  a: 'Yes — significantly. BookLingua uses a proprietary two-pass system: the first pass produces a faithful translation; the second is an editorial review that refines idioms, adapts cultural context, and ensures your book reads naturally to native speakers. Every change is highlighted so you stay in control.',
+                  a: 'Yes - significantly. BookLingua uses a proprietary two-pass system: the first pass produces a faithful translation; the second is an editorial review that refines idioms, adapts cultural context, and ensures your book reads naturally to native speakers. Every change is highlighted so you stay in control.',
                 },
                 {
                   q: 'What file formats do you support?',
-                  a: 'EPUB, DOCX, and TXT. We recommend DOCX for best results — it gives the most accurate word count and preserves formatting perfectly. PDF is not supported as formatting is lost during conversion.',
+                  a: 'EPUB, DOCX, and TXT. We recommend DOCX for best results - it gives the most accurate word count and preserves formatting perfectly. PDF is not supported as formatting is lost during conversion.',
                 },
                 {
                   q: 'How long does translation take?',
-                  a: 'Most books complete within 2–6 hours depending on length. You\'ll receive an email with your download link as soon as it\'s ready.',
+                  a: 'Most books complete within 2-6 hours depending on length. You\'ll receive an email with your download link as soon as it\'s ready.',
                 },
                 {
                   q: 'Can I see examples before I buy?',
-                  a: 'Absolutely — visit our Examples page to see real side-by-side translations with editorial highlights.',
+                  a: 'Absolutely - visit our Examples page to see real side-by-side translations with editorial highlights.',
                   link: { href: '/examples', label: 'View Examples →' },
                 },
                 {
@@ -913,7 +957,7 @@ export default function Home() {
                 },
                 {
                   q: 'Do you offer pricing for publishers with larger catalogues?',
-                  a: 'Yes — if you have 10 or more books, we offer custom bulk pricing and a hands-off pipeline.',
+                  a: 'Yes - if you have 10 or more books, we offer custom bulk pricing and a hands-off pipeline.',
                   link: { href: '/publishers', label: 'Learn more →' },
                 },
               ].map((item, i) => (
@@ -958,7 +1002,7 @@ export default function Home() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-violet-50">
       <style>{`@import url('https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&display=swap');`}</style>
-      
+
       <nav className="flex items-center justify-between px-8 py-6 max-w-5xl mx-auto">
         <button onClick={() => { setCurrentView('landing'); setCheckoutStep(1) }} className="flex items-center gap-3">
           <Logo size="md" />
@@ -989,7 +1033,7 @@ export default function Home() {
           <>
             <div className="text-center mb-8">
               <h1 className="text-4xl font-bold text-gray-900 mb-4" style={serifFont}>Upload Your Book</h1>
-              <p className="text-gray-600 text-lg">EPUB, DOCX, or TXT — formatting preserved</p>
+              <p className="text-gray-600 text-lg">EPUB, DOCX, or TXT - formatting preserved</p>
             </div>
 
             {!uploadedFile ? (
@@ -1052,7 +1096,7 @@ export default function Home() {
                             {WORD_TIERS[selectedTier!]?.label}
                           </span>
                           <span className="px-2 py-1 bg-gray-100 text-gray-600 text-xs font-semibold rounded-full">
-                            {fileFormat.toUpperCase()} — formatting preserved
+                            {fileFormat.toUpperCase()} - formatting preserved
                           </span>
                         </div>
                       </div>
@@ -1135,14 +1179,14 @@ export default function Home() {
                     <div className="mb-6">
                       <label className="block text-sm font-semibold text-gray-700 mb-1">
                         Where is your book set, and what local language should we keep?
-                        <span className="ml-2 text-xs font-normal text-gray-500">Optional — helps preserve cultural authenticity</span>
+                        <span className="ml-2 text-xs font-normal text-gray-500">Optional - helps preserve cultural authenticity</span>
                       </label>
                       <textarea
                         value={bookSetting}
                         onChange={e => setBookSetting(e.target.value)}
                         rows={3}
                         className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-violet-400 bg-white text-gray-800 resize-none"
-                        placeholder={`Examples:\n• Set in America — keep DA, precinct, Secretary of State, the Oval Office as-is\n• Set in the UK — keep Prime Minister (don't translate to Chancellor), NHS, barrister\n• Fantasy world — all place names and invented words are untranslatable\n• Historical France — use period titles (Monsieur le Président, not President)`}
+                        placeholder={`Examples:\n• Set in America - keep DA, precinct, Secretary of State, the Oval Office as-is\n• Set in the UK - keep Prime Minister (don't translate to Chancellor), NHS, barrister\n• Fantasy world - all place names and invented words are untranslatable\n• Historical France - use period titles (Monsieur le Président, not President)`}
                       />
                     </div>
 
@@ -1152,7 +1196,7 @@ export default function Home() {
                       {/* Genre-specific clickable tip chips */}
                       {selectedGenre && GENRE_INSTRUCTION_TIPS[normalizeGenreKey(selectedGenre)] && (
                         <div className="mb-2">
-                          <p className="text-xs font-medium text-gray-500 mb-1.5">💡 Suggested instructions — click to add:</p>
+                          <p className="text-xs font-medium text-gray-500 mb-1.5">💡 Suggested instructions - click to add:</p>
                           <div className="flex flex-wrap gap-2 mb-2">
                             {[
                               ...(GENRE_INSTRUCTION_TIPS[normalizeGenreKey(selectedGenre)] || []),
@@ -1207,7 +1251,7 @@ export default function Home() {
                             <p className="text-sm text-gray-600">We found {scanFindings.length} item{scanFindings.length > 1 ? 's' : ''} that may need your input before translation</p>
                           </div>
                         </div>
-                        
+
                         <div className="space-y-4">
                           {scanFindings.map((finding, idx) => (
                             <div key={idx} className="bg-white rounded-xl p-4 border border-amber-100">
@@ -1229,7 +1273,7 @@ export default function Home() {
                                   )}
                                 </div>
                               </div>
-                              
+
                               <div className="grid gap-2">
                                 {finding.options.map((opt: any) => (
                                   <label key={opt.value} className={`flex items-start gap-3 p-3 rounded-xl border-2 cursor-pointer transition-all ${
@@ -1255,7 +1299,7 @@ export default function Home() {
                             </div>
                           ))}
                         </div>
-                        
+
                         <div className="flex gap-3 mt-6">
                           <button
                             onClick={() => { setShowScanStep(false); setScanFindings([]) }}
@@ -1413,7 +1457,7 @@ export default function Home() {
                     <p className="text-sm text-gray-600">Your choices will be saved and applied to the translation</p>
                   </div>
                 </div>
-                
+
                 <div className="space-y-4">
                   {scanFindings.map((finding, idx) => (
                     <div key={idx} className="bg-white rounded-xl p-4 border border-amber-100">
@@ -1435,7 +1479,7 @@ export default function Home() {
                           )}
                         </div>
                       </div>
-                      
+
                       <div className="grid gap-2">
                         {finding.options.map((opt: any) => (
                           <label key={opt.value} className={`flex items-start gap-3 p-3 rounded-xl border-2 cursor-pointer transition-all ${
@@ -1461,7 +1505,7 @@ export default function Home() {
                     </div>
                   ))}
                 </div>
-                
+
                 <div className="flex gap-3 mt-6">
                   <button
                     onClick={() => setCheckoutStep(2)}
@@ -1547,6 +1591,10 @@ export default function Home() {
                             ? selectedUpsells.includes(upsell.id)
                               ? 'border-violet-500 bg-violet-50'
                               : 'border-violet-200 bg-gradient-to-br from-violet-50/60 to-white hover:border-violet-400'
+                            : upsell.id === 'dual-format'
+                            ? selectedUpsells.includes(upsell.id)
+                              ? 'border-blue-500 bg-blue-50'
+                              : 'border-blue-200 bg-gradient-to-br from-blue-50/60 to-white hover:border-blue-400'
                             : selectedUpsells.includes(upsell.id)
                               ? 'border-violet-500 bg-violet-50'
                               : 'border-gray-200 hover:border-violet-300'
@@ -1569,7 +1617,7 @@ export default function Home() {
                               )}
                             </div>
                             <p className="text-sm text-gray-500">{upsell.description}</p>
-                            {upsell.id === 'launch-pack' && upsell.details && (
+                            {upsell.details && (
                               <div className="mt-3 grid grid-cols-1 gap-1">
                                 {upsell.details.map((d, i) => (
                                   <div key={i} className="flex items-center gap-2 text-xs text-gray-700">
@@ -1581,19 +1629,9 @@ export default function Home() {
                             )}
                           </div>
                           <div className="text-right">
-                            {upsell.id === 'launch-pack' ? (
-                              <div>
-                                <p className="text-xl font-bold text-gray-900">{selectedLanguages.length > 1 ? '$49' : '$29'}</p>
-                                <p className="text-xs text-gray-500">{selectedLanguages.length > 1 ? 'all languages' : '1 language'}</p>
-                                {selectedLanguages.length === 1 && <p className="text-xs text-green-600">$49 for 2+</p>}
-                              </div>
-                            ) : (
-                              <div>
-                                <p className="text-xl font-bold text-gray-900">${upsell.price}</p>
-                                {upsell.originalPrice && (
-                                  <p className="text-xs text-gray-400 line-through">${upsell.originalPrice}</p>
-                                )}
-                              </div>
+                            <p className="text-xl font-bold text-gray-900">${upsell.price}</p>
+                            {upsell.originalPrice && (
+                              <p className="text-xs text-gray-400 line-through">${upsell.originalPrice}</p>
                             )}
                           </div>
                         </div>
@@ -1601,7 +1639,7 @@ export default function Home() {
                     ))}
                   </div>
 
-                  {/* MRR Romance Reader Promo — shows for romance/erotica only */}
+                  {/* MRR Romance Reader Promo - shows for romance/erotica only */}
                   {(selectedGenre === 'Romance' || selectedGenre === 'Erotica' || heatLevel) && (
                     <div className="mt-4 rounded-2xl border-2 border-pink-200 bg-gradient-to-br from-pink-50 to-rose-50 p-5">
                       <div className="flex items-start gap-3">
@@ -1611,7 +1649,7 @@ export default function Home() {
                             <h4 className="font-bold text-gray-900 text-sm">Romance Reader Shoutout</h4>
                             <span className="px-2 py-0.5 bg-pink-100 text-pink-700 text-xs font-semibold rounded-full">Romance Special</span>
                           </div>
-                          <p className="text-xs text-gray-600 mb-3">Get your translated romance featured to 20,000+ romance readers via My Romance Reads. English version live at myromancereads.com — MRR Europe coming soon.</p>
+                          <p className="text-xs text-gray-600 mb-3">Get your translated romance featured to 20,000+ romance readers via My Romance Reads. English version live at myromancereads.com - MRR Europe coming soon.</p>
                           <div className="flex items-center justify-between">
                             <div className="flex items-center gap-2">
                               <span className="text-sm text-gray-400 line-through mr-1">$90</span>

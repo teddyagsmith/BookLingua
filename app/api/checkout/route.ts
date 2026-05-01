@@ -69,6 +69,7 @@ function calculateServerPrice(
   for (const id of selectedUpsells) {
     if (id === 'launch-pack') upsellTotal += numLanguages > 1 ? 49 : 29
     else if (id === 'mrr-shoutout') upsellTotal += 69
+    else if (id === 'dual-format') upsellTotal += 29
   }
 
   return Math.round((translationTotal + upsellTotal) * 100) / 100

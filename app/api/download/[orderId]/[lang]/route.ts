@@ -545,6 +545,14 @@ export async function GET(
     const langDisplay = LANG_DISPLAY[lang]  || lang
     const safeTitle   = order.book_title.replace(/[^a-z0-9\s]/gi, '').trim()
     const fileFormat  = (order.file_format || '.docx').toLowerCase()
+    const upsells     = (order.upsells || []) as string[]
+    const hasDualFormat = upsells.includes('dual-format')
+
+    // Allow format override via query param (for dual-format orders)
+    const requestedFormat = (request.nextUrl.searchParams.get('format') || fileFormat).toLowerCase()
+    const effectiveFormat = (hasDualFormat && (requestedFormat === '.epub' || requestedFormat === '.docx'))
+      ? requestedFormat
+      : fileFormat
 
     // ── Review version: always DOCX with yellow highlights + review summary ──
     if (type === 'review') {
@@ -575,8 +583,8 @@ export async function GET(
       })
     }
 
-    // ── Final version: clean, in original format ──
-    if (fileFormat === '.epub') {
+    // ── Final version: clean, in effective format ──
+    if (effectiveFormat === '.epub') {
       const buffer = await buildFinalEpub(file.content, order.book_title, langDisplay)
       return new NextResponse(new Uint8Array(buffer), {
         headers: {

@@ -812,14 +812,24 @@ Be specific — use real examples from this text, not generic ones. Even if no e
     // Step 6: Notify admin for review — customer email sent only after approval
     await step.run('notify-admin-for-review', async () => {
       const preview = translationPreview || '(preview not available)'
+      const hasDualFormat = (order.upsells as string[] || []).includes('dual-format')
+      const fileFormat = (order.file_format || '.docx').toLowerCase()
+
       // Build download links for all languages
       const downloadLinksHtml = languages.map(l => {
         const reviewUrl = buildDownloadUrl(orderId, l, 'review')
         const finalUrl  = buildDownloadUrl(orderId, l, 'final')
+        // For dual format, also add the alternate format link
+        let extraFormatLink = ''
+        if (hasDualFormat) {
+          const altFormat = fileFormat === '.epub' ? 'docx' : 'epub'
+          const altUrl = buildDownloadUrl(orderId, l, 'final') + `&format=.${altFormat}`
+          extraFormatLink = `<br><a href="${altUrl}" style="color:#8b5cf6; font-size:12px;">Also as ${altFormat.toUpperCase()}</a>`
+        }
         return `<tr>
           <td style="padding:6px 8px; color:#374151;">${LANGUAGE_NAMES[l]}</td>
           <td style="padding:6px 8px;"><a href="${reviewUrl}" style="color:#7c3aed; font-weight:bold;">Review DOCX</a> (highlighted changes)</td>
-          <td style="padding:6px 8px;"><a href="${finalUrl}" style="color:#059669;">Final file</a></td>
+          <td style="padding:6px 8px;"><a href="${finalUrl}" style="color:#059669;">Final ${fileFormat.replace('.', '').toUpperCase()}</a>${extraFormatLink}</td>
         </tr>`
       }).join('')
 
