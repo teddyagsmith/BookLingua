@@ -21,11 +21,15 @@ export async function GET(request: NextRequest) {
 
     // Fetch abandoned uploads: temp_uploads older than 1 hour (still in checkout = not abandoned yet)
     const abandonedThreshold = new Date(Date.now() - 60 * 60 * 1000).toISOString()
-    const { data: abandonedUploads } = await supabaseAdmin
+    const { data: abandonedUploads, error: abandonedError } = await supabaseAdmin
       .from('temp_uploads')
-      .select('session_id, file_name, file_format, word_count, email, created_at')
+      .select('session_id, file_name, file_format, word_count, created_at')
       .lte('created_at', abandonedThreshold)
       .order('created_at', { ascending: false })
+
+    if (abandonedError) {
+      console.error('Abandoned uploads query error:', abandonedError)
+    }
 
     const now = new Date()
     const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate()).toISOString()

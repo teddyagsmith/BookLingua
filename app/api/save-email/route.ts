@@ -16,12 +16,18 @@ export async function POST(request: NextRequest) {
     }
 
     // Save email to temp_uploads row for this session
+    // NOTE: temp_uploads table needs an 'email' column for this to work
     const { error } = await supabaseAdmin
       .from('temp_uploads')
       .update({ email })
       .eq('session_id', sessionId)
 
     if (error) {
+      // If column doesn't exist, log but don't fail the request
+      if (error.message?.includes('column') && error.message?.includes('email')) {
+        console.warn('[save-email] temp_uploads.email column does not exist — run: ALTER TABLE temp_uploads ADD COLUMN email TEXT;')
+        return NextResponse.json({ success: true, warning: 'Email column missing in database' })
+      }
       console.error('save-email error:', error)
       return NextResponse.json({ error: 'Failed to save email' }, { status: 500 })
     }
