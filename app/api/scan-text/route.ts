@@ -119,7 +119,11 @@ interface Finding {
 
 function keywordScan(text: string, languages: string[]): Finding[] {
   const findings: Finding[] = []
-  const langName = getLangName(languages[0] || 'de')
+  const isMultiLang = languages.length > 1
+  const langName = isMultiLang
+    ? `${languages.length} target languages`
+    : getLangName(languages[0] || 'de')
+  const langRef = isMultiLang ? 'target language' : langName
 
   // Measurements
   for (const { term, unit, context } of MEASUREMENT_TERMS) {
@@ -131,7 +135,7 @@ function keywordScan(text: string, languages: string[]): Finding[] {
           type: 'potentially_ambiguous',
           original: term,
           context: getContext(text, idx, term.length),
-          question: `Your text uses "${term}" (${context}). For ${langName} readers, should we convert to ${unit}?`,
+          question: `Your text uses "${term}" (${context}). For ${langName}${isMultiLang ? ' readers' : ''}, should we convert to ${unit}?`,
           options: [
             { label: `Convert to ${unit}`, value: 'convert', description: `Replace with metric equivalent throughout` },
             { label: 'Keep original', value: 'keep', description: `Keep "${term}" as-is (e.g. if story is set in the US/UK)` },
@@ -175,11 +179,11 @@ function keywordScan(text: string, languages: string[]): Finding[] {
           type: 'country_specific',
           original: term,
           context: getContext(text, idx, term.length),
-          question: `Your text mentions "${term}" — a US/UK education term. For ${langName} readers, keep or explain?`,
+          question: `Your text mentions "${term}" — a US/UK education term. For ${langRef} readers, keep or explain?`,
           options: [
             { label: 'Keep original', value: 'keep', description: `Keep "${term}" — appropriate if story stays in original education system` },
-            { label: 'Add brief explanation', value: 'footnote', description: `Keep English + add local equivalent in brackets on first mention (e.g. "${term} (${langName} equivalent)"), then just "${term}" afterwards` },
-            { label: 'Use local equivalent', value: 'adapt', description: `Replace with nearest ${langName} equivalent` },
+            { label: 'Add brief explanation', value: 'footnote', description: `Keep English + add local equivalent in brackets on first mention (e.g. "${term} (local equivalent)"), then just "${term}" afterwards` },
+            { label: 'Use local equivalent', value: 'adapt', description: `Replace with nearest local equivalent` },
           ],
           defaultOption: 'keep',
         })
@@ -197,11 +201,11 @@ function keywordScan(text: string, languages: string[]): Finding[] {
           type: 'country_specific',
           original: term,
           context: getContext(text, idx, term.length),
-          question: `Your text mentions "${term}" — a US-specific term. For your ${langName} translation, how should we handle it?`,
+          question: `Your text mentions "${term}" — a US-specific term. For your ${langRef} translation${isMultiLang ? 's' : ''}, how should we handle it?`,
           options: [
-            { label: 'Keep original', value: 'keep', description: `Keep "${term}" in English with brief ${langName} explanation` },
-            { label: 'Adapt to local equivalent', value: 'adapt', description: `Replace with nearest ${langName} equivalent (may change meaning)` },
-            { label: 'Keep with inline bracket', value: 'footnote', description: `Keep English + add local equivalent in brackets on first mention (e.g. "${term} (${langName} equivalent)"), then just "${term}" afterwards` },
+            { label: 'Keep original', value: 'keep', description: `Keep "${term}" in English with brief ${langRef} explanation` },
+            { label: 'Adapt to local equivalent', value: 'adapt', description: `Replace with nearest ${langRef} equivalent (may change meaning)` },
+            { label: 'Keep with inline bracket', value: 'footnote', description: `Keep English + add local equivalent in brackets on first mention (e.g. "${term} (local equivalent)"), then just "${term}" afterwards` },
           ],
           defaultOption: 'keep',
         })
@@ -219,11 +223,11 @@ function keywordScan(text: string, languages: string[]): Finding[] {
           type: 'country_specific',
           original: term,
           context: getContext(text, idx, term.length),
-          question: `Your text mentions "${term}" — a UK-specific term. For your ${langName} translation, how should we handle it?`,
+          question: `Your text mentions "${term}" — a UK-specific term. For your ${langRef} translation${isMultiLang ? 's' : ''}, how should we handle it?`,
           options: [
             { label: 'Keep original', value: 'keep', description: `Keep "${term}" in English with brief explanation` },
-            { label: 'Adapt to local equivalent', value: 'adapt', description: `Replace with nearest ${langName} equivalent` },
-            { label: 'Keep with inline bracket', value: 'footnote', description: `Keep English + add local equivalent in brackets on first mention (e.g. "${term} (${langName} equivalent)"), then just "${term}" afterwards` },
+            { label: 'Adapt to local equivalent', value: 'adapt', description: `Replace with nearest ${langRef} equivalent` },
+            { label: 'Keep with inline bracket', value: 'footnote', description: `Keep English + add local equivalent in brackets on first mention (e.g. "${term} (local equivalent)"), then just "${term}" afterwards` },
           ],
           defaultOption: 'keep',
         })
