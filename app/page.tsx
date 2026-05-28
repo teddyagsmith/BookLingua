@@ -240,6 +240,7 @@ export default function Home() {
   const [scanResponses, setScanResponses] = useState<Record<string, string>>({})
   const [scanLoading, setScanLoading] = useState(false)
   const [showScanStep, setShowScanStep] = useState(false)
+  const [affiliateCode, setAffiliateCode] = useState('')
 
   const determineTier = (words: number): 'small' | 'medium' | 'large' => {
     if (words <= 30000) return 'small'
@@ -376,6 +377,13 @@ export default function Home() {
     }, 800)
     return () => clearTimeout(timer)
   }, [email, uploadComplete])
+
+  // Capture affiliate ref from URL
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    const ref = params.get('ref')
+    if (ref) setAffiliateCode(ref)
+  }, [])
 
   const handleDrag = useCallback((e: React.DragEvent) => {
     e.preventDefault()
@@ -525,6 +533,7 @@ export default function Home() {
           voucherCode: voucherApplied?.code || '',
           sessionId: sessionIdRef.current,
           bookSetting,
+          affiliateCode,
         }),
       })
 
@@ -1561,6 +1570,9 @@ export default function Home() {
                           return <span key={code} className="text-xl">{lang?.flag}</span>
                         })}
                       </div>
+                      {affiliateCode && (
+                        <p className="text-xs text-violet-600 mt-1">Referred by: {affiliateCode}</p>
+                      )}
                     </div>
                     <p className="text-xl font-bold text-gray-900">
                       ${calculatePrice(selectedTier, selectedLanguages.length)}

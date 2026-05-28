@@ -93,6 +93,7 @@ export async function POST(request: NextRequest) {
       voucherCode,
       sessionId,
       bookSetting,
+      affiliateCode,
     } = body
 
     // ✅ SECURITY: Recalculate price server-side — ignore any client-submitted totalAmount
@@ -156,6 +157,7 @@ export async function POST(request: NextRequest) {
         sessionId: sessionId || '',
         specialInstructions: (specialInstructions || '').slice(0, 490), // Stripe 500 char limit
         book_setting: (bookSetting || '').slice(0, 490),
+        affiliateCode: (affiliateCode || '').toUpperCase(),
       },
     })
 

@@ -1,6 +1,7 @@
 import './globals.css'
 import { Metadata } from 'next'
 import { Analytics } from '@vercel/analytics/next'
+import Script from 'next/script'
 
 export const metadata: Metadata = {
   title: 'BookLingua - Professional Book Translation for Authors',
@@ -36,6 +37,13 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en">
+      <head>
+        <Script
+          src="https://app.revshare.so/js/revshare.js"
+          strategy="afterInteractive"
+          data-revshare-domain="booklingua.io"
+        />
+      </head>
       <body>{children}<Analytics /></body>
     </html>
   )
