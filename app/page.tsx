@@ -863,13 +863,14 @@ export default function Home() {
             <div className="text-center mb-16">
               <h2 className="text-4xl font-bold text-gray-900 mb-4" style={serifFont}>Simple, transparent pricing</h2>
               <p className="text-xl text-gray-600">Per language • Includes editorial review</p>
+              <p className="text-lg text-violet-600 font-medium mt-3">Upload your book and we automatically calculate your exact price — no need to pick a tier</p>
             </div>
 
             <div className="grid md:grid-cols-3 gap-6 max-w-4xl mx-auto mb-16">
               {Object.entries(WORD_TIERS).map(([key, tier]) => (
                 <div
                   key={key}
-                  className={`relative bg-white rounded-3xl p-8 border-2 ${
+                  className={`relative bg-white rounded-3xl p-8 border-2 cursor-default ${
                     key === 'medium' ? 'border-violet-400 shadow-lg' : 'border-gray-100'
                   }`}
                 >
@@ -889,6 +890,7 @@ export default function Home() {
                       {key === 'medium' && 'Standard books'}
                       {key === 'large' && 'Large books & textbooks'}
                     </p>
+                    <p className="text-xs text-violet-600 font-medium mt-3">Auto-detected after upload</p>
                   </div>
                 </div>
               ))}
@@ -919,7 +921,7 @@ export default function Home() {
                 onClick={() => setCurrentView('upload')}
                 className="px-10 py-4 bg-gradient-to-r from-blue-600 to-violet-600 text-white rounded-2xl font-bold text-lg shadow-xl hover:shadow-2xl transition-all"
               >
-                Get Started →
+                Upload Your Book to See Your Price →
               </button>
             </div>
           </div>
