@@ -75,6 +75,13 @@ function calculateServerPrice(
   return Math.round((translationTotal + upsellTotal) * 100) / 100
 }
 
+// Validate that the submitted tier matches the word count
+function determineTierFromWordCount(wordCount: number): string {
+  if (wordCount <= 40000) return 'small'
+  if (wordCount <= 80000) return 'medium'
+  return 'large'
+}
+
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
@@ -97,9 +104,15 @@ export async function POST(request: NextRequest) {
     } = body
 
     // ✅ SECURITY: Recalculate price server-side — ignore any client-submitted totalAmount
+    // Also validate tier against word count — correct it if client sent wrong tier
+    const validatedTier = determineTierFromWordCount(wordCount)
+    if (tier !== validatedTier) {
+      console.warn(`Tier mismatch: client sent ${tier} for ${wordCount} words, corrected to ${validatedTier}`)
+    }
+
     let serverCalculatedAmount: number
     try {
-      serverCalculatedAmount = calculateServerPrice(tier, selectedLanguages, selectedUpsells || [])
+      serverCalculatedAmount = calculateServerPrice(validatedTier, selectedLanguages, selectedUpsells || [])
     } catch (e) {
       return NextResponse.json({ error: 'Invalid order configuration' }, { status: 400 })
     }
@@ -125,7 +138,7 @@ export async function POST(request: NextRequest) {
           currency: 'usd',
           product_data: {
             name: `Book Translation: ${bookTitle}`,
-            description: `${wordCount.toLocaleString()} words (${tier}) → ${selectedLanguages.join(', ').toUpperCase()} • ${fileFormat.toUpperCase()} format preserved${appliedVoucher ? ` • Voucher: ${appliedVoucher}` : ''}`,
+            description: `${wordCount.toLocaleString()} words (${validatedTier}) → ${selectedLanguages.join(', ').toUpperCase()} • ${fileFormat.toUpperCase()} format preserved${appliedVoucher ? ` • Voucher: ${appliedVoucher}` : ''}`,
           },
           unit_amount: Math.round(finalAmount * 100), // Convert to cents
         },
@@ -145,7 +158,7 @@ export async function POST(request: NextRequest) {
         authorName,
         bookTitle,
         wordCount: wordCount.toString(),
-        tier,
+        tier: validatedTier,
         fileFormat,
         selectedLanguages: JSON.stringify(selectedLanguages),
         selectedGenre,

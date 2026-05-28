@@ -243,7 +243,7 @@ export default function Home() {
   const [affiliateCode, setAffiliateCode] = useState('')
 
   const determineTier = (words: number): 'small' | 'medium' | 'large' => {
-    if (words <= 30000) return 'small'
+    if (words <= 40000) return 'small'
     if (words <= 80000) return 'medium'
     return 'large'
   }
