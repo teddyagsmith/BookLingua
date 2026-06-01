@@ -29,7 +29,19 @@ export async function POST(request: NextRequest) {
 
   if (event.type === 'checkout.session.completed') {
     const session = event.data.object as Stripe.Checkout.Session
-    
+
+    // Idempotency check: ignore duplicate webhook events for the same Stripe session
+    const { data: existingOrder } = await supabaseAdmin
+      .from('orders')
+      .select('id')
+      .eq('stripe_session_id', session.id)
+      .maybeSingle()
+
+    if (existingOrder) {
+      console.log(`Webhook already processed for session ${session.id}, order ${existingOrder.id}. Skipping.`)
+      return NextResponse.json({ received: true, duplicate: true })
+    }
+
     const {
       authorName,
       bookTitle,
