@@ -381,36 +381,8 @@ export const translateBook = inngest.createFunction(
 
     if (estCostTotal > Number(order.amount_paid)) {
       console.warn(`[BookLingua] ⚠️  UNPROFITABLE ORDER ${orderId}: est. API cost ($${estCostTotal.toFixed(2)}) > revenue ($${order.amount_paid})`)
-      // Alert — non-blocking, job still runs to honour the customer's order
-      // Only send once per order by checking if alert was already sent
-      const { data: alreadyAlerted } = await supabaseAdmin
-        .from('orders')
-        .select('profitability_alert_sent')
-        .eq('id', orderId)
-        .single()
-      if (!alreadyAlerted?.profitability_alert_sent) {
-        resend.emails.send({
-          from: 'BookLingua <orders@booklingua.io>',
-          to: 'hello@booklingua.io',
-          subject: `⚠️ Unprofitable Order — ${order.book_title}`,
-          text: [
-            `Order ID: ${orderId}`,
-            `Book: ${order.book_title} (${order.word_count?.toLocaleString()} words, ${order.tier} tier)`,
-            `Languages: ${languages.join(', ')}`,
-            `Revenue: $${order.amount_paid}`,
-            `Est. API cost: $${estCostTotal.toFixed(2)}`,
-            `Est. loss: $${(estCostTotal - Number(order.amount_paid)).toFixed(2)}`,
-            ``,
-            `Likely cause: deep discount code applied. Consider adding a minimum order value for discount codes.`,
-          ].join('\n'),
-        }).catch(err => console.error('[BookLingua] Failed to send profitability alert:', err))
-        // Mark alert as sent so we don't email again (best-effort: column may not exist yet)
-        try {
-          await supabaseAdmin.from('orders').update({ profitability_alert_sent: true }).eq('id', orderId).throwOnError()
-        } catch {
-          console.warn(`[BookLingua] Could not set profitability_alert_sent for order ${orderId} — column may not exist. Run: ALTER TABLE orders ADD COLUMN IF NOT EXISTS profitability_alert_sent boolean DEFAULT false;`)
-        }
-      }
+      // Email alert disabled — Resend blocked us from sending too many emails
+      // Check the console logs or admin panel for unprofitable orders instead
     }
 
     // Token usage accumulator for actual cost tracking
