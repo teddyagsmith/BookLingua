@@ -78,6 +78,7 @@ export async function POST(request: NextRequest) {
         special_instructions: specialInstructions || null,
         amount_paid: session.amount_total! / 100,
         status: 'pending',
+        voucher_code: (session.metadata?.voucherCode || '').toUpperCase() || null,
       })
       .select()
       .single()

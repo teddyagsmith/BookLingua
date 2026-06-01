@@ -5,17 +5,19 @@ const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
   apiVersion: '2023-10-16',
 })
 
+import { supabaseAdmin } from '@/lib/supabase'
+
 // Voucher codes - add/remove codes here
-const VOUCHER_CODES: Record<string, { discount: number; type: 'percent' | 'fixed'; description: string; maxUses?: number; expiresAt?: string }> = {
+const VOUCHER_CODES: Record<string, { discount: number; type: 'percent' | 'fixed'; description: string; maxUses?: number; expiresAt?: string; oncePerEmail?: boolean }> = {
   'LAUNCH20': { discount: 20, type: 'percent', description: '20% off launch discount' },
   'FIRST50': { discount: 50, type: 'fixed', description: '$50 off first order' },
   'FRIEND10': { discount: 10, type: 'percent', description: '10% friend referral' },
   'AUTHOR25': { discount: 25, type: 'percent', description: '25% author discount' },
-  'BETA95': { discount: 95, type: 'percent', description: '95% beta tester discount' },
-  'TESTDRIVE': { discount: 95, type: 'percent', description: '95% test discount' },
+  'BETA95': { discount: 95, type: 'percent', description: '95% beta tester discount', oncePerEmail: true },
+  'TESTDRIVE': { discount: 95, type: 'percent', description: '95% test discount', oncePerEmail: true },
 }
 
-function validateVoucher(code: string, subtotal: number): { valid: boolean; discountAmount: number; error?: string } {
+async function validateVoucher(code: string, subtotal: number, email?: string): Promise<{ valid: boolean; discountAmount: number; error?: string }> {
   const upperCode = code.toUpperCase().trim()
   const voucher = VOUCHER_CODES[upperCode]
   
@@ -26,6 +28,20 @@ function validateVoucher(code: string, subtotal: number): { valid: boolean; disc
   // Check expiry if set
   if (voucher.expiresAt && new Date(voucher.expiresAt) < new Date()) {
     return { valid: false, discountAmount: 0, error: 'Voucher has expired' }
+  }
+
+  // Check once-per-email restriction
+  if (voucher.oncePerEmail && email) {
+    const { data: previousOrder } = await supabaseAdmin
+      .from('orders')
+      .select('id')
+      .eq('email', email.toLowerCase().trim())
+      .eq('voucher_code', upperCode)
+      .maybeSingle()
+
+    if (previousOrder) {
+      return { valid: false, discountAmount: 0, error: 'This voucher has already been used with this email address' }
+    }
   }
   
   // Calculate discount
@@ -121,7 +137,7 @@ export async function POST(request: NextRequest) {
     let appliedVoucher = null
 
     if (voucherCode) {
-      const voucherResult = validateVoucher(voucherCode, finalAmount)
+      const voucherResult = await validateVoucher(voucherCode, finalAmount, email)
       if (voucherResult.valid) {
         finalAmount = finalAmount - voucherResult.discountAmount
         appliedVoucher = voucherCode.toUpperCase()
