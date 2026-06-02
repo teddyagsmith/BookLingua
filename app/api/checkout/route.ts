@@ -14,7 +14,7 @@ const VOUCHER_CODES: Record<string, { discount: number; type: 'percent' | 'fixed
   'FRIEND10': { discount: 10, type: 'percent', description: '10% friend referral', oncePerEmail: true },
   'AUTHOR25': { discount: 25, type: 'percent', description: '25% author discount', oncePerEmail: true },
   'BETA95': { discount: 95, type: 'percent', description: '95% beta tester discount', oncePerEmail: true },
-  'TESTDRIVE': { discount: 95, type: 'percent', description: '95% test discount', oncePerEmail: true },
+  'TESTDRIVE': { discount: 90, type: 'percent', description: '90% test discount', oncePerEmail: true },
 }
 
 async function validateVoucher(code: string, subtotal: number, email?: string): Promise<{ valid: boolean; discountAmount: number; error?: string }> {
