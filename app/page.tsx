@@ -275,9 +275,14 @@ export default function Home() {
     return (translationCost + upsellCost).toFixed(2)
   }
 
-  // Returns the amount that CAN be discounted (excludes MRR shoutout which is never discounted)
+  // Returns the amount that CAN be discounted (excludes MRR shoutout and Launch Pack which are never discounted)
   const calculateVoucherableSubtotal = () => {
-    return parseFloat(calculateTotal()) - (selectedUpsells.includes('mrr-shoutout') ? 69 : 0)
+    let nonVoucherable = 0
+    if (selectedUpsells.includes('mrr-shoutout')) nonVoucherable += 69
+    if (selectedUpsells.includes('launch-pack')) {
+      nonVoucherable += selectedLanguages.length > 1 ? 49 : 29
+    }
+    return parseFloat(calculateTotal()) - nonVoucherable
   }
 
   // Returns the actual voucher discount amount to display (recalculates dynamically)

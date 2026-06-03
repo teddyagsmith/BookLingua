@@ -70,7 +70,7 @@ function calculateServerPrice(
   tier: string,
   selectedLanguages: string[],
   selectedUpsells: string[],
-): number {
+): { total: number; nonVoucherable: number } {
   const tierInfo = WORD_TIERS[tier]
   if (!tierInfo) throw new Error(`Invalid tier: ${tier}`)
 
@@ -82,13 +82,22 @@ function calculateServerPrice(
   const translationTotal = baseTotal * (1 - discountPct / 100)
 
   let upsellTotal = 0
+  let nonVoucherable = 0
   for (const id of selectedUpsells) {
-    if (id === 'launch-pack') upsellTotal += numLanguages > 1 ? 49 : 29
-    else if (id === 'mrr-shoutout') upsellTotal += 69
+    if (id === 'launch-pack') {
+      const cost = numLanguages > 1 ? 49 : 29
+      upsellTotal += cost
+      nonVoucherable += cost
+    }
+    else if (id === 'mrr-shoutout') {
+      upsellTotal += 69
+      nonVoucherable += 69
+    }
     else if (id === 'dual-format') upsellTotal += 29
   }
 
-  return Math.round((translationTotal + upsellTotal) * 100) / 100
+  const total = Math.round((translationTotal + upsellTotal) * 100) / 100
+  return { total, nonVoucherable }
 }
 
 // Validate that the submitted tier matches the word count
@@ -127,8 +136,11 @@ export async function POST(request: NextRequest) {
     }
 
     let serverCalculatedAmount: number
+    let nonVoucherable: number
     try {
-      serverCalculatedAmount = calculateServerPrice(validatedTier, selectedLanguages, selectedUpsells || [])
+      const result = calculateServerPrice(validatedTier, selectedLanguages, selectedUpsells || [])
+      serverCalculatedAmount = result.total
+      nonVoucherable = result.nonVoucherable
     } catch (e) {
       return NextResponse.json({ error: 'Invalid order configuration' }, { status: 400 })
     }
@@ -137,9 +149,10 @@ export async function POST(request: NextRequest) {
     let appliedVoucher = null
 
     if (voucherCode) {
-      const voucherResult = await validateVoucher(voucherCode, finalAmount, email)
+      const voucherableAmount = Math.max(serverCalculatedAmount - nonVoucherable, 0)
+      const voucherResult = await validateVoucher(voucherCode, voucherableAmount, email)
       if (voucherResult.valid) {
-        finalAmount = finalAmount - voucherResult.discountAmount
+        finalAmount = serverCalculatedAmount - voucherResult.discountAmount
         appliedVoucher = voucherCode.toUpperCase()
       }
     }
