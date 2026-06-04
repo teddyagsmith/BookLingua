@@ -8,6 +8,7 @@ const VOUCHER_CODES: Record<string, { discount: number; type: 'percent' | 'fixed
   'AUTHOR25': { discount: 25, type: 'percent', description: '25% author discount' },
   'BETA95': { discount: 95, type: 'percent', description: '95% beta tester discount' },
   'TESTDRIVE': { discount: 95, type: 'percent', description: '95% test discount' },
+  'X7KQ9M2P': { discount: 100, type: 'percent', description: '100% internal test discount' },
 }
 
 export async function POST(request: NextRequest) {

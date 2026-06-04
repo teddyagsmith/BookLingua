@@ -15,6 +15,7 @@ const VOUCHER_CODES: Record<string, { discount: number; type: 'percent' | 'fixed
   'AUTHOR25': { discount: 25, type: 'percent', description: '25% author discount', oncePerEmail: true },
   'BETA95': { discount: 95, type: 'percent', description: '95% beta tester discount', oncePerEmail: true },
   'TESTDRIVE': { discount: 90, type: 'percent', description: '90% test discount', oncePerEmail: true },
+  'X7KQ9M2P': { discount: 100, type: 'percent', description: '100% internal test discount', oncePerEmail: false },
 }
 
 async function validateVoucher(code: string, subtotal: number, email?: string): Promise<{ valid: boolean; discountAmount: number; error?: string }> {
@@ -157,8 +158,65 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Ensure minimum charge of $1
+    // Ensure minimum charge of $1 (unless 100% discount)
+    const isFullyFree = appliedVoucher && finalAmount <= 0
     finalAmount = Math.max(finalAmount, 1)
+
+    // Handle 100% free orders — skip Stripe, create order directly
+    if (isFullyFree) {
+      const orderData = {
+        stripe_session_id: 'FREE-' + crypto.randomUUID(),
+        email: email.toLowerCase().trim(),
+        author_name: authorName,
+        book_title: bookTitle,
+        word_count: wordCount,
+        tier: validatedTier,
+        file_format: fileFormat,
+        languages: selectedLanguages,
+        genre: selectedGenre,
+        upsells: selectedUpsells || [],
+        heat_level: heatLevel || null,
+        book_setting: bookSetting || null,
+        special_instructions: specialInstructions || '',
+        amount_paid: 0,
+        status: 'pending',
+      }
+
+      const { data: order, error: orderError } = await supabaseAdmin
+        .from('orders')
+        .insert(orderData)
+        .select()
+        .single()
+
+      if (orderError) {
+        console.error('Free order insert error:', orderError)
+        return NextResponse.json({ error: 'Failed to create order' }, { status: 500 })
+      }
+
+      // Link temp upload file
+      if (sessionId) {
+        const { data: tempUpload } = await supabaseAdmin
+          .from('temp_uploads')
+          .select('*')
+          .eq('session_id', sessionId)
+          .single()
+
+        if (tempUpload) {
+          await supabaseAdmin.from('files').insert({
+            order_id: order.id,
+            type: 'original',
+            language: 'en',
+            content: tempUpload.content,
+          })
+          await supabaseAdmin.from('temp_uploads').delete().eq('session_id', sessionId)
+        }
+      }
+
+      return NextResponse.json({
+        url: `${process.env.NEXT_PUBLIC_APP_URL}/success?session_id=FREE&order_id=${order.id}`,
+        freeOrder: true,
+      })
+    }
 
     // Create line items for Stripe
     const lineItems: Stripe.Checkout.SessionCreateParams.LineItem[] = [

@@ -6,6 +6,10 @@ import { Suspense } from 'react'
 function SuccessContent() {
   const searchParams = useSearchParams()
   const sessionId = searchParams.get('session_id')
+  const orderId = searchParams.get('order_id')
+  const isFreeOrder = sessionId === 'FREE'
+
+  const displayId = isFreeOrder ? orderId : sessionId?.slice(-12)
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-amber-50 via-rose-50 to-violet-50 flex items-center justify-center p-8">
@@ -16,11 +20,13 @@ function SuccessContent() {
           </div>
 
           <h1 className="text-3xl font-bold text-gray-900 mb-4">
-            Payment Successful! 🎉
+            {isFreeOrder ? 'Order Confirmed! 🎉' : 'Payment Successful! 🎉'}
           </h1>
 
           <p className="text-gray-600 mb-6">
-            Thank you for your order! We've sent a confirmation email with all the details.
+            {isFreeOrder 
+              ? "Your order is confirmed! We'll send you a confirmation email with all the details."
+              : "Thank you for your order! We've sent a confirmation email with all the details."}
           </p>
 
           <div className="bg-violet-50 rounded-2xl p-6 mb-8 text-left">
@@ -58,7 +64,7 @@ function SuccessContent() {
 
           <div className="bg-gray-50 rounded-xl p-4 mb-6">
             <p className="text-sm text-gray-500">
-              Order ID: <span className="font-mono text-xs">{sessionId?.slice(-12)}</span>
+              Order ID: <span className="font-mono text-xs">{displayId}</span>
             </p>
           </div>
 
