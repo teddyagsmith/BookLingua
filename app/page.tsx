@@ -296,18 +296,21 @@ export default function Home() {
   }
 
   const calculateFinalTotal = () => {
-    const mrrCost = selectedUpsells.includes('mrr-shoutout') ? 69 : 0
-    const voucherableSubtotal = calculateVoucherableSubtotal()
-    if (voucherApplied) {
-      let discountAmount: number
-      if (voucherApplied.type === 'percent') {
-        discountAmount = voucherableSubtotal * (voucherApplied.discount / 100)
-      } else {
-        discountAmount = Math.min(parseFloat(voucherApplied.discountAmount), voucherableSubtotal)
-      }
-      return Math.max(voucherableSubtotal - discountAmount + mrrCost, 1).toFixed(2)
+    if (!voucherApplied) {
+      return calculateTotal()
     }
-    return (voucherableSubtotal + mrrCost).toFixed(2)
+    const mrrCost = selectedUpsells.includes('mrr-shoutout') ? 69 : 0
+    const launchPackCost = selectedUpsells.includes('launch-pack')
+      ? (selectedLanguages.length > 1 ? 49 : 29)
+      : 0
+    const voucherableSubtotal = calculateVoucherableSubtotal()
+    let discountAmount: number
+    if (voucherApplied.type === 'percent') {
+      discountAmount = voucherableSubtotal * (voucherApplied.discount / 100)
+    } else {
+      discountAmount = Math.min(parseFloat(voucherApplied.discountAmount), voucherableSubtotal)
+    }
+    return Math.max(voucherableSubtotal - discountAmount + mrrCost + launchPackCost, 1).toFixed(2)
   }
 
   const applyVoucher = async () => {
