@@ -7,7 +7,7 @@ import Link from 'next/link'
 const serifFont = { fontFamily: "'Instrument Serif', Georgia, serif" }
 
 const Logo = ({ size = 'md' }: { size?: 'sm' | 'md' | 'lg' }) => {
-  const sizes = { sm: 32, md: 48, lg: 64 }
+  const sizes = { sm: 40, md: 64, lg: 96 }
   return (
     <Image
       src="/logo.png"
@@ -763,8 +763,7 @@ export default function ExamplesPage() {
       {/* Nav */}
       <nav className="relative z-10 flex items-center justify-between px-8 py-6 max-w-7xl mx-auto">
         <Link href="/" className="flex items-center gap-3">
-          <Logo size="md" />
-          <span className="text-2xl font-bold text-gray-800" style={serifFont}>BookLingua</span>
+          <Logo size="lg" />
         </Link>
         <div className="flex items-center gap-6">
           <Link href="/publishers" className="text-gray-600 hover:text-violet-700 font-medium transition-colors hidden sm:block">
@@ -1071,8 +1070,7 @@ export default function ExamplesPage() {
       <footer className="bg-gray-900 text-gray-400 py-12">
         <div className="max-w-7xl mx-auto px-8 text-center">
           <div className="flex items-center justify-center gap-3 mb-4">
-            <Logo size="sm" />
-            <span className="text-xl font-bold text-white" style={serifFont}>BookLingua</span>
+            <Logo size="md" />
           </div>
           <p className="mb-2">© 2026 BookLingua. All rights reserved.</p>
           <p className="text-xs text-gray-600">
