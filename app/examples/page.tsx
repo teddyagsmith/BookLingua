@@ -7,7 +7,7 @@ import Link from 'next/link'
 const serifFont = { fontFamily: "'Instrument Serif', Georgia, serif" }
 
 const Logo = ({ size = 'md' }: { size?: 'sm' | 'md' | 'lg' }) => {
-  const sizes = { sm: 80, md: 120, lg: 180 }
+  const sizes = { sm: 120, md: 200, lg: 300 }
   return (
     <Image
       src="/logo.png"

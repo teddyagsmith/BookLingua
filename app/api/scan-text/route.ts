@@ -140,6 +140,7 @@ function keywordScan(text: string, languages: string[]): Finding[] {
             { label: `Convert to ${unit}`, value: 'convert', description: `Replace with metric equivalent throughout` },
             { label: 'Keep original', value: 'keep', description: `Keep "${term}" as-is (e.g. if story is set in the US/UK)` },
             { label: 'Convert with note', value: 'footnote', description: `Use ${unit} + add Translation Note` },
+            { label: 'Not a measurement — just a regular word', value: 'false_positive', description: `This is a normal use of "${term}" (e.g. "a few miles away" vs. a brand name)` },
           ],
           defaultOption: 'convert',
         })
@@ -162,6 +163,7 @@ function keywordScan(text: string, languages: string[]): Finding[] {
             { label: 'Keep original', value: 'keep', description: `Keep "${brand}" — global brand recognition` },
             { label: 'Use local equivalent', value: 'adapt', description: `Replace with nearest local equivalent` },
             { label: 'Keep with explanation', value: 'footnote', description: `Keep "${brand}" + brief description` },
+            { label: 'Not a brand — just a regular word', value: 'false_positive', description: `This is a normal use of the word "${brand}" (e.g. "target audience" not the store)` },
           ],
           defaultOption: 'keep',
         })
@@ -184,6 +186,7 @@ function keywordScan(text: string, languages: string[]): Finding[] {
             { label: 'Keep original', value: 'keep', description: `Keep "${term}" — appropriate if story stays in original education system` },
             { label: 'Add brief explanation', value: 'footnote', description: `Keep English + add local equivalent in brackets on first mention (e.g. "${term} (local equivalent)"), then just "${term}" afterwards` },
             { label: 'Use local equivalent', value: 'adapt', description: `Replace with nearest local equivalent` },
+            { label: 'Not an education term — just a regular word', value: 'false_positive', description: `This is a normal use of the word "${term}" (e.g. "act" as a verb, not the test)` },
           ],
           defaultOption: 'keep',
         })
@@ -206,6 +209,7 @@ function keywordScan(text: string, languages: string[]): Finding[] {
             { label: 'Keep original', value: 'keep', description: `Keep "${term}" in English with brief ${langRef} explanation` },
             { label: 'Adapt to local equivalent', value: 'adapt', description: `Replace with nearest ${langRef} equivalent (may change meaning)` },
             { label: 'Keep with inline bracket', value: 'footnote', description: `Keep English + add local equivalent in brackets on first mention (e.g. "${term} (local equivalent)"), then just "${term}" afterwards` },
+            { label: 'Not a US term — just a regular word', value: 'false_positive', description: `This is a normal use of the word "${term}" (e.g. "target" as a verb, not the store)` },
           ],
           defaultOption: 'keep',
         })
@@ -228,6 +232,7 @@ function keywordScan(text: string, languages: string[]): Finding[] {
             { label: 'Keep original', value: 'keep', description: `Keep "${term}" in English with brief explanation` },
             { label: 'Adapt to local equivalent', value: 'adapt', description: `Replace with nearest ${langRef} equivalent` },
             { label: 'Keep with inline bracket', value: 'footnote', description: `Keep English + add local equivalent in brackets on first mention (e.g. "${term} (local equivalent)"), then just "${term}" afterwards` },
+            { label: 'Not a UK term — just a regular word', value: 'false_positive', description: `This is a normal use of the word "${term}" (e.g. "prime" as an adjective, not the office)` },
           ],
           defaultOption: 'keep',
         })

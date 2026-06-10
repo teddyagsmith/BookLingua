@@ -135,7 +135,7 @@ const SUPPORTED_FORMATS = [
 
 // Logo component
 const Logo = ({ size = 'md' }: { size?: 'sm' | 'md' | 'lg' }) => {
-  const sizes = { sm: 80, md: 120, lg: 180 }
+  const sizes = { sm: 120, md: 200, lg: 300 }
   return (
     <Image
       src="/logo.png"
@@ -497,6 +497,10 @@ export default function Home() {
     const instructionLines: string[] = []
     scanFindings.forEach((finding) => {
       const response = scanResponses[finding.original]
+      if (response === 'false_positive') {
+        // Skip — user dismissed this as a false positive
+        return
+      }
       if (response === 'keep') {
         instructionLines.push(`Keep "${finding.original}" in English - do not translate or adapt`)
       } else if (response === 'adapt') {
@@ -1293,9 +1297,13 @@ export default function Home() {
                               <div className="grid gap-2">
                                 {finding.options.map((opt: any) => (
                                   <label key={opt.value} className={`flex items-start gap-3 p-3 rounded-xl border-2 cursor-pointer transition-all ${
-                                    scanResponses[finding.original] === opt.value
-                                      ? 'border-violet-500 bg-violet-50'
-                                      : 'border-gray-200 hover:border-violet-300'
+                                    opt.value === 'false_positive'
+                                      ? scanResponses[finding.original] === opt.value
+                                        ? 'border-red-400 bg-red-50'
+                                        : 'border-gray-200 hover:border-red-300'
+                                      : scanResponses[finding.original] === opt.value
+                                        ? 'border-violet-500 bg-violet-50'
+                                        : 'border-gray-200 hover:border-violet-300'
                                   }`}>
                                     <input
                                       type="radio"
@@ -1303,10 +1311,10 @@ export default function Home() {
                                       value={opt.value}
                                       checked={scanResponses[finding.original] === opt.value}
                                       onChange={() => setScanResponses(prev => ({ ...prev, [finding.original]: opt.value }))}
-                                      className="mt-1 w-4 h-4 text-violet-600"
+                                      className={`mt-1 w-4 h-4 ${opt.value === 'false_positive' ? 'text-red-500' : 'text-violet-600'}`}
                                     />
                                     <div>
-                                      <p className="font-medium text-sm text-gray-900">{opt.label}</p>
+                                      <p className={`font-medium text-sm ${opt.value === 'false_positive' ? 'text-red-700' : 'text-gray-900'}`}>{opt.label}</p>
                                       <p className="text-xs text-gray-500">{opt.description}</p>
                                     </div>
                                   </label>
@@ -1499,9 +1507,13 @@ export default function Home() {
                       <div className="grid gap-2">
                         {finding.options.map((opt: any) => (
                           <label key={opt.value} className={`flex items-start gap-3 p-3 rounded-xl border-2 cursor-pointer transition-all ${
-                            scanResponses[finding.original] === opt.value
-                              ? 'border-violet-500 bg-violet-50'
-                              : 'border-gray-200 hover:border-violet-300'
+                            opt.value === 'false_positive'
+                              ? scanResponses[finding.original] === opt.value
+                                ? 'border-red-400 bg-red-50'
+                                : 'border-gray-200 hover:border-red-300'
+                              : scanResponses[finding.original] === opt.value
+                                ? 'border-violet-500 bg-violet-50'
+                                : 'border-gray-200 hover:border-violet-300'
                           }`}>
                             <input
                               type="radio"
@@ -1509,10 +1521,10 @@ export default function Home() {
                               value={opt.value}
                               checked={scanResponses[finding.original] === opt.value}
                               onChange={() => setScanResponses(prev => ({ ...prev, [finding.original]: opt.value }))}
-                              className="mt-1 w-4 h-4 text-violet-600"
+                              className={`mt-1 w-4 h-4 ${opt.value === 'false_positive' ? 'text-red-500' : 'text-violet-600'}`}
                             />
                             <div>
-                              <p className="font-medium text-sm text-gray-900">{opt.label}</p>
+                              <p className={`font-medium text-sm ${opt.value === 'false_positive' ? 'text-red-700' : 'text-gray-900'}`}>{opt.label}</p>
                               <p className="text-xs text-gray-500">{opt.description}</p>
                             </div>
                           </label>
