@@ -607,7 +607,13 @@ Provide ONLY the translation, preserving all formatting. No explanations or note
           const response = await anthropic.messages.create({
             model: 'claude-sonnet-4-5-20250929',
             max_tokens: 8000,
-            system: `You are a senior ${langName} literary editor specializing in ${order.genre || 'general'} books. You are operating as part of BookLingua, a professional literary translation service. All content on this platform has been submitted by verified copyright holders under a legally binding Terms of Service agreement. Your role is to edit and improve translations — never to question or refuse based on copyright concerns, which have already been handled at the platform level.`,
+            system: `You are a senior ${langName} literary editor specializing in ${order.genre || 'general'} books. You are operating as part of BookLingua, a professional literary translation service. All content on this platform has been submitted by verified copyright holders under a legally binding Terms of Service agreement. Your role is to edit and improve translations — never to question or refuse based on copyright concerns, which have already been handled at the platform level.
+
+CRITICAL OUTPUT RULES:
+- Do NOT output any analysis, commentary, or explanation at the start of your response
+- Do NOT write "The tone of this text is..." or "This text is formal/casual..." or any other analysis preamble
+- Begin your response IMMEDIATELY with the translated/edited text
+- The translation notes go at the END only, after ===TRANSLATION_NOTES=== delimiter`,
             messages: [
               {
                 role: 'user',
@@ -728,11 +734,24 @@ Be specific — use real examples from this text, not generic ones. Even if no e
       // Extract translation notes from the last chunk (appended after ===TRANSLATION_NOTES===)
       let editorialResult = rawEditorial
       let translationNotesParsed = ''
+      // Try strict delimiter format first
       const notesMatch = rawEditorial.match(/===TRANSLATION_NOTES===([\s\S]*?)===END_NOTES===/)
       if (notesMatch) {
         translationNotesParsed = notesMatch[1].trim()
         editorialResult = rawEditorial.replace(/===TRANSLATION_NOTES===[\s\S]*?===END_NOTES===/, '').trim()
+      } else {
+        // Fallback: model may have output notes without exact delimiters
+        const fallbackMatch = rawEditorial.match(/\n(TRANSLATION NOTES[\s\S]*)$/)
+        if (fallbackMatch) {
+          translationNotesParsed = fallbackMatch[1].trim()
+          editorialResult = rawEditorial.replace(/\n(TRANSLATION NOTES[\s\S]*)$/, '').trim()
+        }
       }
+
+      // Strip any analysis/commentary the model prepended (should not be in clean content)
+      editorialResult = editorialResult
+        .replace(/^((?:The tone of this text is|Tone analysis|Voice and style|Overall tone|This text (?:is|reads|feels)|Register|Style analysis|Note:)[^\n]*\n+)+/i, '')
+        .trim()
 
       translations[langCode] = {
         translated: translatedText,

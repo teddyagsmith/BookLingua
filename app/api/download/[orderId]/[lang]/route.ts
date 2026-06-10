@@ -52,8 +52,8 @@ function isHeading(line: string): boolean {
   const t = line.trim()
   return (
     /^#{1,3}\s/.test(t) ||  // Markdown # headings
-    /^(chapter|chapitre|capítulo|kapitel|capitolo)\s+\d+/i.test(t) ||
-    /^(prologue|epilogue|introduction|conclusion|foreword|preface|prólogo|épilogue|einleitung|schluss)/i.test(t) ||
+    /^(chapter|chapitre|capítulo|kapitel|capitolo|capitulo)\s+\d+/i.test(t) ||
+    /^(prologue|epilogue|introduction|conclusion|foreword|preface|préface|préambule|postface|avertissement|prólogo|epílogo|introducción|conclusión|vorwort|nachwort|vorrede|einleitung|schluss|prefazione|postfazione|introduzione|prefácio|posfácio)/i.test(t) ||
     (t.length < 60 && t.length > 3 && t === t.toUpperCase()) ||
     /^\*{3}/.test(t)
   )
@@ -140,15 +140,53 @@ function buildReviewDocx(
   // Build review summary section
   const reviewSummaryParas: Paragraph[] = []
 
+  // ─── Instructions section ──────────────────────────────────────────────
+  reviewSummaryParas.push(
+    new Paragraph({
+      children: [new TextRun({ text: '📖 How to Use This Document', bold: true, color: '111827', size: 22 })],
+    }),
+    new Paragraph({
+      children: [new TextRun({
+        text: 'This is your Editorial Review copy. It shows every change our AI made during the second-pass editorial review.',
+        color: '374151', size: 20,
+      })],
+      spacing: { after: 60 },
+    }),
+    new Paragraph({
+      children: [new TextRun({
+        text: 'Yellow highlighted text = the original first-pass translation. Clean text after it = the editorially improved version. Review these changes, then download the Final version for publishing.',
+        color: '374151', size: 20,
+      })],
+      spacing: { after: 80 },
+    }),
+    new Paragraph({
+      children: [new TextRun({ text: 'What to check:', bold: true, color: '374151', size: 20 })],
+    }),
+    ...[
+      'Character names, places, and brand names are consistent',
+      'Cultural adaptations make sense for your target market',
+      'Tone and voice match your original writing style',
+      'Any yellow-highlighted sections reflect your intended meaning',
+    ].map(item => new Paragraph({
+      children: [
+        new TextRun({ text: '• ', color: '4F46E5', size: 20 }),
+        new TextRun({ text: item, color: '374151', size: 20 }),
+      ],
+      spacing: { after: 40 },
+    })),
+    new Paragraph({ text: '', spacing: { after: 120 } }),
+  )
+
+  // Build review summary section
   if (highlightCount === 0) {
     reviewSummaryParas.push(
       new Paragraph({
-        children: [new TextRun({ text: 'Translation Review: Passed Without Changes', bold: true, color: '166534', size: 24 })],
+        children: [new TextRun({ text: '✅ Editorial Review: No Changes Needed', bold: true, color: '166534', size: 20 })],
       }),
       new Paragraph({
         children: [new TextRun({
-          text: 'Our editorial AI reviewed this translation and found no changes were necessary. The initial translation accurately captured your voice, tone, and meaning — no improvements were needed.',
-          color: '374151',
+          text: 'Our editorial AI reviewed this translation and found no changes were necessary. The initial translation accurately captured your voice, tone, and meaning.',
+          color: '374151', size: 20,
         })],
         spacing: { after: 120 },
       }),
@@ -156,12 +194,12 @@ function buildReviewDocx(
   } else {
     reviewSummaryParas.push(
       new Paragraph({
-        children: [new TextRun({ text: `Translation Review: ${highlightCount} Editorial Improvement${highlightCount !== 1 ? 's' : ''} Made`, bold: true, color: '92400E', size: 24 })],
+        children: [new TextRun({ text: `✏️ Editorial Review: ${highlightCount} Improvement${highlightCount !== 1 ? 's' : ''}`, bold: true, color: '92400E', size: 20 })],
       }),
       new Paragraph({
         children: [new TextRun({
-          text: 'Yellow highlighted text shows the original first-pass translation. The clean text that follows is the editorially improved version ready to publish.',
-          color: '374151',
+          text: 'Yellow highlighted text shows the original first-pass translation. The clean text that follows is the editorially improved version.',
+          color: '374151', size: 20,
         })],
         spacing: { after: 120 },
       }),
@@ -208,12 +246,12 @@ function buildReviewDocx(
       reviewSummaryParas.push(
         new Paragraph({ text: '' }),
         new Paragraph({
-          children: [new TextRun({ text: 'Editorial Translation Report', bold: true, color: '111827', size: 26 })],
+          children: [new TextRun({ text: 'Editorial Translation Report', bold: true, color: '111827', size: 22 })],
         }),
         new Paragraph({
           children: [new TextRun({
             text: 'A detailed account of every key decision made during translation and editorial review.',
-            italics: true, color: '6B7280',
+            italics: true, color: '6B7280', size: 20,
           })],
           spacing: { after: 160 },
         }),
@@ -224,10 +262,7 @@ function buildReviewDocx(
         reviewSummaryParas.push(
           new Paragraph({
             children: [
-              new TextRun({ text: `  ${title}  `, bold: true, color: 'FFFFFF',
-                highlight: undefined, size: 20,
-                // docx lib doesn't support background directly here — use shading via paragraph
-              }),
+              new TextRun({ text: `  ${title}  `, bold: true, color: 'FFFFFF', size: 18 }),
             ],
             shading: { type: ShadingType.SOLID, color, fill: color },
             spacing: { before: 200, after: 100 },
@@ -237,10 +272,10 @@ function buildReviewDocx(
           reviewSummaryParas.push(
             new Paragraph({
               children: [
-                new TextRun({ text: orig, bold: true, color: '111827' }),
+                new TextRun({ text: orig, bold: true, color: '111827', size: 20 }),
                 ...(trans ? [
-                  new TextRun({ text: '   →   ', color: '9CA3AF' }),
-                  new TextRun({ text: trans, bold: true, color }),
+                  new TextRun({ text: '   →   ', color: '9CA3AF', size: 20 }),
+                  new TextRun({ text: trans, bold: true, color, size: 20 }),
                 ] : []),
                 ...(reason ? [new TextRun({ text: `\n${reason}`, italics: true, color: '6B7280', size: 18 })] : []),
               ],
@@ -257,10 +292,10 @@ function buildReviewDocx(
         reviewSummaryParas.push(
           new Paragraph({ text: '' }),
           new Paragraph({
-            children: [new TextRun({ text: 'Key Translation Decisions', bold: true, color: '374151', size: 22 })],
+            children: [new TextRun({ text: 'Key Translation Decisions', bold: true, color: '374151', size: 20 })],
           }),
           new Paragraph({
-            children: [new TextRun({ text: 'How our editors handled important terms, names, and cultural references:', italics: true, color: '6B7280' })],
+            children: [new TextRun({ text: 'How our editors handled important terms, names, and cultural references:', italics: true, color: '6B7280', size: 20 })],
             spacing: { after: 80 },
           }),
         )
@@ -272,10 +307,10 @@ function buildReviewDocx(
           reviewSummaryParas.push(
             new Paragraph({
               children: [
-                new TextRun({ text: orig, bold: true }),
-                new TextRun({ text: '  →  ' }),
-                new TextRun({ text: trans, bold: true, color: '4F46E5' }),
-                new TextRun({ text: reason ? `  — ${reason}` : '', italics: true, color: '6B7280' }),
+                new TextRun({ text: orig, bold: true, size: 20 }),
+                new TextRun({ text: '  →  ', size: 20 }),
+                new TextRun({ text: trans, bold: true, color: '4F46E5', size: 20 }),
+                new TextRun({ text: reason ? `  — ${reason}` : '', italics: true, color: '6B7280', size: 20 }),
               ],
               spacing: { after: 80 },
             })
@@ -288,16 +323,16 @@ function buildReviewDocx(
     reviewSummaryParas.push(
       new Paragraph({ text: '' }),
       new Paragraph({
-        children: [new TextRun({ text: 'Translation Consistency Confirmed', bold: true, color: '374151', size: 22 })],
+        children: [new TextRun({ text: 'Translation Consistency Confirmed', bold: true, color: '374151', size: 20 })],
       }),
       new Paragraph({
-        children: [new TextRun({ text: 'Our editorial review confirmed the following throughout:', italics: true, color: '6B7280' })],
+        children: [new TextRun({ text: 'Our editorial review confirmed the following throughout:', italics: true, color: '6B7280', size: 20 })],
         spacing: { after: 100 },
       }),
       ...DEFAULT_NOTES.map(note => new Paragraph({
         children: [
-          new TextRun({ text: '✓  ', bold: true, color: '4F46E5' }),
-          new TextRun({ text: note, color: '374151' }),
+          new TextRun({ text: '✓  ', bold: true, color: '4F46E5', size: 20 }),
+          new TextRun({ text: note, color: '374151', size: 20 }),
         ],
         spacing: { after: 60 },
       }))
@@ -328,7 +363,7 @@ function buildReviewDocx(
     if (!t) { paragraphs.push(new Paragraph({ text: '' })); continue }
 
     if (isHeading(t)) {
-      paragraphs.push(new Paragraph({ text: t, heading: HeadingLevel.HEADING_1 }))
+      paragraphs.push(new Paragraph({ text: stripMarkdownHeading(t), heading: HeadingLevel.HEADING_1 }))
     } else {
       for (const line of t.split('\n')) {
         if (!line.trim()) continue
@@ -344,6 +379,18 @@ function buildReviewDocx(
 
 function buildFinalDocx(content: string, bookTitle: string, langDisplay: string): Document {
   const clean = stripHighlightMarkers(content)
+    // Remove any stray notes sections that leaked from the editorial pass
+    .replace(/===TRANSLATION_NOTES===[\s\S]*?===END_NOTES===/g, '')
+    // Remove "TRANSLATION NOTES" and all content below it in the same block
+    .replace(/TRANSLATION NOTES[\s\S]*?(?=\n{2,}(?=[A-Z])|$)/g, '')
+    // Remove ⚠️ Content Modifications blocks
+    .replace(/⚠️ Content Modifications[\s\S]*?(?=\n{2,}(?=[A-Z])|$)/g, '')
+    // Remove specific category header blocks
+    .replace(/Key Terminology Choices\s*\n[\s\S]*?(?=\n{2,}(?=[A-Z])|$)/g, '')
+    .replace(/Cultural Adaptations\s*\n[\s\S]*?(?=\n{2,}(?=[A-Z])|$)/g, '')
+    // Remove any analysis/intro text at the start (model commentary before actual translation)
+    .replace(/^((?:The tone|Tone analysis|Voice and style|Overall tone|Register|Style analysis|This text|Note:)[^\n]*\n+)+/i, '')
+    .trim()
   const blocks = clean.split(/\n{2,}/)
   const paragraphs: Paragraph[] = [
     new Paragraph({ text: bookTitle, heading: HeadingLevel.TITLE }),
