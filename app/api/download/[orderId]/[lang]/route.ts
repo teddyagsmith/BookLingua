@@ -53,8 +53,11 @@ function isHeading(line: string): boolean {
   return (
     /^#{1,3}\s/.test(t) ||  // Markdown # headings
     /^(chapter|chapitre|capítulo|kapitel|capitolo|capitulo)\s+\d+/i.test(t) ||
-    /^(prologue|epilogue|introduction|conclusion|foreword|preface|préface|préambule|postface|avertissement|prólogo|epílogo|introducción|conclusión|vorwort|nachwort|vorrede|einleitung|schluss|prefazione|postfazione|introduzione|prefácio|posfácio)/i.test(t) ||
-    (t.length < 60 && t.length > 3 && t === t.toUpperCase()) ||
+    /^(prologue|epilogue|introduction|conclusion|foreword|preface|préface|préambule|postface|avertissement|prólogo|epílogo|introducción|conclusión|vorwort|nachwort|vorrede|einleitung|schluss|prefazione|postfazione|introduzione|prefácio|posfácio)\b/i.test(t) ||
+    // All-caps: only match very short lines (4–20 chars) to avoid false-positives on
+    // French/German/Spanish content where longer all-caps phrases are common in body text.
+    // Also require no lowercase letters at all (i.e. exclude lines with accented lowercase).
+    (t.length >= 4 && t.length <= 20 && t === t.toUpperCase() && /[A-Z]/.test(t) && !/[a-z]/.test(t)) ||
     /^\*{3}/.test(t)
   )
 }
@@ -95,6 +98,10 @@ function parseInlineRuns(text: string): TextRun[] {
   return runs
 }
 
+// Body text size (20 half-points = 10pt). Explicit size prevents TextRuns inheriting
+// a much larger document default and causing the "text suddenly becomes massive" bug.
+const BODY_SIZE = 20
+
 function parseHighlightedRuns(text: string): TextRun[] {
   const runs: TextRun[] = []
   const pattern = /\[\[ORIGINAL:\s*(.*?)\]\]/g
@@ -104,7 +111,7 @@ function parseHighlightedRuns(text: string): TextRun[] {
   while ((match = pattern.exec(text)) !== null) {
     if (match.index > lastIndex) {
       const before = text.slice(lastIndex, match.index)
-      if (before) runs.push(new TextRun({ text: before }))
+      if (before) runs.push(new TextRun({ text: before, size: BODY_SIZE }))
     }
     const original = match[1].trim()
     if (original) {
@@ -112,6 +119,7 @@ function parseHighlightedRuns(text: string): TextRun[] {
         text: original + ' ',
         shading: { type: ShadingType.SOLID, fill: 'FFFF00', color: 'FFFF00' },
         color: '000000',
+        size: BODY_SIZE,
       }))
     }
     lastIndex = pattern.lastIndex
@@ -119,10 +127,10 @@ function parseHighlightedRuns(text: string): TextRun[] {
 
   if (lastIndex < text.length) {
     const rest = text.slice(lastIndex)
-    if (rest.trim()) runs.push(new TextRun({ text: rest }))
+    if (rest.trim()) runs.push(new TextRun({ text: rest, size: BODY_SIZE }))
   }
 
-  if (runs.length === 0 && text.trim()) runs.push(new TextRun({ text }))
+  if (runs.length === 0 && text.trim()) runs.push(new TextRun({ text, size: BODY_SIZE }))
   return runs
 }
 
@@ -527,7 +535,11 @@ async function buildFormattedDocxFromOriginal(
       // Skip empty / formatting-only paragraphs
       if (!paraText) return match
 
-      const translated = translatedParas[paraIndex] ?? paraText
+      // If we've exhausted translated paragraphs, leave this paragraph empty rather than
+      // falling back to the original English text (which was the cause of English leaking
+      // into the final document for front matter, headers, and overflow paragraphs).
+      if (paraIndex >= translatedParas.length) return match.replace(WT_RE, (_, attrs) => `<w:t${attrs ?? ''}></w:t>`)
+      const translated = translatedParas[paraIndex]
       paraIndex++
 
       // Replace: put translated text in first <w:t>, empty the rest
