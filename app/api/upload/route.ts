@@ -21,17 +21,31 @@ async function extractEpubText(buffer: Buffer): Promise<string> {
       epub.on('end', async () => {
         try {
           const chapters: string[] = []
+          const seenContent = new Set<string>() // Deduplication
           const flowItems = epub.flow || []
 
           for (const item of flowItems) {
             if (!item.id) continue
+            // Skip non-text items (CSS, images, fonts, TOC, etc.)
+            const mediaType = item.mediaType || item['media-type'] || ''
+            if (mediaType && !mediaType.includes('html') && !mediaType.includes('xhtml') && !mediaType.includes('xml')) {
+              continue
+            }
             const chapterId = item.id as string
             await new Promise<void>((res) => {
               epub.getChapter(chapterId, (err: Error, text?: string) => {
                 if (!err && text) {
+                  // Remove script and style content before stripping tags
+                  const noScripts = text
+                    .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, ' ')
+                    .replace(/<style\b[^<]*(?:(?!<\/style>)<[^<]*)*<\/style>/gi, ' ')
                   // Strip HTML tags
-                  const stripped = text.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim()
-                  if (stripped.length > 0) chapters.push(stripped)
+                  const stripped = noScripts.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim()
+                  // Deduplicate: skip if we've seen this exact content before
+                  if (stripped.length > 0 && !seenContent.has(stripped)) {
+                    seenContent.add(stripped)
+                    chapters.push(stripped)
+                  }
                 }
                 res()
               })
