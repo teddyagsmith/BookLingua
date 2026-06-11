@@ -728,30 +728,48 @@ Be specific — use real examples from this text, not generic ones. Even if no e
         .select('chunk_index, content')
         .eq('order_id', orderId).eq('lang_code', langCode).eq('pass', 'opus')
         .order('chunk_index')
-      const assembledOpus = opusRows?.map(r => r.content).filter(Boolean) || editorialChunks
-      const rawEditorial = assembledOpus.join('\n\n')
+      const rawChunks = opusRows?.map(r => r.content).filter(Boolean) || editorialChunks
 
-      // Extract translation notes from the last chunk (appended after ===TRANSLATION_NOTES===)
-      let editorialResult = rawEditorial
-      let translationNotesParsed = ''
-      // Try strict delimiter format first
-      const notesMatch = rawEditorial.match(/===TRANSLATION_NOTES===([\s\S]*?)===END_NOTES===/)
-      if (notesMatch) {
-        translationNotesParsed = notesMatch[1].trim()
-        editorialResult = rawEditorial.replace(/===TRANSLATION_NOTES===[\s\S]*?===END_NOTES===/, '').trim()
-      } else {
-        // Fallback: model may have output notes without exact delimiters
-        const fallbackMatch = rawEditorial.match(/\n(TRANSLATION NOTES[\s\S]*)$/)
-        if (fallbackMatch) {
-          translationNotesParsed = fallbackMatch[1].trim()
-          editorialResult = rawEditorial.replace(/\n(TRANSLATION NOTES[\s\S]*)$/, '').trim()
+      // ── Per-chunk extraction ────────────────────────────────────────────────
+      // Each opus chunk contains: [translated content] followed by optional notes.
+      // Notes may be delimited by ===TRANSLATION_NOTES===...===END_NOTES=== or
+      // may appear as trailing English paragraphs without delimiters.
+      //
+      // CRITICAL: do NOT do notes extraction across the full assembled text.
+      // The first ===TRANSLATION_NOTES=== might appear in chunk 0 while
+      // ===END_NOTES=== only appears in the last chunk — causing the regex to
+      // swallow almost the entire book as "notes".
+      // Instead, extract per-chunk so regexes are always scoped to one chunk.
+      const cleanedChunks: string[] = []
+      const collectedNotes: string[] = []
+
+      for (const chunk of rawChunks) {
+        // 1. Strip any delimited note blocks within this chunk
+        const noteMatches = [...chunk.matchAll(/===TRANSLATION_NOTES===([\s\S]*?)===END_NOTES===/g)]
+        for (const m of noteMatches) collectedNotes.push(m[1].trim())
+        let chunkClean = chunk.replace(/===TRANSLATION_NOTES===[\s\S]*?===END_NOTES===/g, '').trim()
+
+        // 2. Strip trailing English-only paragraphs (notes without delimiters)
+        const paras = chunkClean.split(/\n{2,}/)
+        while (paras.length > 0) {
+          const last = paras[paras.length - 1].trim()
+          const hasFrenchAccents = /[àâäéèêëîïôùûüçœæ]/i.test(last)
+          const looksEnglish = !hasFrenchAccents && last.length > 20 && /[a-z]/.test(last)
+          const isNotePhrase = /^(note[:\s]|the (tone|style|register|voice|text|translation|author)|this (translation|text|chapter)|throughout|overall|i (have|used|maintained|kept|preserved)|in (this|the) (translation|chapter|section))/i.test(last)
+          if (looksEnglish || isNotePhrase) { paras.pop() } else { break }
         }
+        chunkClean = paras.join('\n\n').trim()
+
+        // 3. Strip analysis preamble from the start of each chunk
+        chunkClean = chunkClean
+          .replace(/^((?:The tone of this text is|Tone analysis|Voice and style|Overall tone|This text (?:is|reads|feels)|Register|Style analysis|Note:)[^\n]*\n+)+/i, '')
+          .trim()
+
+        if (chunkClean) cleanedChunks.push(chunkClean)
       }
 
-      // Strip any analysis/commentary the model prepended (should not be in clean content)
-      editorialResult = editorialResult
-        .replace(/^((?:The tone of this text is|Tone analysis|Voice and style|Overall tone|This text (?:is|reads|feels)|Register|Style analysis|Note:)[^\n]*\n+)+/i, '')
-        .trim()
+      let editorialResult = cleanedChunks.join('\n\n')
+      const translationNotesParsed = collectedNotes.join('\n\n')
 
       translations[langCode] = {
         translated: translatedText,
