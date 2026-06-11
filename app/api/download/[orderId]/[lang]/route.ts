@@ -98,43 +98,34 @@ function parseInlineRuns(text: string): TextRun[] {
   return runs
 }
 
-// Body text size (20 half-points = 10pt). Explicit size prevents TextRuns inheriting
-// a much larger document default and causing the "text suddenly becomes massive" bug.
-const BODY_SIZE = 20
-
 function parseHighlightedRuns(text: string): TextRun[] {
   const runs: TextRun[] = []
-  const pattern = /\[\[ORIGINAL:\s*(.*?)\]\]/g
+  const pattern = /\[\[ORIGINAL:\s*([^\]]+?)\]\]/g
   let lastIndex = 0
   let match: RegExpExecArray | null
 
   while ((match = pattern.exec(text)) !== null) {
     if (match.index > lastIndex) {
       const before = text.slice(lastIndex, match.index)
-      if (before) runs.push(new TextRun({ text: before, size: BODY_SIZE }))
+      if (before) {
+        // parse inline formatting within the regular text too
+        runs.push(...parseInlineRuns(before))
+      }
     }
-    const original = match[1].trim()
-    if (original) {
-      runs.push(new TextRun({
-        text: original + ' ',
-        shading: { type: ShadingType.SOLID, fill: 'FFFF00', color: 'FFFF00' },
-        color: '000000',
-        size: BODY_SIZE,
-      }))
-    }
+    runs.push(new TextRun({ text: match[1], shading: { type: ShadingType.SOLID, color: 'FFEB3B', fill: 'FFEB3B' } }))
     lastIndex = pattern.lastIndex
   }
 
   if (lastIndex < text.length) {
     const rest = text.slice(lastIndex)
-    if (rest.trim()) runs.push(new TextRun({ text: rest, size: BODY_SIZE }))
+    if (rest.trim()) runs.push(...parseInlineRuns(rest))
   }
 
-  if (runs.length === 0 && text.trim()) runs.push(new TextRun({ text, size: BODY_SIZE }))
+  if (runs.length === 0 && text.trim()) runs.push(new TextRun({ text }))
   return runs
 }
 
-// ─── DOCX: Review version (yellow highlights) ───────────────────────────────
+// ─── DOCX: Review copy (with yellow highlights) ────────────────────────────
 
 function buildReviewDocx(
   content: string,
@@ -497,25 +488,26 @@ function escapeXml(str: string): string {
 }
 
 async function buildFormattedDocxFromOriginal(
-  originalBase64: string,
+  originalContent: string,
   translatedContent: string,
 ): Promise<Buffer | null> {
   try {
-    const clean = stripHighlightMarkers(translatedContent)
-    // Split into non-empty paragraphs (handle both \n\n and single \n separators)
-    const translatedParas = clean.split(/\n{2,}/).flatMap(block =>
-      block.split('\n').map(l => l.trim().replace(/^#{1,3}\s+/, '')).filter(Boolean)
-    )
+    const zip = await JSZip.loadAsync(Buffer.from(originalContent, 'base64'))
+    const docXml = await zip.file('word/document.xml')?.async('text')
+    if (!docXml) return null
 
-    const buffer = Buffer.from(originalBase64, 'base64')
-    const zip = await JSZip.loadAsync(buffer)
+    // Parse translated paragraphs (split by double newline, same as buildReviewDocx)
+    const translatedParas = translatedContent
+      .split(/\n{2,}/)
+      .map(block => block.trim())
+      .filter(Boolean)
+      .flatMap(block => {
+        if (isHeading(block)) return [stripMarkdownHeading(block)]
+        return block.split('\n').map(l => l.trim()).filter(Boolean)
+      })
 
-    const docXmlFile = zip.file('word/document.xml')
-    if (!docXmlFile) return null
-    const docXml = await docXmlFile.async('string')
-
-    // Helper: extract inner text from a <w:t.../> element safely
-    const getWtText = (wtTag: string): string => {
+    // Helper: extract text from <w:t> tags
+    function getWtText(wtTag: string): string {
       const start = wtTag.indexOf('>') + 1
       const end = wtTag.lastIndexOf('</')
       return start < end ? wtTag.slice(start, end) : ''
@@ -615,21 +607,34 @@ export async function GET(
 
     // ── Review version: always DOCX with yellow highlights + review summary ──
     if (type === 'review') {
-      // Fetch translation notes from last opus chunk if available
+      // Fetch translation notes from the dedicated `type: 'notes'` file (preferred)
+      // Fallback to last-chunk extraction for legacy orders
       let translationNotes: string | undefined
-      const { data: notesChunk } = await supabaseAdmin
-        .from('translation_chunks')
+      const { data: notesFile } = await supabaseAdmin
+        .from('files')
         .select('content')
         .eq('order_id', orderId)
-        .eq('lang_code', lang)
-        .eq('pass', 'opus')
-        .order('chunk_index', { ascending: false })
+        .eq('language', lang)
+        .eq('type', 'notes')
+        .order('created_at', { ascending: false })
         .limit(1)
-        .single()
-
-      if (notesChunk?.content) {
-        const notesMatch = notesChunk.content.match(/===TRANSLATION_NOTES===([\s\S]*?)===END_NOTES===/)
-        if (notesMatch) translationNotes = notesMatch[1].trim()
+        .maybeSingle()
+      if (notesFile?.content) {
+        translationNotes = notesFile.content
+      } else {
+        const { data: notesChunk } = await supabaseAdmin
+          .from('translation_chunks')
+          .select('content')
+          .eq('order_id', orderId)
+          .eq('lang_code', lang)
+          .eq('pass', 'opus')
+          .order('chunk_index', { ascending: false })
+          .limit(1)
+          .single()
+        if (notesChunk?.content) {
+          const notesMatch = notesChunk.content.match(/===TRANSLATION_NOTES===([\s\S]*?)===END_NOTES===/)
+          if (notesMatch) translationNotes = notesMatch[1].trim()
+        }
       }
 
       const doc = buildReviewDocx(file.content, order.book_title, langDisplay, translationNotes)
@@ -673,25 +678,16 @@ export async function GET(
       .select('content')
       .eq('order_id', orderId)
       .eq('type', 'original')
-      .single()
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle()
 
     if (originalFile?.content) {
-      try {
-        const raw = originalFile.content as string
-        if (raw.startsWith('{"text":')) {
-          const parsed = JSON.parse(raw)
-          if (parsed.binary) {
-            buffer = await buildFormattedDocxFromOriginal(parsed.binary, file.content)
-          }
-        }
-      } catch {
-        // Fall through to rebuilt DOCX
-      }
+      buffer = await buildFormattedDocxFromOriginal(originalFile.content, file.content)
     }
 
     if (!buffer) {
-      const doc = buildFinalDocx(file.content, order.book_title, langDisplay)
-      buffer = await Packer.toBuffer(doc)
+      buffer = await Packer.toBuffer(buildFinalDocx(file.content, order.book_title, langDisplay))
     }
 
     return new NextResponse(new Uint8Array(buffer), {
@@ -701,8 +697,8 @@ export async function GET(
       },
     })
 
-  } catch (error) {
-    console.error('Download error:', error)
+  } catch (err) {
+    console.error('[BookLingua download] error:', err)
     return NextResponse.json({ error: 'Download failed' }, { status: 500 })
   }
 }

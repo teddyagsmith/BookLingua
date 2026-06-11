@@ -786,6 +786,10 @@ Be specific — use real examples from this text, not generic ones. Even if no e
         await supabaseAdmin.from('files')
           .delete()
           .eq('order_id', orderId).eq('type', 'translated').eq('language', langCode)
+        await supabaseAdmin.from('files')
+          .delete()
+          .eq('order_id', orderId).eq('type', 'notes').eq('language', langCode)
+        // Insert the clean translated content (no notes)
         await supabaseAdmin.from('files').insert({
           order_id: orderId,
           type: 'translated',
@@ -793,6 +797,15 @@ Be specific — use real examples from this text, not generic ones. Even if no e
           content: editorialResult,
           original_content: translatedText,
         })
+        // Insert the translation notes separately (for the review DOCX only)
+        if (translationNotesParsed) {
+          await supabaseAdmin.from('files').insert({
+            order_id: orderId,
+            type: 'notes',
+            language: langCode,
+            content: translationNotesParsed,
+          })
+        }
       })
     }
 
