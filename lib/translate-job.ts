@@ -765,6 +765,10 @@ Be specific — use real examples from this text, not generic ones. Even if no e
           .replace(/^((?:The tone of this text is|Tone analysis|Voice and style|Overall tone|This text (?:is|reads|feels)|Register|Style analysis|Note:)[^\n]*\n+)+/i, '')
           .trim()
 
+        // 4. Strip [[ORIGINAL: ...]] highlight markers — the editorial pass uses these
+        // to show what was changed, but the final document should only show the improved text
+        chunkClean = chunkClean.replace(/\[\[ORIGINAL:[^\]]*\]\]/g, '').trim()
+
         if (chunkClean) cleanedChunks.push(chunkClean)
       }
 
