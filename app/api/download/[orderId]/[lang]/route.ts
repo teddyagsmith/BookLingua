@@ -496,8 +496,11 @@ async function buildFormattedDocxFromOriginal(
     const docXml = await zip.file('word/document.xml')?.async('text')
     if (!docXml) return null
 
+    // Strip editorial highlight markers from final document — keep only improved text
+    const cleanTranslated = stripHighlightMarkers(translatedContent)
+
     // Parse translated paragraphs (split by double newline, same as buildReviewDocx)
-    const translatedParas = translatedContent
+    const translatedParas = cleanTranslated
       .split(/\n{2,}/)
       .map(block => block.trim())
       .filter(Boolean)
