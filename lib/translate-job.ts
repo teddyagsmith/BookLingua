@@ -645,7 +645,11 @@ EDITING INSTRUCTIONS:
 4. Ensure consistency in terminology throughout
 5. Maintain the author's voice and tone
 6. NEVER soften, sanitize, or replace strong language — if the translation used the correct erotic or profane register, preserve it exactly. Only change strong language if the wrong register was used (e.g. a clinical term where an erotic one was needed, or vice versa)
-7. CULTURAL ADAPTATION REVIEW: Scan for [[ADAPTED:original term]] markers. These indicate the translator replaced a source-culture concept with a target-culture equivalent that is NOT functionally identical (different rules, different system). For each one:
+7. DUPLICATE & UNTRANSLATED TEXT REVIEW:
+   - Scan for any text that appears more than once in the translation (duplicate headings, paragraphs, or repeated content). If the same heading appears twice (e.g., "Chapter 2" followed by text then another "Chapter 2" heading), remove the duplicate.
+   - Check for any English text that remains in the translation when it should be translated. If the original English heading appears alongside its translated version (e.g., "Chapter 2" followed by "Kapital Zwei"), remove the English original and keep only the translated version.
+   - Check for mixed English/target language text — if a paragraph contains both languages, translate the English portion or flag it if it needs correction.
+8. CULTURAL ADAPTATION REVIEW: Scan for [[ADAPTED:original term]] markers. These indicate the translator replaced a source-culture concept with a target-culture equivalent that is NOT functionally identical (different rules, different system). For each one:
    a. Verify the adapted equivalent makes sense for ${langName} readers
    b. Convert the marker to the standard highlight format: \`[[ORIGINAL: original English term]]adapted equivalent\` so it appears yellow-highlighted in the Review DOCX
    c. If the adaptation changes the meaning significantly (e.g., tax rules, legal systems differ materially), add it to the ⚠️ Content Modifications section in Translation Notes

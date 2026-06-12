@@ -552,6 +552,7 @@ async function buildFormattedDocxFromOriginal(
 
     zip.file('word/document.xml', newXml)
     const result = await zip.generateAsync({ type: 'nodebuffer' })
+    console.log(`[BookLingua] XML DOCX replacement succeeded: ${paraIndex} paragraphs mapped, ${translatedParas.length} translated paras`)
     return result
   } catch (err) {
     console.error('[BookLingua] XML DOCX replacement failed:', err)
@@ -686,7 +687,16 @@ export async function GET(
       .maybeSingle()
 
     if (originalFile?.content) {
-      buffer = await buildFormattedDocxFromOriginal(originalFile.content, file.content)
+      // DOCX files store content as JSON: { text: "...", binary: "base64..." }
+      // Extract the binary for XML replacement (legacy TXT files use content as-is)
+      let originalBinary = originalFile.content
+      try {
+        const parsed = JSON.parse(originalFile.content)
+        if (parsed.binary) originalBinary = parsed.binary
+      } catch {
+        // Not JSON — use as-is
+      }
+      buffer = await buildFormattedDocxFromOriginal(originalBinary, file.content)
     }
 
     if (!buffer) {
