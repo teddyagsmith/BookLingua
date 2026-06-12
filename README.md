@@ -189,3 +189,4 @@ From Inngest dashboard, you can replay the event to re-run the job.
 
 Questions? Email support@booklingua.com
 # Thu Apr 30 13:19:21 WEST 2026
+# Trigger deploy Fri Jun 12 20:11:27 WEST 2026
