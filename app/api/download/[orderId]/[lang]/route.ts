@@ -510,7 +510,7 @@ async function buildFormattedDocxFromOriginal(
       })
 
     // Helper: extract text from <w:t> tags
-    function getWtText(wtTag: string): string {
+    const getWtText = (wtTag: string): string => {
       const start = wtTag.indexOf('>') + 1
       const end = wtTag.lastIndexOf('</')
       return start < end ? wtTag.slice(start, end) : ''
