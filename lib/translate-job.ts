@@ -745,11 +745,12 @@ Be specific — use real examples from this text, not generic ones. Even if no e
 
       for (const chunk of rawChunks) {
         // 1. Strip any delimited note blocks within this chunk
-        const noteMatches = [...chunk.matchAll(/===TRANSLATION_NOTES===([\s\S]*?)===END_NOTES===/g)]
+        // Handle both cases: with ===END_NOTES=== and without (notes run to end of chunk)
+        const noteMatches = [...chunk.matchAll(/===TRANSLATION_NOTES===([\s\S]*?)(?:===END_NOTES===|$)/g)]
         for (const m of noteMatches) collectedNotes.push(m[1].trim())
-        let chunkClean = chunk.replace(/===TRANSLATION_NOTES===[\s\S]*?===END_NOTES===/g, '').trim()
+        let chunkClean = chunk.replace(/===TRANSLATION_NOTES===[\s\S]*?(?:===END_NOTES===|$)/g, '').trim()
 
-        // 2. Strip trailing English-only paragraphs (notes without delimiters)
+        // 2. Strip trailing editorial summary paragraphs (notes without delimiters)
         const paras = chunkClean.split(/\n{2,}/)
         while (paras.length > 0) {
           const last = paras[paras.length - 1].trim()
