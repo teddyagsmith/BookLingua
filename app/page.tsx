@@ -444,8 +444,8 @@ export default function Home() {
         const res = await fetch('/api/upload', { method: 'POST', body: formData })
         if (!res.ok) throw new Error('Upload failed')
         const result = await res.json()
-        // Use server-calculated word count for txt/docx (more accurate)
-        if (result.wordCount && (ext === '.txt' || ext === '.docx')) {
+        // Use server-calculated word count for all formats (backend extraction is more accurate)
+        if (result.wordCount) {
           setWordCount(result.wordCount)
           setSelectedTier(determineTier(result.wordCount))
         }
