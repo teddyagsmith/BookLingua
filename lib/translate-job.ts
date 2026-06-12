@@ -899,13 +899,47 @@ Be specific — use real examples from this text, not generic ones. Even if no e
         }
       }
 
+      // Fetch original file for attachment
+      const { data: originalFile } = await supabaseAdmin
+        .from('files')
+        .select('content, filename')
+        .eq('order_id', orderId).eq('type', 'original')
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle()
+
+      let originalAttachment: Array<{ filename: string; content: string; content_type: string }> = []
+      if (originalFile?.content) {
+        // DOCX files store JSON { text: "...", binary: "base64..." }
+        let binaryContent = originalFile.content
+        let filename = originalFile.filename || 'original.docx'
+        try {
+          const parsed = JSON.parse(originalFile.content)
+          if (parsed.binary) {
+            binaryContent = parsed.binary
+            filename = originalFile.filename || parsed.filename || 'original.docx'
+          }
+        } catch {
+          // Not JSON — use as-is
+        }
+        // Ensure filename has extension
+        if (!filename.includes('.')) {
+          filename = order.file_name || 'original.docx'
+        }
+        const ext = filename.split('.').pop()?.toLowerCase() || 'docx'
+        const contentType = ext === 'epub' ? 'application/epub+zip' : ext === 'txt' ? 'text/plain' : 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+        originalAttachment = [{ filename, content: binaryContent, content_type: contentType }]
+      }
+
       await resend.emails.send({
         from: 'BookLingua <orders@booklingua.io>',
-        to: 'hello@booklingua.io',
+        to: 'gilly@myromancereads.com',
+        attachments: originalAttachment,
         subject: `📋 Review needed: ${order.book_title} (${languages.map(l => LANGUAGE_NAMES[l]).join(', ')})`,
         html: `
           <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto;">
             <h2 style="color: #7c3aed;">Translation ready for review</h2>
+            <p style="color: #6b7280;">Original file attached to this email.</p>
             <table style="width:100%; border-collapse:collapse; margin-bottom:16px;">
               <tr><td style="padding:6px 0; color:#6b7280; width:140px;">Book</td><td style="padding:6px 0; font-weight:bold;">${order.book_title}</td></tr>
               <tr><td style="padding:6px 0; color:#6b7280;">Author</td><td style="padding:6px 0;">${order.author_name}</td></tr>
