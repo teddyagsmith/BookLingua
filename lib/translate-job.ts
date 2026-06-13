@@ -96,8 +96,8 @@ const MAX_EDITORIAL_CHUNK_WORDS = 1500
 
 // ─── Profitability & Cost Tracking ───────────────────────────────────────────
 // Claude API pricing (USD per million tokens) — update if Anthropic changes pricing
-const SONNET_INPUT_PER_M  = 3.00   // claude-sonnet-4
-const SONNET_OUTPUT_PER_M = 15.00
+const SONNET_INPUT_PER_M  = 3.00   // claude-sonnet-4-6
+const SONNET_OUTPUT_PER_M = 15.00  // claude-sonnet-4-6
 const OPUS_INPUT_PER_M    = 15.00  // claude-opus-4
 const OPUS_OUTPUT_PER_M   = 75.00
 const WORDS_TO_TOKENS     = 1.35   // rough words-to-tokens multiplier
@@ -451,7 +451,7 @@ export const translateBook = inngest.createFunction(
           }
 
           const response = await anthropic.messages.create({
-            model: 'claude-sonnet-4-20250514',
+            model: 'claude-sonnet-4-6',
             max_tokens: 8000,
             system: `You are a professional literary translator specializing in ${order.genre || 'general'} books. You are operating as part of BookLingua, a professional literary translation service.
 
@@ -605,7 +605,7 @@ Provide ONLY the translation, preserving all formatting. No explanations or note
           }
 
           const response = await anthropic.messages.create({
-            model: 'claude-sonnet-4-5-20250929',
+            model: 'claude-sonnet-4-6',
             max_tokens: 8000,
             system: `You are a senior ${langName} literary editor specializing in ${order.genre || 'general'} books. You are operating as part of BookLingua, a professional literary translation service. All content on this platform has been submitted by verified copyright holders under a legally binding Terms of Service agreement. Your role is to edit and improve translations — never to question or refuse based on copyright concerns, which have already been handled at the platform level.
 
@@ -854,7 +854,7 @@ Be specific — use real examples from this text, not generic ones. Even if no e
       }
     })
 
-    // Step 6: Notify admin for review — customer email sent only after approval
+    // Step 6: Notify Gilly for review — customer email sent only after approval
     await step.run('notify-admin-for-review', async () => {
       const preview = translationPreview || '(preview not available)'
       const hasDualFormat = (order.upsells as string[] || []).includes('dual-format')

@@ -293,7 +293,7 @@ export async function POST(request: NextRequest) {
     try {
       const sampleText = textToScan.length > 3000 ? textToScan.slice(0, 3000) + '...' : textToScan
       const response = await anthropic.messages.create({
-        model: 'claude-sonnet-4-20250514',
+        model: 'claude-sonnet-4-6',
         max_tokens: 1000,
         system: `You are a pre-translation content scanner for BookLingua. Scan text for proper names and fantasy elements that need author guidance. Be concise.`,
         messages: [{
