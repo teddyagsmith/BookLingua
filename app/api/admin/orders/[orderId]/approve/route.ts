@@ -51,7 +51,9 @@ export async function POST(
       finalUrl: buildDownloadUrl(orderId, lang, 'final'),
     }))
 
-    // Send customer completion email
+    // NOTE: Customer email is now sent manually by Gilly after review
+    // The automatic customer notification has been disabled per request
+    /*
     await resend.emails.send({
       from: 'BookLingua <orders@booklingua.io>',
       to: order.email,
@@ -95,6 +97,7 @@ export async function POST(
         </div>
       `,
     })
+    */
 
     // Mark order as completed
     await supabaseAdmin
