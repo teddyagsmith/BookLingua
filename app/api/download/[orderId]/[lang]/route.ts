@@ -45,19 +45,26 @@ const LANG_DISPLAY: Record<string, string> = {
 
 function stripHighlightMarkers(text: string): string {
   // Remove [[ORIGINAL: ...]] — keep only the improved text that follows
-  return text.replace(/\[\[ORIGINAL:\s*.*?\]\]/g, '').replace(/[^\S\n]{2,}/g, ' ')
+  // The ORIGINAL text may contain single ] characters (e.g. [citations]),
+  // so we must match ] only when NOT followed by another ] (i.e. not ]])
+  return text.replace(/\[\[ORIGINAL:([^\]]|\](?!\]))*\]\]/g, '').replace(/[^\S\n]{2,}/g, ' ')
 }
 
 function isHeading(line: string): boolean {
   const t = line.trim()
+  const len = t.length
   return (
     /^#{1,3}\s/.test(t) ||  // Markdown # headings
-    /^(chapter|chapitre|capítulo|kapitel|capitolo|capitulo)\s+\d+/i.test(t) ||
-    /^(prologue|epilogue|introduction|conclusion|foreword|preface|préface|préambule|postface|avertissement|prólogo|epílogo|introducción|conclusión|vorwort|nachwort|vorrede|einleitung|schluss|prefazione|postfazione|introduzione|prefácio|posfácio)\b/i.test(t) ||
+    // For chapter headings: only match if line is reasonably short (< 120 chars) to avoid
+    // matching body text that starts with "Capítulo 1" followed by a long paragraph
+    (len < 120 && /^(chapter|chapitre|capítulo|kapitel|capitolo|capitulo)\s+\d+/i.test(t)) ||
+    // For intro/outro words: only match if line is short (< 80 chars) to avoid
+    // matching body text that starts with e.g. "Introducción Cuando me..."
+    (len < 80 && /^(prologue|epilogue|introduction|conclusion|foreword|preface|préface|préambule|postface|avertissement|prólogo|epílogo|introducción|conclusión|vorwort|nachwort|vorrede|einleitung|schluss|prefazione|postfazione|introduzione|prefácio|posfácio)\b/i.test(t)) ||
     // All-caps: only match very short lines (4–20 chars) to avoid false-positives on
     // French/German/Spanish content where longer all-caps phrases are common in body text.
     // Also require no lowercase letters at all (i.e. exclude lines with accented lowercase).
-    (t.length >= 4 && t.length <= 20 && t === t.toUpperCase() && /[A-Z]/.test(t) && !/[a-z]/.test(t)) ||
+    (len >= 4 && len <= 20 && t === t.toUpperCase() && /[A-Z]/.test(t) && !/[a-z]/.test(t)) ||
     /^\*{3}/.test(t)
   )
 }
@@ -139,41 +146,25 @@ function buildReviewDocx(
   // Build review summary section
   const reviewSummaryParas: Paragraph[] = []
 
-  // ─── Instructions section ──────────────────────────────────────────────
+  // ─── Concise Instructions ──────────────────────────────────────────────
   reviewSummaryParas.push(
     new Paragraph({
       children: [new TextRun({ text: '📖 How to Use This Document', bold: true, color: '111827', size: 22 })],
     }),
     new Paragraph({
       children: [new TextRun({
-        text: 'This is your Editorial Review copy. It shows every change our AI made during the second-pass editorial review.',
+        text: 'Yellow highlighted text = original first-pass translation. Clean text after it = editorial improvement.',
         color: '374151', size: 20,
       })],
       spacing: { after: 60 },
     }),
     new Paragraph({
       children: [new TextRun({
-        text: 'Yellow highlighted text = the original first-pass translation. Clean text after it = the editorially improved version. Review these changes, then download the Final version for publishing.',
+        text: 'What to check: character names, cultural adaptations, tone/voice, and that yellow sections reflect your intended meaning.',
         color: '374151', size: 20,
       })],
       spacing: { after: 80 },
     }),
-    new Paragraph({
-      children: [new TextRun({ text: 'What to check:', bold: true, color: '374151', size: 20 })],
-    }),
-    ...[
-      'Character names, places, and brand names are consistent',
-      'Cultural adaptations make sense for your target market',
-      'Tone and voice match your original writing style',
-      'Any yellow-highlighted sections reflect your intended meaning',
-    ].map(item => new Paragraph({
-      children: [
-        new TextRun({ text: '• ', color: '4F46E5', size: 20 }),
-        new TextRun({ text: item, color: '374151', size: 20 }),
-      ],
-      spacing: { after: 40 },
-    })),
-    new Paragraph({ text: '', spacing: { after: 120 } }),
   )
 
   // Build review summary section
@@ -184,7 +175,7 @@ function buildReviewDocx(
       }),
       new Paragraph({
         children: [new TextRun({
-          text: 'Our editorial AI reviewed this translation and found no changes were necessary. The initial translation accurately captured your voice, tone, and meaning.',
+          text: 'Our editorial AI reviewed this translation and found no changes were necessary.',
           color: '374151', size: 20,
         })],
         spacing: { after: 120 },
@@ -197,7 +188,7 @@ function buildReviewDocx(
       }),
       new Paragraph({
         children: [new TextRun({
-          text: 'Yellow highlighted text shows the original first-pass translation. The clean text that follows is the editorially improved version.',
+          text: 'See Translation Report below for detailed notes on each change.',
           color: '374151', size: 20,
         })],
         spacing: { after: 120 },
