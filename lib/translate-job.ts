@@ -473,6 +473,7 @@ CRITICAL FORMATTING RULES:
 - Keep chapter numbers/titles in the same position
 - Preserve any indentation patterns
 - If there are bullet points or numbered lists, keep them formatted the same way
+- PRESERVE ###CHAPTER: markers exactly as they appear — these are structural markers that must not be translated or altered
 
 TRANSLATION GUIDELINES:
 - Preserve the author's unique voice and writing style
@@ -669,6 +670,7 @@ Example:
 Only highlight phrases you actually changed. Do not highlight text you kept the same.
 
 PRESERVE ALL FORMATTING from the translation (paragraph breaks, chapters, etc.)
+- PRESERVE ###CHAPTER: markers exactly as they appear — these are structural markers that must not be altered or removed
 
 Respond with the full improved translation with highlights showing original phrases that were changed.${i === translatedTextChunks.length - 1 ? `
 

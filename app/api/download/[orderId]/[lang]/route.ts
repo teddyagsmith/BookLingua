@@ -50,6 +50,11 @@ function stripHighlightMarkers(text: string): string {
   return text.replace(/\[\[ORIGINAL:([^\]]|\](?!\]))*\]\]/g, '').replace(/[^\S\n]{2,}/g, ' ')
 }
 
+function stripChapterMarkers(text: string): string {
+  // Remove ###CHAPTER: markers used for EPUB structure
+  return text.replace(/###CHAPTER:[^#]*###\n?\n?/g, '')
+}
+
 function isHeading(line: string): boolean {
   const t = line.trim()
   const len = t.length
@@ -141,7 +146,7 @@ function buildReviewDocx(
   translationNotes?: string,
 ): Document {
   const highlightCount = (content.match(/\[\[ORIGINAL:/g) || []).length
-  const blocks = content.split(/\n{2,}/)
+  const blocks = stripChapterMarkers(content).split(/\n{2,}/)
 
   // Build review summary section
   const reviewSummaryParas: Paragraph[] = []
@@ -368,7 +373,7 @@ function buildReviewDocx(
 // ─── DOCX: Final clean version ───────────────────────────────────────────────
 
 function buildFinalDocx(content: string, bookTitle: string, langDisplay: string): Document {
-  const clean = stripHighlightMarkers(content)
+  const clean = stripHighlightMarkers(stripChapterMarkers(content))
     // Remove any stray notes sections that leaked from the editorial pass
     .replace(/===TRANSLATION_NOTES===[\s\S]*?===END_NOTES===/g, '')
     // Remove "TRANSLATION NOTES" and all content below it in the same block
@@ -417,36 +422,67 @@ async function buildFinalEpub(
 ): Promise<Buffer> {
   const clean = stripHighlightMarkers(content)
 
-  // Split into chapters by heading detection
-  const lines = clean.split('\n')
+  // Split by chapter markers (###CHAPTER:Title### or ###CHAPTER:###)
+  const chapterRegex = /###CHAPTER:([^#]*)###\n\n?/g
   const chapters: { title: string; content: string }[] = []
-  let currentTitle = 'Chapter 1'
-  let currentLines: string[] = []
+  
+  let match
+  let lastIndex = 0
+  let chapterNum = 1
+  
+  while ((match = chapterRegex.exec(clean)) !== null) {
+    const title = match[1].trim() || `Chapter ${chapterNum}`
+    const start = match.index + match[0].length
+    
+    // Find the next chapter marker or end of string
+    const nextMatch = chapterRegex.exec(clean)
+    const end = nextMatch ? nextMatch.index : clean.length
+    
+    // Reset regex lastIndex since we used it in the condition
+    if (nextMatch) chapterRegex.lastIndex = nextMatch.index
+    
+    const chapterText = clean.slice(start, end).trim()
+    if (chapterText) {
+      chapters.push({
+        title: title,
+        content: `<p>${chapterText.split('\n').filter(l => l.trim()).join('</p><p>')}</p>`,
+      })
+    }
+    chapterNum++
+    lastIndex = end
+  }
 
-  for (const line of lines) {
-    if (isHeading(line.trim()) && line.trim().length > 0) {
-      if (currentLines.filter(l => l.trim()).length > 0) {
-        chapters.push({
-          title: currentTitle,
-          content: `<p>${currentLines.filter(l => l.trim()).join('</p><p>')}</p>`,
-        })
+  // Fallback: no chapter markers found — use heading detection (legacy behavior)
+  if (chapters.length === 0) {
+    const lines = clean.split('\n')
+    let currentTitle = 'Chapter 1'
+    let currentLines: string[] = []
+
+    for (const line of lines) {
+      if (isHeading(line.trim()) && line.trim().length > 0) {
+        if (currentLines.filter(l => l.trim()).length > 0) {
+          chapters.push({
+            title: currentTitle,
+            content: `<p>${currentLines.filter(l => l.trim()).join('</p><p>')}</p>`,
+          })
+        }
+        currentTitle = line.trim()
+        currentLines = []
+      } else {
+        currentLines.push(line)
       }
-      currentTitle = line.trim()
-      currentLines = []
-    } else {
-      currentLines.push(line)
+    }
+
+    // Final chapter
+    if (currentLines.filter(l => l.trim()).length > 0) {
+      chapters.push({
+        title: currentTitle,
+        content: `<p>${currentLines.filter(l => l.trim()).join('</p><p>')}</p>`,
+      })
     }
   }
 
-  // Final chapter
-  if (currentLines.filter(l => l.trim()).length > 0) {
-    chapters.push({
-      title: currentTitle,
-      content: `<p>${currentLines.filter(l => l.trim()).join('</p><p>')}</p>`,
-    })
-  }
-
-  // Fallback: single chapter if no headings detected
+  // Fallback: single chapter if no chapters detected
   if (chapters.length === 0) {
     chapters.push({
       title: bookTitle,

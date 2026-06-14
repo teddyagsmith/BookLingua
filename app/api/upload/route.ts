@@ -44,6 +44,13 @@ async function extractEpubText(buffer: Buffer): Promise<string> {
                   // Deduplicate: skip if we've seen this exact content before
                   if (stripped.length > 0 && !seenContent.has(stripped)) {
                     seenContent.add(stripped)
+                    // Add chapter marker with the chapter title (if available from TOC)
+                    const chapterTitle = item.title || ''
+                    if (chapterTitle) {
+                      chapters.push(`###CHAPTER:${chapterTitle}###`)
+                    } else {
+                      chapters.push(`###CHAPTER:###`)
+                    }
                     chapters.push(stripped)
                   }
                 }
