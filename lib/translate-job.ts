@@ -772,7 +772,8 @@ Be specific — use real examples from this text, not generic ones. Even if no e
 
         // 4. Strip [[ORIGINAL: ...]] highlight markers — the editorial pass uses these
         // to show what was changed, but the final document should only show the improved text
-        chunkClean = chunkClean.replace(/\[\[ORIGINAL:[^\]]*\]\]/g, '').trim()
+        // NOTE: We keep markers in the stored content. The download route strips them for final version.
+        // chunkClean = chunkClean.replace(/\[\[ORIGINAL:[^\]]*\]\]/g, '').trim()
 
         if (chunkClean) cleanedChunks.push(chunkClean)
       }
@@ -798,7 +799,8 @@ Be specific — use real examples from this text, not generic ones. Even if no e
         await supabaseAdmin.from('files')
           .delete()
           .eq('order_id', orderId).eq('type', 'notes').eq('language', langCode)
-        // Insert the clean translated content (no notes)
+        // Insert the translated content (with ORIGINAL markers for review DOCX)
+        // The download route strips markers for the final version
         await supabaseAdmin.from('files').insert({
           order_id: orderId,
           type: 'translated',
