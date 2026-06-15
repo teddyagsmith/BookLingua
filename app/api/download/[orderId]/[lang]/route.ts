@@ -146,7 +146,22 @@ function buildReviewDocx(
   translationNotes?: string,
 ): Document {
   const highlightCount = (content.match(/\[\[ORIGINAL:/g) || []).length
-  const blocks = stripChapterMarkers(content).split(/\n{2,}/)
+  const cleanContent = stripChapterMarkers(content)
+    // Strip all editorial notes that leaked into the content
+    .replace(/===TRANSLATION_NOTES===[\s\S]*?===END_NOTES===/g, '')
+    .replace(/##? Translation Notes[\s\S]*?(?=\n{2,}(?=[A-Z])|$)/g, '')
+    .replace(/General Assessment[\s\S]*?(?=\n{2,}(?=[A-Z])|$)/g, '')
+    .replace(/Tone [&] Style Analysis[\s\S]*?(?=\n{2,}(?=[A-Z])|$)/g, '')
+    .replace(/Tone [&] Style Assessment[\s\S]*?(?=\n{2,}(?=[A-Z])|$)/g, '')
+    .replace(/Key Edits Made[\s\S]*?(?=\n{2,}(?=[A-Z])|$)/g, '')
+    .replace(/Content Modifications[\s\S]*?(?=\n{2,}(?=[A-Z])|$)/g, '')
+    .replace(/Structural Notes[\s\S]*?(?=\n{2,}(?=[A-Z])|$)/g, '')
+    .replace(/Note for author[\s\S]*?(?=\n{2,}(?=[A-Z])|$)/g, '')
+    .replace(/---[\s\S]*?(?=\n{2,}(?=[A-Z])|$)/g, '')
+    .replace(/⚠️ Content Modifications[\s\S]*?(?=\n{2,}(?=[A-Z])|$)/g, '')
+    .replace(/TRANSLATION NOTES[\s\S]*?(?=\n{2,}(?=[A-Z])|$)/g, '')
+    .trim()
+  const blocks = cleanContent.split(/\n{2,}/)
 
   // Build review summary section
   const reviewSummaryParas: Paragraph[] = []
@@ -375,11 +390,17 @@ function buildFinalDocx(content: string, bookTitle: string, langDisplay: string)
   const clean = stripHighlightMarkers(stripChapterMarkers(content))
     // Remove any stray notes sections that leaked from the editorial pass
     .replace(/===TRANSLATION_NOTES===[\s\S]*?===END_NOTES===/g, '')
-    // Remove "TRANSLATION NOTES" and all content below it in the same block
-    .replace(/TRANSLATION NOTES[\s\S]*?(?=\n{2,}(?=[A-Z])|$)/g, '')
-    // Remove ⚠️ Content Modifications blocks
+    .replace(/##? Translation Notes[\s\S]*?(?=\n{2,}(?=[A-Z])|$)/g, '')
+    .replace(/General Assessment[\s\S]*?(?=\n{2,}(?=[A-Z])|$)/g, '')
+    .replace(/Tone [&] Style Analysis[\s\S]*?(?=\n{2,}(?=[A-Z])|$)/g, '')
+    .replace(/Tone [&] Style Assessment[\s\S]*?(?=\n{2,}(?=[A-Z])|$)/g, '')
+    .replace(/Key Edits Made[\s\S]*?(?=\n{2,}(?=[A-Z])|$)/g, '')
+    .replace(/Content Modifications[\s\S]*?(?=\n{2,}(?=[A-Z])|$)/g, '')
+    .replace(/Structural Notes[\s\S]*?(?=\n{2,}(?=[A-Z])|$)/g, '')
+    .replace(/Note for author[\s\S]*?(?=\n{2,}(?=[A-Z])|$)/g, '')
+    .replace(/---[\s\S]*?(?=\n{2,}(?=[A-Z])|$)/g, '')
     .replace(/⚠️ Content Modifications[\s\S]*?(?=\n{2,}(?=[A-Z])|$)/g, '')
-    // Remove specific category header blocks
+    .replace(/TRANSLATION NOTES[\s\S]*?(?=\n{2,}(?=[A-Z])|$)/g, '')
     .replace(/Key Terminology Choices\s*\n[\s\S]*?(?=\n{2,}(?=[A-Z])|$)/g, '')
     .replace(/Cultural Adaptations\s*\n[\s\S]*?(?=\n{2,}(?=[A-Z])|$)/g, '')
     // Remove any analysis/intro text at the start (model commentary before actual translation)
@@ -420,6 +441,20 @@ async function buildFinalEpub(
   langDisplay: string,
 ): Promise<Buffer> {
   const clean = stripHighlightMarkers(content)
+    // Strip all editorial notes that leaked into the content
+    .replace(/===TRANSLATION_NOTES===[\s\S]*?===END_NOTES===/g, '')
+    .replace(/##? Translation Notes[\s\S]*?(?=\n{2,}(?=[A-Z])|$)/g, '')
+    .replace(/General Assessment[\s\S]*?(?=\n{2,}(?=[A-Z])|$)/g, '')
+    .replace(/Tone [&] Style Analysis[\s\S]*?(?=\n{2,}(?=[A-Z])|$)/g, '')
+    .replace(/Tone [&] Style Assessment[\s\S]*?(?=\n{2,}(?=[A-Z])|$)/g, '')
+    .replace(/Key Edits Made[\s\S]*?(?=\n{2,}(?=[A-Z])|$)/g, '')
+    .replace(/Content Modifications[\s\S]*?(?=\n{2,}(?=[A-Z])|$)/g, '')
+    .replace(/Structural Notes[\s\S]*?(?=\n{2,}(?=[A-Z])|$)/g, '')
+    .replace(/Note for author[\s\S]*?(?=\n{2,}(?=[A-Z])|$)/g, '')
+    .replace(/---[\s\S]*?(?=\n{2,}(?=[A-Z])|$)/g, '')
+    .replace(/⚠️ Content Modifications[\s\S]*?(?=\n{2,}(?=[A-Z])|$)/g, '')
+    .replace(/TRANSLATION NOTES[\s\S]*?(?=\n{2,}(?=[A-Z])|$)/g, '')
+    .trim()
 
   // Split by chapter markers (###CHAPTER:Title###) — find all markers and their positions
   const markerRe = /###CHAPTER:([^#]*)###\n*/g
