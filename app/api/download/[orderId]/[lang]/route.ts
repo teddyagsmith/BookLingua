@@ -668,6 +668,7 @@ export async function GET(
         headers: {
           'Content-Type': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
           'Content-Disposition': `attachment; filename="${safeTitle}_${langName}_Review.docx"`,
+          'Cache-Control': 'no-store, must-revalidate',
         },
       })
     }
@@ -679,6 +680,7 @@ export async function GET(
         headers: {
           'Content-Type': 'application/epub+zip',
           'Content-Disposition': `attachment; filename="${safeTitle}_${langName}_Final.epub"`,
+          'Cache-Control': 'no-store, must-revalidate',
         },
       })
     }
@@ -728,6 +730,7 @@ export async function GET(
       headers: {
         'Content-Type': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
         'Content-Disposition': `attachment; filename="${safeTitle}_${langName}_Final.docx"`,
+        'Cache-Control': 'no-store, must-revalidate',
       },
     })
 
