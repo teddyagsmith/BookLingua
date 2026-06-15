@@ -147,19 +147,9 @@ function buildReviewDocx(
 ): Document {
   const highlightCount = (content.match(/\[\[ORIGINAL:/g) || []).length
   const cleanContent = stripChapterMarkers(content)
-    // Strip all editorial notes that leaked into the content
-    .replace(/===TRANSLATION_NOTES===[\s\S]*?===END_NOTES===/g, '')
-    .replace(/##? Translation Notes[\s\S]*?(?=\n{2,}(?=[A-Z])|$)/g, '')
-    .replace(/General Assessment[\s\S]*?(?=\n{2,}(?=[A-Z])|$)/g, '')
-    .replace(/Tone [&] Style Analysis[\s\S]*?(?=\n{2,}(?=[A-Z])|$)/g, '')
-    .replace(/Tone [&] Style Assessment[\s\S]*?(?=\n{2,}(?=[A-Z])|$)/g, '')
-    .replace(/Key Edits Made[\s\S]*?(?=\n{2,}(?=[A-Z])|$)/g, '')
-    .replace(/Content Modifications[\s\S]*?(?=\n{2,}(?=[A-Z])|$)/g, '')
-    .replace(/Structural Notes[\s\S]*?(?=\n{2,}(?=[A-Z])|$)/g, '')
-    .replace(/Note for author[\s\S]*?(?=\n{2,}(?=[A-Z])|$)/g, '')
-    .replace(/---[\s\S]*?(?=\n{2,}(?=[A-Z])|$)/g, '')
-    .replace(/⚠️ Content Modifications[\s\S]*?(?=\n{2,}(?=[A-Z])|$)/g, '')
-    .replace(/TRANSLATION NOTES[\s\S]*?(?=\n{2,}(?=[A-Z])|$)/g, '')
+    // Strip each notes block (ends at next chapter marker or end-of-notes marker)
+    .replace(/===TRANSLATION_NOTES===[\s\S]*?(?=###CHAPTER:|===END_NOTES===)/g, '')
+    .replace(/===END_NOTES===/g, '')
     .trim()
   const blocks = cleanContent.split(/\n{2,}/)
 
@@ -387,25 +377,11 @@ function buildReviewDocx(
 // ─── DOCX: Final clean version ───────────────────────────────────────────────
 
 function buildFinalDocx(content: string, bookTitle: string, langDisplay: string): Document {
-  const clean = stripHighlightMarkers(stripChapterMarkers(content))
-    // Remove any stray notes sections that leaked from the editorial pass
-    .replace(/===TRANSLATION_NOTES===[\s\S]*?===END_NOTES===/g, '')
-    .replace(/##? Translation Notes[\s\S]*?(?=\n{2,}(?=[A-Z])|$)/g, '')
-    .replace(/General Assessment[\s\S]*?(?=\n{2,}(?=[A-Z])|$)/g, '')
-    .replace(/Tone [&] Style Analysis[\s\S]*?(?=\n{2,}(?=[A-Z])|$)/g, '')
-    .replace(/Tone [&] Style Assessment[\s\S]*?(?=\n{2,}(?=[A-Z])|$)/g, '')
-    .replace(/Key Edits Made[\s\S]*?(?=\n{2,}(?=[A-Z])|$)/g, '')
-    .replace(/Content Modifications[\s\S]*?(?=\n{2,}(?=[A-Z])|$)/g, '')
-    .replace(/Structural Notes[\s\S]*?(?=\n{2,}(?=[A-Z])|$)/g, '')
-    .replace(/Note for author[\s\S]*?(?=\n{2,}(?=[A-Z])|$)/g, '')
-    .replace(/---[\s\S]*?(?=\n{2,}(?=[A-Z])|$)/g, '')
-    .replace(/⚠️ Content Modifications[\s\S]*?(?=\n{2,}(?=[A-Z])|$)/g, '')
-    .replace(/TRANSLATION NOTES[\s\S]*?(?=\n{2,}(?=[A-Z])|$)/g, '')
-    .replace(/Key Terminology Choices\s*\n[\s\S]*?(?=\n{2,}(?=[A-Z])|$)/g, '')
-    .replace(/Cultural Adaptations\s*\n[\s\S]*?(?=\n{2,}(?=[A-Z])|$)/g, '')
-    // Remove any analysis/intro text at the start (model commentary before actual translation)
-    .replace(/^((?:The tone|Tone analysis|Voice and style|Overall tone|Register|Style analysis|This text|Note:)[^\n]*\n+)+/i, '')
-    .trim()
+  const clean = stripHighlightMarkers(stripChapterMarkers(
+    content
+      .replace(/===TRANSLATION_NOTES===[\s\S]*?(?=###CHAPTER:|===END_NOTES===)/g, '')
+      .replace(/===END_NOTES===/g, '')
+  )).trim()
   const blocks = clean.split(/\n{2,}/)
   const paragraphs: Paragraph[] = [
     new Paragraph({ text: bookTitle, heading: HeadingLevel.TITLE }),
@@ -440,21 +416,11 @@ async function buildFinalEpub(
   bookTitle: string,
   langDisplay: string,
 ): Promise<Buffer> {
-  const clean = stripHighlightMarkers(content)
-    // Strip all editorial notes that leaked into the content
-    .replace(/===TRANSLATION_NOTES===[\s\S]*?===END_NOTES===/g, '')
-    .replace(/##? Translation Notes[\s\S]*?(?=\n{2,}(?=[A-Z])|$)/g, '')
-    .replace(/General Assessment[\s\S]*?(?=\n{2,}(?=[A-Z])|$)/g, '')
-    .replace(/Tone [&] Style Analysis[\s\S]*?(?=\n{2,}(?=[A-Z])|$)/g, '')
-    .replace(/Tone [&] Style Assessment[\s\S]*?(?=\n{2,}(?=[A-Z])|$)/g, '')
-    .replace(/Key Edits Made[\s\S]*?(?=\n{2,}(?=[A-Z])|$)/g, '')
-    .replace(/Content Modifications[\s\S]*?(?=\n{2,}(?=[A-Z])|$)/g, '')
-    .replace(/Structural Notes[\s\S]*?(?=\n{2,}(?=[A-Z])|$)/g, '')
-    .replace(/Note for author[\s\S]*?(?=\n{2,}(?=[A-Z])|$)/g, '')
-    .replace(/---[\s\S]*?(?=\n{2,}(?=[A-Z])|$)/g, '')
-    .replace(/⚠️ Content Modifications[\s\S]*?(?=\n{2,}(?=[A-Z])|$)/g, '')
-    .replace(/TRANSLATION NOTES[\s\S]*?(?=\n{2,}(?=[A-Z])|$)/g, '')
-    .trim()
+  const clean = stripHighlightMarkers(
+    content
+      .replace(/===TRANSLATION_NOTES===[\s\S]*?(?=###CHAPTER:|===END_NOTES===)/g, '')
+      .replace(/===END_NOTES===/g, '')
+  ).trim()
 
   // Split by chapter markers (###CHAPTER:Title###) — find all markers and their positions
   const markerRe = /###CHAPTER:([^#]*)###\n*/g
