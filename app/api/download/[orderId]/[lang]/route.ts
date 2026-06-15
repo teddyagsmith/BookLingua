@@ -422,34 +422,28 @@ async function buildFinalEpub(
 ): Promise<Buffer> {
   const clean = stripHighlightMarkers(content)
 
-  // Split by chapter markers (###CHAPTER:Title### or ###CHAPTER:###)
-  const chapterRegex = /###CHAPTER:([^#]*)###\n\n?/g
+  // Split by chapter markers (###CHAPTER:Title###) — find all markers and their positions
+  const markerRe = /###CHAPTER:([^#]*)###\n*/g
+  const markers: Array<{ index: number; title: string; end: number }> = []
+  let m
+  while ((m = markerRe.exec(clean)) !== null) {
+    markers.push({ index: m.index, title: m[1].trim(), end: m.index + m[0].length })
+  }
+
   const chapters: { title: string; content: string }[] = []
-  
-  let match
-  let lastIndex = 0
-  let chapterNum = 1
-  
-  while ((match = chapterRegex.exec(clean)) !== null) {
-    const title = match[1].trim() || `Chapter ${chapterNum}`
-    const start = match.index + match[0].length
-    
-    // Find the next chapter marker or end of string
-    const nextMatch = chapterRegex.exec(clean)
-    const end = nextMatch ? nextMatch.index : clean.length
-    
-    // Reset regex lastIndex since we used it in the condition
-    if (nextMatch) chapterRegex.lastIndex = nextMatch.index
-    
-    const chapterText = clean.slice(start, end).trim()
-    if (chapterText) {
-      chapters.push({
-        title: title,
-        content: `<p>${chapterText.split('\n').filter(l => l.trim()).join('</p><p>')}</p>`,
-      })
+  if (markers.length > 0) {
+    for (let i = 0; i < markers.length; i++) {
+      const title = markers[i].title || `Chapter ${i + 1}`
+      const start = markers[i].end
+      const end = i + 1 < markers.length ? markers[i + 1].index : clean.length
+      const chapterText = clean.slice(start, end).trim()
+      if (chapterText) {
+        chapters.push({
+          title,
+          content: `<p>${chapterText.split('\n').filter(l => l.trim()).join('</p><p>')}</p>`,
+        })
+      }
     }
-    chapterNum++
-    lastIndex = end
   }
 
   // Fallback: no chapter markers found — use heading detection (legacy behavior)
