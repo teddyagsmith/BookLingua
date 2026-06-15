@@ -79,7 +79,7 @@ function stripMarkdownHeading(t: string): string {
 }
 
 // Parse inline *italic*, **bold**, _italic_ into TextRuns
-function parseInlineRuns(text: string): TextRun[] {
+function parseInlineRuns(text: string, size: number = 20): TextRun[] {
   const runs: TextRun[] = []
   // Match **bold**, *italic*, _italic_ — in that order (bold first to avoid partial match)
   const pattern = /\*\*([^*]+)\*\*|\*([^*]+)\*|_([^_]+)_/g
@@ -89,28 +89,28 @@ function parseInlineRuns(text: string): TextRun[] {
   while ((match = pattern.exec(text)) !== null) {
     if (match.index > lastIndex) {
       const before = text.slice(lastIndex, match.index)
-      if (before) runs.push(new TextRun({ text: before }))
+      if (before) runs.push(new TextRun({ text: before, size }))
     }
     if (match[1] !== undefined) {
-      runs.push(new TextRun({ text: match[1], bold: true }))
+      runs.push(new TextRun({ text: match[1], bold: true, size }))
     } else if (match[2] !== undefined) {
-      runs.push(new TextRun({ text: match[2], italics: true }))
+      runs.push(new TextRun({ text: match[2], italics: true, size }))
     } else if (match[3] !== undefined) {
-      runs.push(new TextRun({ text: match[3], italics: true }))
+      runs.push(new TextRun({ text: match[3], italics: true, size }))
     }
     lastIndex = pattern.lastIndex
   }
 
   if (lastIndex < text.length) {
     const rest = text.slice(lastIndex)
-    if (rest.trim()) runs.push(new TextRun({ text: rest }))
+    if (rest.trim()) runs.push(new TextRun({ text: rest, size }))
   }
 
-  if (runs.length === 0 && text.trim()) runs.push(new TextRun({ text }))
+  if (runs.length === 0 && text.trim()) runs.push(new TextRun({ text, size }))
   return runs
 }
 
-function parseHighlightedRuns(text: string): TextRun[] {
+function parseHighlightedRuns(text: string, size: number = 20): TextRun[] {
   const runs: TextRun[] = []
   const pattern = /\[\[ORIGINAL:\s*([^\]]+?)\]\]/g
   let lastIndex = 0
@@ -121,19 +121,19 @@ function parseHighlightedRuns(text: string): TextRun[] {
       const before = text.slice(lastIndex, match.index)
       if (before) {
         // parse inline formatting within the regular text too
-        runs.push(...parseInlineRuns(before))
+        runs.push(...parseInlineRuns(before, size))
       }
     }
-    runs.push(new TextRun({ text: match[1], shading: { type: ShadingType.SOLID, color: 'FFEB3B', fill: 'FFEB3B' } }))
+    runs.push(new TextRun({ text: match[1], size, shading: { type: ShadingType.SOLID, color: 'FFEB3B', fill: 'FFEB3B' } }))
     lastIndex = pattern.lastIndex
   }
 
   if (lastIndex < text.length) {
     const rest = text.slice(lastIndex)
-    if (rest.trim()) runs.push(...parseInlineRuns(rest))
+    if (rest.trim()) runs.push(...parseInlineRuns(rest, size))
   }
 
-  if (runs.length === 0 && text.trim()) runs.push(new TextRun({ text }))
+  if (runs.length === 0 && text.trim()) runs.push(new TextRun({ text, size }))
   return runs
 }
 
