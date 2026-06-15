@@ -671,6 +671,7 @@ Only highlight phrases you actually changed. Do not highlight text you kept the 
 
 PRESERVE ALL FORMATTING from the translation (paragraph breaks, chapters, etc.)
 - PRESERVE ###CHAPTER: markers exactly as they appear — these are structural markers that must not be altered or removed
+- CRITICAL: ###CHAPTER: markers must be on a single line: ###CHAPTER:Title### — NEVER put notes, text, or line breaks between the title and the closing ###
 
 Respond with the full improved translation with highlights showing original phrases that were changed.${i === translatedTextChunks.length - 1 ? `
 
