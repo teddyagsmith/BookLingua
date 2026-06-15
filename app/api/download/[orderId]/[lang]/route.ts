@@ -241,14 +241,14 @@ function buildReviewDocx(
       reviewSummaryParas.push(
         new Paragraph({ text: '' }),
         new Paragraph({
-          children: [new TextRun({ text: 'Editorial Translation Report', bold: true, color: '111827', size: 22 })],
+          children: [new TextRun({ text: 'Editorial Translation Report', bold: true, color: '111827', size: 20 })],
         }),
         new Paragraph({
           children: [new TextRun({
-            text: 'A detailed account of every key decision made during translation and editorial review.',
-            italics: true, color: '6B7280', size: 20,
+            text: 'Key decisions made during translation and editorial review.',
+            italics: true, color: '6B7280', size: 18,
           })],
-          spacing: { after: 160 },
+          spacing: { after: 80 },
         }),
       )
 
@@ -257,9 +257,8 @@ function buildReviewDocx(
         reviewSummaryParas.push(
           new Paragraph({
             children: [
-              new TextRun({ text: `  ${title}  `, bold: true, color: 'FFFFFF', size: 18 }),
+              new TextRun({ text: `${title}`, bold: true, color, size: 20 }),
             ],
-            shading: { type: ShadingType.SOLID, color, fill: color },
             spacing: { before: 200, after: 100 },
           }),
         )
