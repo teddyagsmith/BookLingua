@@ -473,7 +473,7 @@ CRITICAL FORMATTING RULES:
 - Keep chapter numbers/titles in the same position
 - Preserve any indentation patterns
 - If there are bullet points or numbered lists, keep them formatted the same way
-- PRESERVE ###CHAPTER: markers exactly as they appear — these are structural markers that must not be translated or altered
+- PRESERVE ###CHAPTER: markers but TRANSLATE the title inside to the target language. Keep the exact format: ###CHAPTER:Spanish Title###. For example: ###CHAPTER:Foundations of Anxious Attachment### → ###CHAPTER:Fundamentos del apego ansioso###
 
 TRANSLATION GUIDELINES:
 - Preserve the author's unique voice and writing style
