@@ -113,7 +113,12 @@ function extractParagraphInfo(node: any): ParagraphInfo {
 
 // ─── Main DOCX extractor ────────────────────────────────────────────────────
 
-export async function extractDocxSegments(buffer: Buffer): Promise<Segment[]> {
+export interface ExtractionResult {
+  segments: Segment[]
+  quality: QualityReport
+}
+
+export async function extractDocxSegments(buffer: Buffer): Promise<ExtractionResult> {
   const segments: Segment[] = []
   let segmentId = 0
 
@@ -192,7 +197,8 @@ export async function extractDocxSegments(buffer: Buffer): Promise<Segment[]> {
   const headingCount = segments.filter(s => s.type === 'heading').length
   console.log(`[extractDocxSegments] Extracted ${segments.length} segments (${headingCount} headings)`)
 
-  return segments
+  const quality = assessQuality(segments)
+  return { segments, quality }
 }
 
 // ─── TXT extractor ───────────────────────────────────────────────────────────
@@ -226,6 +232,91 @@ export function extractTxtSegments(text: string): Segment[] {
   }
 
   return segments
+}
+
+// ─── Quality Gate ────────────────────────────────────────────────────────────
+// Flags documents that are too messy for automated processing
+
+export interface QualityReport {
+  score: number        // 0–100, higher is better
+  status: 'clean' | 'needs_review' | 'unprocessable'
+  issues: string[]
+  headingCount: number
+  paragraphCount: number
+  avgParagraphLength: number
+  hasProperStyles: boolean
+}
+
+export function assessQuality(segments: Segment[]): QualityReport {
+  const issues: string[] = []
+  const headings = segments.filter(s => s.type === 'heading')
+  const paragraphs = segments.filter(s => s.type === 'paragraph')
+  const hasProperStyles = segments.some(s => s.styleName && s.styleName !== 'none')
+
+  // Calculate average paragraph length
+  const avgLength = paragraphs.length > 0
+    ? paragraphs.reduce((sum, s) => sum + s.text.length, 0) / paragraphs.length
+    : 0
+
+  // Issue: No headings detected in a long document
+  if (headings.length === 0 && segments.length > 50) {
+    issues.push('No headings detected — document may be one giant block of text')
+  }
+
+  // Issue: Very short paragraphs (possible broken sentences)
+  const shortParagraphs = paragraphs.filter(p => p.text.length < 30).length
+  if (paragraphs.length > 0 && shortParagraphs / paragraphs.length > 0.3) {
+    issues.push(`${Math.round((shortParagraphs / paragraphs.length) * 100)}% of paragraphs are very short — possible broken sentences or line breaks`)
+  }
+
+  // Issue: Very long paragraphs (possible merged content)
+  const longParagraphs = paragraphs.filter(p => p.text.length > 2000).length
+  if (paragraphs.length > 0 && longParagraphs / paragraphs.length > 0.1) {
+    issues.push(`${Math.round((longParagraphs / paragraphs.length) * 100)}% of paragraphs are extremely long — possible merged content`)
+  }
+
+  // Issue: No proper styles AND very few headings (manually formatted mess)
+  if (!hasProperStyles && headings.length < 3 && segments.length > 100) {
+    issues.push('Document has no heading styles and few detected headings — structure may be unreliable')
+  }
+
+  // Issue: Unusual character distribution (garbled text)
+  const totalText = segments.map(s => s.text).join('')
+  const nonAsciiRatio = (totalText.match(/[^\x00-\x7F]/g) || []).length / totalText.length
+  if (nonAsciiRatio > 0.5 && totalText.length > 1000) {
+    issues.push('High proportion of non-ASCII characters — possible encoding issues or garbled text')
+  }
+
+  // Issue: Excessive empty/whitespace-only segments
+  const emptySegments = segments.filter(s => s.text.trim().length === 0).length
+  if (emptySegments / segments.length > 0.2) {
+    issues.push(`${Math.round((emptySegments / segments.length) * 100)}% empty segments — possible extraction failure`)
+  }
+
+  // Calculate score
+  let score = 100
+  score -= issues.length * 15
+  if (!hasProperStyles) score -= 10
+  if (headings.length === 0) score -= 20
+  score = Math.max(0, Math.min(100, score))
+
+  // Determine status
+  let status: QualityReport['status'] = 'clean'
+  if (score < 50 || issues.length >= 3) {
+    status = 'unprocessable'
+  } else if (score < 75 || issues.length >= 1) {
+    status = 'needs_review'
+  }
+
+  return {
+    score,
+    status,
+    issues,
+    headingCount: headings.length,
+    paragraphCount: paragraphs.length,
+    avgParagraphLength: Math.round(avgLength),
+    hasProperStyles,
+  }
 }
 
 // ─── Serialization: segments → text (for feeding into current pipeline) ──────
