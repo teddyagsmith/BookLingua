@@ -4,7 +4,7 @@ const fs = require('fs');
 async function test() {
   console.log('Testing HJ Chammas (proper styles)...');
   const hjBuf = fs.readFileSync('/Users/gilbert/Downloads/hj-chammas-original.docx');
-  const hjSegments = await extractDocxSegments(hjBuf);
+  const { segments: hjSegments } = await extractDocxSegments(hjBuf);
   console.log(`\nTotal: ${hjSegments.length} segments, ${hjSegments.filter(s => s.type === 'heading').length} headings`);
   hjSegments.slice(0, 8).forEach(s => {
     const icon = s.type === 'heading' ? 'H' : 'P';
@@ -13,7 +13,7 @@ async function test() {
 
   console.log('\n\nTesting Selene Grace Silver (manual formatting)...');
   const selBuf = fs.readFileSync('/Users/gilbert/Downloads/watch-over-me-original.docx');
-  const selSegments = await extractDocxSegments(selBuf);
+  const { segments: selSegments } = await extractDocxSegments(selBuf);
   console.log(`\nTotal: ${selSegments.length} segments, ${selSegments.filter(s => s.type === 'heading').length} headings`);
   selSegments.slice(0, 8).forEach(s => {
     const icon = s.type === 'heading' ? 'H' : 'P';

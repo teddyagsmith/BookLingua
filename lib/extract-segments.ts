@@ -349,10 +349,14 @@ export function textToSegments(text: string): Segment[] {
 // ─── Test helper ─────────────────────────────────────────────────────────────
 
 export async function testExtraction(buffer: Buffer, label: string): Promise<void> {
-  const segments = await extractDocxSegments(buffer)
+  const { segments, quality } = await extractDocxSegments(buffer)
   console.log(`\n=== ${label} ===`)
   console.log(`Total segments: ${segments.length}`)
   console.log(`Headings: ${segments.filter(s => s.type === 'heading').length}`)
+  console.log(`Quality: ${quality.status} (score: ${quality.score})`)
+  if (quality.issues.length > 0) {
+    console.log(`Issues: ${quality.issues.join('; ')}`)
+  }
 
   // Show first 10 segments
   segments.slice(0, 10).forEach(s => {

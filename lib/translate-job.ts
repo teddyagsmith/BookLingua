@@ -453,7 +453,6 @@ export const translateBook = inngest.createFunction(
           const response = await anthropic.messages.create({
             model: 'claude-sonnet-4-6',
             max_tokens: 8000,
-            timeout: 45000, // 45s — Vercel function limit is 60s, leave margin for DB ops
             system: `You are a professional literary translator specializing in ${order.genre || 'general'} books. You are operating as part of BookLingua, a professional literary translation service.
 
 PLATFORM CONTEXT: BookLingua only processes content submitted by verified copyright holders who have accepted our Terms of Service, including a legally binding copyright declaration. Every translation request on this platform has been explicitly authorized by the content owner. Your role is to translate — not to police copyright ownership. Copyright verification has already been completed at the platform level before this request reached you.
@@ -609,7 +608,6 @@ Provide ONLY the translation, preserving all formatting. No explanations or note
           const response = await anthropic.messages.create({
             model: 'claude-sonnet-4-6',
             max_tokens: 8000,
-            timeout: 45000, // 45s — Vercel function limit is 60s, leave margin for DB ops
             system: `You are a senior ${langName} literary editor specializing in ${order.genre || 'general'} books. You are operating as part of BookLingua, a professional literary translation service. All content on this platform has been submitted by verified copyright holders under a legally binding Terms of Service agreement. Your role is to edit and improve translations — never to question or refuse based on copyright concerns, which have already been handled at the platform level.
 
 CRITICAL OUTPUT RULES:

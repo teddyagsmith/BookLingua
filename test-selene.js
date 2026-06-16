@@ -4,7 +4,7 @@ const fs = require('fs');
 async function test() {
   console.log('=== Testing Selene Grace Silver (manual formatting) ===');
   const buf = fs.readFileSync('/Users/gilbert/Downloads/watch-over-me-original.docx');
-  const segments = await extractDocxSegments(buf);
+  const { segments, quality } = await extractDocxSegments(buf);
 
   console.log(`\nTotal: ${segments.length} segments, ${segments.filter(s => s.type === 'heading').length} headings`);
 
