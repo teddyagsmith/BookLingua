@@ -361,6 +361,53 @@ export const translateBook = inngest.createFunction(
       return raw
     })
 
+    // Step 2b: Extract and store segment metadata (non-fatal — improves builder quality)
+    // Segments are stored as type='segments' in the files table and used by the download
+    // route to build DOCX/EPUB with correct heading/paragraph types (no regex guessing).
+    await step.run('extract-segment-metadata', async () => {
+      const { data: existing } = await supabaseAdmin
+        .from('files')
+        .select('id')
+        .eq('order_id', orderId)
+        .eq('type', 'segments')
+        .maybeSingle()
+
+      if (existing) return // Already extracted
+
+      const { data: fileData } = await supabaseAdmin
+        .from('files')
+        .select('content')
+        .eq('order_id', orderId)
+        .eq('type', 'original')
+        .single()
+
+      if (!fileData?.content) return
+
+      const rawContent = fileData.content as string
+      if (!rawContent.startsWith('{')) return // Only DOCX files have binary
+
+      try {
+        const parsed = JSON.parse(rawContent)
+        if (!parsed.binary) return
+
+        const buffer = Buffer.from(parsed.binary, 'base64')
+        const { extractDocxSegments } = await import('./extract-segments')
+        const { segments, quality } = await extractDocxSegments(buffer)
+
+        if (quality.status !== 'unprocessable' && segments.length > 0) {
+          await supabaseAdmin.from('files').upsert({
+            order_id: orderId,
+            type: 'segments',
+            language: 'en',
+            content: JSON.stringify(segments.map(s => ({ id: s.id, type: s.type, level: s.level }))),
+          })
+          console.log(`[Pipeline] Stored ${segments.length} segment metadata (${quality.headingCount} headings)`)
+        }
+      } catch (e) {
+        console.warn('[Pipeline] Segment extraction failed (non-fatal):', e)
+      }
+    })
+
     // Step 3: Update order status to processing
     await step.run('update-status-processing', async () => {
       await supabaseAdmin
@@ -474,6 +521,7 @@ CRITICAL FORMATTING RULES:
 - Preserve any indentation patterns
 - If there are bullet points or numbered lists, keep them formatted the same way
 - PRESERVE ###CHAPTER: markers but TRANSLATE the title inside to the target language. Keep the exact format: ###CHAPTER:Spanish Title###. For example: ###CHAPTER:Foundations of Anxious Attachment### → ###CHAPTER:Fundamentos del apego ansioso###
+- PRESERVE all segment markers exactly: ===SEGMENT_123_START=== and ===SEGMENT_123_END=== markers must NOT be translated or modified. Only translate the text BETWEEN these markers. The markers themselves must appear exactly as they are in the original text.
 
 TRANSLATION GUIDELINES:
 - Preserve the author's unique voice and writing style
@@ -614,7 +662,8 @@ CRITICAL OUTPUT RULES:
 - Do NOT output any analysis, commentary, or explanation at the start of your response
 - Do NOT write "The tone of this text is..." or "This text is formal/casual..." or any other analysis preamble
 - Begin your response IMMEDIATELY with the translated/edited text
-- The translation notes go at the END only, after ===TRANSLATION_NOTES=== delimiter`,
+- The translation notes go at the END only, after ===TRANSLATION_NOTES=== delimiter
+- PRESERVE all structural markers exactly: ===SEGMENT_123_START=== and ===SEGMENT_123_END=== markers must NOT be modified. Only edit the text BETWEEN these markers. The markers themselves must appear exactly as they are in the original text.`,
             messages: [
               {
                 role: 'user',

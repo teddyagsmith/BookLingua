@@ -630,6 +630,25 @@ export async function GET(
       ? requestedFormat
       : fileFormat
 
+    // ── Load segment metadata (if available) for type-safe building ──
+    // Segment metadata tells us exactly which paragraphs are headings vs body text.
+    // When present, we use segment-aware builders (no isHeading() regex guessing).
+    // When absent, we fall back to the old regex-based builders.
+    const { data: segFile } = await supabaseAdmin
+      .from('files')
+      .select('content')
+      .eq('order_id', orderId)
+      .eq('type', 'segments')
+      .eq('language', 'en')
+      .maybeSingle()
+
+    const segmentMeta: Array<{ id: number; type: 'heading' | 'paragraph'; level: number }> | null =
+      segFile?.content ? JSON.parse(segFile.content) : null
+
+    if (segmentMeta) {
+      console.log(`[Download] Using segment-aware builder (${segmentMeta.length} segments, ${segmentMeta.filter(s => s.type === 'heading').length} headings)`)
+    }
+
     // ── Review version: always DOCX with yellow highlights + review summary ──
     if (type === 'review') {
       // Fetch translation notes from the dedicated `type: 'notes'` file (preferred)
@@ -662,6 +681,20 @@ export async function GET(
         }
       }
 
+      // Use segment-aware builder if metadata is available (better heading detection)
+      if (segmentMeta) {
+        const { buildReviewDocxFromSegments } = await import('@/lib/build-docx-segments')
+        const reviewBuffer = await buildReviewDocxFromSegments(file.content, segmentMeta, order.book_title, langDisplay)
+        return new NextResponse(new Uint8Array(reviewBuffer), {
+          headers: {
+            'Content-Type': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+            'Content-Disposition': `attachment; filename="${safeTitle}_${langName}_Review.docx"`,
+            'Cache-Control': 'no-store, must-revalidate',
+          },
+        })
+      }
+
+      // Fallback: old regex-based builder
       const doc = buildReviewDocx(file.content, order.book_title, langDisplay, translationNotes)
       const buffer = await Packer.toBuffer(doc)
       return new NextResponse(new Uint8Array(buffer), {
@@ -723,7 +756,13 @@ export async function GET(
     }
 
     if (!buffer) {
-      buffer = await Packer.toBuffer(buildFinalDocx(file.content, order.book_title, langDisplay))
+      // Use segment-aware builder if metadata is available (better heading detection)
+      if (segmentMeta) {
+        const { buildFinalDocxFromSegments } = await import('@/lib/build-docx-segments')
+        buffer = await buildFinalDocxFromSegments(file.content, segmentMeta, order.book_title, langDisplay)
+      } else {
+        buffer = await Packer.toBuffer(buildFinalDocx(file.content, order.book_title, langDisplay))
+      }
     }
 
     return new NextResponse(new Uint8Array(buffer), {
