@@ -41,7 +41,7 @@ const GENRE_GUIDANCE: Record<string, string> = {
 }
 
 const MAX_CHUNK_WORDS = 2500
-const MAX_EDITORIAL_CHUNK_WORDS = 1200
+const MAX_EDITORIAL_CHUNK_WORDS = 600 // Reduced from 1200 — 4-part structured output generates more tokens, needs smaller chunks to stay within Vercel 60s timeout
 
 function chunkText(text: string, maxWords: number): string[] {
   const paragraphs = text.split(/\n\n/)
