@@ -132,9 +132,13 @@ function parse4PartResponse(text: string): {
 
 export const translateBook = inngest.createFunction(
   { id: 'translate-book' },
-  { event: 'book.translate' },
+  [{ event: 'book.translate' }, { event: 'book/translate.requested' }],
   async ({ event, step }) => {
-    const { orderId, languages } = event.data as { orderId: string; languages: string[] }
+    // Handle both event formats
+    const orderId = event.data.orderId as string
+    // If languages not in event, load from order
+    let languages = (event.data as any).languages as string[] | undefined
+    
     console.log(`[BookLingua] Starting translation for order ${orderId}`)
 
     // ── Step 1: Load order and original content ──
@@ -144,6 +148,12 @@ export const translateBook = inngest.createFunction(
       .eq('id', orderId)
       .single()
     if (!order) throw new Error(`Order ${orderId} not found`)
+
+    // Fallback: load languages from order if not in event data
+    if (!languages || languages.length === 0) {
+      languages = (order.languages as string[]) || []
+      console.log(`[BookLingua] Loaded languages from order: ${languages.join(', ')}`)
+    }
 
     const { data: fileData } = await supabaseAdmin
       .from('files')
