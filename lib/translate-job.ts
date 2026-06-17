@@ -4,6 +4,7 @@ import { buildDownloadUrl, buildFeedbackUrl } from '@/lib/download-token'
 import { generateLaunchStrategy } from '@/lib/launch-strategy'
 import Anthropic from '@anthropic-ai/sdk'
 import { Resend } from 'resend'
+import type { Segment } from '@/lib/extract-segments'
 
 const anthropic = new Anthropic({
   apiKey: process.env.ANTHROPIC_API_KEY,
@@ -841,6 +842,59 @@ Be specific — use real examples from this text, not generic ones. Even if no e
       }
       if (translationNotesParsed) {
         translationNotes[langCode] = translationNotesParsed
+      }
+
+      // ── Validation: Check quality before saving ──
+      // Load segment metadata if available (from the extract-segment-metadata step)
+      let segmentMeta: Array<{ id: number; type: Segment['type']; level: number }> | null = null
+      try {
+        const { data: segFile } = await supabaseAdmin
+          .from('files')
+          .select('content')
+          .eq('order_id', orderId)
+          .eq('type', 'segments')
+          .eq('language', 'en')
+          .maybeSingle()
+        if (segFile?.content) {
+          segmentMeta = JSON.parse(segFile.content)
+        }
+      } catch (e) {
+        console.warn('[Pipeline] Could not load segment metadata for validation:', e)
+      }
+
+      const { validateTranslation, formatValidationAlert } = await import('./validate-translation')
+      const validation = validateTranslation(translatedText, editorialResult, segmentMeta, langCode)
+      console.log(`[Pipeline] Validation: ${validation.summary}`)
+
+      if (validation.issues.length > 0) {
+        for (const issue of validation.issues) {
+          console.log(`  [${issue.severity.toUpperCase()}] ${issue.check}: ${issue.message}`)
+        }
+      }
+
+      // Block delivery if errors found
+      if (!validation.passed) {
+        console.error('[Pipeline] VALIDATION FAILED — blocking delivery')
+        await supabaseAdmin.from('orders').update({
+          status: 'validation_failed',
+          notes: `Validation failed: ${validation.summary}\n\n${formatValidationAlert(validation)}`,
+        }).eq('id', orderId)
+
+        // Send alert to admin
+        try {
+          const { Resend } = await import('resend')
+          const resend = new Resend(process.env.RESEND_API_KEY)
+          await resend.emails.send({
+            from: 'BookLingua Admin <hello@booklingua.io>',
+            to: ['gilly@myromancereads.com'],
+            subject: `🚨 Translation Validation Failed — Order ${orderId}`,
+            text: formatValidationAlert(validation) + `\n\nOrder: ${orderId}\nLanguage: ${langCode}\nBook: ${order.book_title}\n\nPlease review manually.`,
+          })
+        } catch (e) {
+          console.warn('[Pipeline] Failed to send validation alert email:', e)
+        }
+
+        throw new Error(`Translation validation failed for ${langCode}: ${validation.summary}`)
       }
 
       // Save translation to database
