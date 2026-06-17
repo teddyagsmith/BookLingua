@@ -480,16 +480,122 @@ ORIGINAL: [term] | KEPT AS: [term] | REASON: [why untranslated]
       completed_at: new Date().toISOString(),
     }).eq('id', orderId)
 
-    // Send review email to admin
-    try {
+    // ── Build and send comprehensive review email to Gilly ──
+    // This email contains EVERYTHING the customer will receive, so Gilly can review
+    // before approving. When approved, the exact same email is sent to the customer.
+    await step.run('send-review-email', async () => {
+      const { data: filesData } = await supabaseAdmin
+        .from('files')
+        .select('type, language, content')
+        .eq('order_id', orderId)
+        .in('type', ['notes', 'email_summary'])
+
+      const notesFile = filesData?.find(f => f.type === 'notes')
+      const emailSummaryFile = filesData?.find(f => f.type === 'email_summary')
+      const translationNotes = notesFile?.content || ''
+      const emailSummary = emailSummaryFile?.content || ''
+
+      const languages = (order.languages as string[]) || []
+      const downloadLinks = languages.map((lang: string) => ({
+        language: LANGUAGE_NAMES[lang] || lang,
+        reviewUrl: buildDownloadUrl(orderId, lang, 'review'),
+        finalUrl: buildDownloadUrl(orderId, lang, 'final'),
+      }))
+
+      // Build the customer-facing email HTML (this is what the customer will see)
+      const customerEmailHtml = `
+        <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto;">
+          <h1 style="color: #7c3aed;">Your translations are ready! 📚</h1>
+          
+          <p>Hi ${order.author_name || 'there'},</p>
+          
+          <p>Great news! Your translations for <strong>${order.book_title}</strong> are complete and ready for download.</p>
+          
+          ${emailSummary ? `<div style="background: #f0fdf4; padding: 15px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #22c55e;">
+            <p style="margin: 0; color: #166534; font-weight: 600;">📝 Translation Notes</p>
+            <div style="margin-top: 8px; color: #374151; font-size: 14px; line-height: 1.5;">
+              ${emailSummary.replace(/\n/g, '<br>')}
+            </div>
+          </div>` : ''}
+          
+          <div style="background: #f5f3ff; padding: 20px; border-radius: 12px; margin: 20px 0;">
+            <h3 style="margin-top: 0;">Download Your Translations</h3>
+            ${downloadLinks.map((link: { language: string; reviewUrl: string; finalUrl: string }) => `
+              <div style="margin: 14px 0; padding: 12px; background: #fff; border-radius: 8px; border: 1px solid #e5e7eb;">
+                <p style="margin: 0 0 8px 0; font-weight: bold; color: #111;">${link.language}</p>
+                <p style="margin: 0 0 4px 0;">
+                  📝 <a href="${link.reviewUrl}" style="color: #7c3aed; text-decoration: none; font-weight: 500;">Review Version (with highlights)</a>
+                  <span style="color: #6b7280; font-size: 12px;"> — see every editorial change in yellow</span>
+                </p>
+                <p style="margin: 0;">
+                  ✅ <a href="${link.finalUrl}" style="color: #059669; text-decoration: none; font-weight: 500;">Final Version (clean, publish-ready)</a>
+                  <span style="color: #6b7280; font-size: 12px;"> — ready to upload to KDP or your publisher</span>
+                </p>
+              </div>
+            `).join('')}
+          </div>
+          
+          <div style="background: #fef3c7; padding: 15px; border-radius: 8px; margin: 20px 0;">
+            <p style="margin: 0; color: #92400e;">
+              <strong>📝 Two files per language — here's how to use them:</strong><br><br>
+              <strong>Review Version</strong> — Yellow highlighted text is the first-pass translation. The clean text after it is our editorial improvement. Use this to approve every change before publishing.<br><br>
+              <strong>Final Version</strong> — Clean, publish-ready. No highlights. Ready to upload directly to KDP, Atticus, Vellum, or your publisher.
+            </p>
+          </div>
+          
+          <p>Download links expire in 7 days. Need them resent? Just reply to this email.</p>
+          
+          <p>Happy publishing!<br>The BookLingua Team</p>
+        </div>
+      `
+
+      // Store the customer email HTML in the files table for later use
+      // This is what gets sent to the customer when approved
+      await supabaseAdmin.from('files').delete()
+        .eq('order_id', orderId).eq('type', 'customer_email')
+      await supabaseAdmin.from('files').insert({
+        order_id: orderId,
+        type: 'customer_email',
+        language: 'en',
+        content: customerEmailHtml,
+      })
+
+      // Send review email to Gilly with everything
       await resend.emails.send({
         from: 'BookLingua Admin <hello@booklingua.io>',
         to: ['gilly@myromancereads.com'],
-        subject: `Review Ready — ${order.book_title} (${languages.join(', ')})`,
-        html: `<p>Translation complete for ${order.book_title}.</p><p>Order: ${orderId}</p><p>Languages: ${languages.join(', ')}</p>`,
+        subject: `🔍 REVIEW NEEDED — ${order.book_title} (${languages.join(', ')})`,
+        html: `
+          <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto;">
+            <div style="background: #fef3c7; padding: 15px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #f59e0b;">
+              <p style="margin: 0; color: #92400e; font-weight: 600;">⚠️ This is a REVIEW email. Do NOT forward to the customer until approved.</p>
+              <p style="margin: 8px 0 0 0; color: #92400e; font-size: 14px;">
+                Order: ${orderId}<br>
+                Book: ${order.book_title}<br>
+                Customer: ${order.email}<br>
+                Languages: ${languages.join(', ')}<br>
+                <a href="https://booklingua.io/admin" style="color: #7c3aed; font-weight: 600;">Go to Admin Panel →</a>
+              </p>
+            </div>
+            
+            <hr style="border: none; border-top: 2px solid #e5e7eb; margin: 30px 0;">
+            
+            <p style="color: #6b7280; font-size: 14px; margin-bottom: 20px;">
+              <strong>Below is the EXACT email the customer will receive after you approve.</strong><br>
+              Review it carefully. Click approve in the admin panel when ready.
+            </p>
+            
+            ${customerEmailHtml}
+            
+            <hr style="border: none; border-top: 2px solid #e5e7eb; margin: 30px 0;">
+            
+            ${translationNotes ? `<div style="margin: 20px 0;">
+              <h3 style="color: #111; margin-bottom: 10px;">📝 Full Translation Notes</h3>
+              <div style="background: #f9fafb; padding: 15px; border-radius: 8px; font-size: 13px; line-height: 1.6; color: #374151; white-space: pre-wrap;">${translationNotes.replace(/\n/g, '<br>')}</div>
+            </div>` : ''}
+          </div>
+        `,
       })
-    } catch (e) {
-      console.warn('[Pipeline] Failed to send review email:', e)
-    }
+    })
   }
 )
