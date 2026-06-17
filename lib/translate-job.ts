@@ -102,26 +102,25 @@ function parse4PartResponse(text: string): {
     counts: { improvements: 0, chapters: 0 },
   }
 
-  // Extract each section using regex
-  const notesMatch = text.match(/\[TRANSLATION_NOTES\]([\s\S]*?)\[\/TRANSLATION_NOTES\]/)
-  const cleanMatch = text.match(/\[CLEAN_TRANSLATION\]([\s\S]*?)\[\/CLEAN_TRANSLATION\]/)
-  const highlightedMatch = text.match(/\[HIGHLIGHTED_TRANSLATION\]([\s\S]*?)\[\/HIGHLIGHTED_TRANSLATION\]/)
-  const emailMatch = text.match(/\[EMAIL_SUMMARY\]([\s\S]*?)\[\/EMAIL_SUMMARY\]/)
-  const countsMatch = text.match(/\[COUNTS\]([\s\S]*?)\[\/COUNTS\]/)
-
-  if (notesMatch) result.notes = notesMatch[1].trim()
-  if (cleanMatch) result.clean = cleanMatch[1].trim()
-  if (highlightedMatch) result.highlighted = highlightedMatch[1].trim()
-  if (emailMatch) result.email = emailMatch[1].trim()
-
-  if (countsMatch) {
-    const improvements = countsMatch[1].match(/improvements:\s*(\d+)/)
-    const chapters = countsMatch[1].match(/chapters_affected:\s*(\d+)/)
-    if (improvements) result.counts.improvements = parseInt(improvements[1])
-    if (chapters) result.counts.chapters = parseInt(chapters[1])
+  // Extract each section using [SECTION]...[SECTION] markers
+  const extractSection = (startTag: string, endTag: string): string => {
+    const pattern = new RegExp(`\\[${startTag}\\]([\\s\\S]*?)\\[\\/${endTag}\\]`, 'i')
+    const match = text.match(pattern)
+    return match ? match[1].trim() : ''
   }
 
-  // Fallback: if no sections found, treat whole response as highlighted (old format)
+  result.notes = extractSection('TRANSLATION_NOTES', 'TRANSLATION_NOTES')
+  result.clean = extractSection('CLEAN_TRANSLATION', 'CLEAN_TRANSLATION')
+  result.highlighted = extractSection('HIGHLIGHTED_TRANSLATION', 'HIGHLIGHTED_TRANSLATION')
+  result.email = extractSection('EMAIL_SUMMARY', 'EMAIL_SUMMARY')
+
+  const countsText = extractSection('COUNTS', 'COUNTS')
+  const improvements = countsText.match(/Total improvements:\s*(\d+)/i)
+  const chapters = countsText.match(/Chapters affected:\s*(\d+)/i)
+  if (improvements) result.counts.improvements = parseInt(improvements[1])
+  if (chapters) result.counts.chapters = parseInt(chapters[1])
+
+  // Fallback: if no structured sections found, treat as old format
   if (!result.highlighted && !result.clean) {
     result.highlighted = text
     result.clean = stripMarkers(text)
