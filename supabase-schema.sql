@@ -84,3 +84,8 @@ BEGIN
   WHERE created_at < NOW() - INTERVAL '24 hours';
 END;
 $$ LANGUAGE plpgsql;
+
+
+-- Add download_token column to orders (added June 17, 2026)
+ALTER TABLE IF EXISTS orders ADD COLUMN IF NOT EXISTS download_token text;
+

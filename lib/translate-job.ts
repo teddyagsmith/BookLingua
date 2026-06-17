@@ -5,6 +5,7 @@ import { buildDownloadUrl, buildFeedbackUrl } from '@/lib/download-token'
 import { generateLaunchStrategy } from '@/lib/launch-strategy'
 import { Resend } from 'resend'
 import type { Segment } from '@/lib/extract-segments'
+import crypto from 'crypto'
 
 const anthropic = new Anthropic({
   apiKey: process.env.ANTHROPIC_API_KEY,
@@ -478,6 +479,22 @@ ORIGINAL: [term] | KEPT AS: [term] | REASON: [why untranslated]
       }
       if (translationNotesParsed) translationNotes[langCode] = translationNotesParsed
     }
+
+    // Generate download token for the order
+    await step.run('generate-download-token', async () => {
+      const { data: existingToken } = await supabaseAdmin
+        .from('orders')
+        .select('download_token')
+        .eq('id', orderId)
+        .single()
+      
+      if (!existingToken?.download_token) {
+        const crypto = require('crypto')
+        const token = crypto.randomBytes(32).toString('base64url').replace(/[^a-zA-Z0-9]/g, '').substring(0, 40)
+        await supabaseAdmin.from('orders').update({ download_token: token }).eq('id', orderId)
+        console.log(`[Pipeline] Generated download token: ${token.substring(0, 10)}...`)
+      }
+    })
 
     // Finalize
     const actualCost = calcActualCost(tokenUsage)
