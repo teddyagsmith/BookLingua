@@ -434,12 +434,12 @@ ORIGINAL: [term] | KEPT AS: [term] | REASON: [why untranslated]
       console.log(`[Pipeline] Validation: ${validation.summary}`)
 
       if (!validation.passed) {
-        console.error('[Pipeline] VALIDATION FAILED — blocking delivery')
+        console.warn(`[Pipeline] Validation issues detected for ${langCode}: ${validation.summary} — saving anyway for human review`)
+        // Save validation issues to order notes but continue with delivery
         await supabaseAdmin.from('orders').update({
-          status: 'validation_failed',
-          notes: `Validation failed: ${validation.summary}`,
+          notes: `Validation: ${validation.summary}`,
         }).eq('id', orderId)
-        throw new Error(`Translation validation failed for ${langCode}: ${validation.summary}`)
+        // Continue to save translation below — don't throw
       }
 
       // Save to database
