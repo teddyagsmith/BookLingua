@@ -504,6 +504,8 @@ ORIGINAL: [term] | KEPT AS: [term] | REASON: [why untranslated]
     await supabaseAdmin.from('orders').update({
       status: 'pending_review',
       completed_at: new Date().toISOString(),
+      api_cost: parseFloat(actualCost.toFixed(4)),
+      margin_pct: parseFloat(actualMargin),
     }).eq('id', orderId)
 
     // ── Build and send comprehensive review email to Gilly ──
