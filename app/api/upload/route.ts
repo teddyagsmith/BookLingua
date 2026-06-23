@@ -93,7 +93,7 @@ export async function POST(request: NextRequest) {
 
     } else if (fileExtension === 'docx') {
       const arrayBuffer = await file.arrayBuffer()
-      const result = await mammoth.extractRawText({ arrayBuffer })
+      const result = await mammoth.extractRawText({ buffer: Buffer.from(arrayBuffer) as any })
       textContent = result.value
       wordCount = countWords(textContent)
 
