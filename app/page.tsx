@@ -3,7 +3,6 @@
 import { useState, useCallback, useRef, useEffect } from 'react'
 import Image from 'next/image'
 import EmailSignupPopup from '@/components/EmailSignupPopup'
-import LanguageIllustration from '@/components/LanguageIllustration'
 
 // Updated pricing tiers
 const WORD_TIERS = {
@@ -658,7 +657,7 @@ export default function Home() {
                   <div className="flex flex-wrap gap-2">
                     {CORE_LANGUAGES.map(l => (
                       <span key={l.code} className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white border border-gray-200 rounded-full text-sm text-gray-700 shadow-sm">
-                        <LanguageIllustration code={l.code} size="sm" />
+                        <span>{l.flag}</span>
                         <span className="font-medium">{l.name}</span>
                       </span>
                     ))}
@@ -681,7 +680,7 @@ export default function Home() {
 
                   <div className="flex items-center gap-2 mb-4">
                     {CORE_LANGUAGES.slice(0, 4).map(l => (
-                      <LanguageIllustration key={l.code} code={l.code} size="md" />
+                      <span key={l.code} className="text-2xl">{l.flag}</span>
                     ))}
                     <span className="text-lg">+</span>
                     <span className="ml-1 px-2 py-1 bg-brand-light text-brand-dark text-xs font-semibold rounded-full">
@@ -1396,7 +1395,7 @@ export default function Home() {
                     }`}
                   >
                     <div className="flex items-center gap-4">
-                      <LanguageIllustration code={lang.code} size="lg" />
+                      <span className="text-4xl">{lang.flag}</span>
                       <div className="flex-1">
                         <p className="font-bold text-gray-900">{lang.name}</p>
                         <p className="text-sm text-gray-500">{lang.market}</p>
@@ -1585,7 +1584,7 @@ export default function Home() {
                       <div className="flex gap-2 mt-2">
                         {selectedLanguages.map(code => {
                           const lang = CORE_LANGUAGES.find(l => l.code === code)
-                          return <LanguageIllustration key={code} code={code} size="sm" />
+                          return <span key={code} className="text-xl">{lang?.flag}</span>
                         })}
                       </div>
                       {affiliateCode && (
