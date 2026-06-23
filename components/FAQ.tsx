@@ -48,7 +48,7 @@ const faqs = [
 export default function FAQ() {
   const [openIndex, setOpenIndex] = useState<number | null>(null)
   
-  const serifFont = { fontFamily: "'Instrument Serif', Georgia, serif" }
+  const serifFont = { fontFamily: "'EB Garamond', Georgia, serif" }
 
   return (
     <section className="py-24 bg-white">
@@ -70,10 +70,10 @@ export default function FAQ() {
             >
               <button
                 onClick={() => setOpenIndex(openIndex === index ? null : index)}
-                className="w-full px-6 py-5 text-left flex items-center justify-between gap-4 hover:bg-gray-50 transition-colors"
+                className="w-full px-6 py-5 text-left flex items-center justify-between gap-4 hover:bg-[#F3F0F8] transition-colors"
               >
                 <span className="font-semibold text-gray-900">{faq.question}</span>
-                <span className={`text-2xl text-violet-600 transition-transform ${openIndex === index ? 'rotate-45' : ''}`}>
+                <span className={`text-2xl text-brand transition-transform ${openIndex === index ? 'rotate-45' : ''}`}>
                   +
                 </span>
               </button>
@@ -90,7 +90,7 @@ export default function FAQ() {
           <p className="text-gray-600 mb-4">Still have questions?</p>
           <a
             href="mailto:support@booklingua.io"
-            className="inline-flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-blue-600 to-violet-600 text-white rounded-xl font-semibold hover:shadow-lg transition-all"
+            className="inline-flex items-center gap-2 px-6 py-3 bg-brand text-white rounded-xl font-semibold hover:shadow-lg transition-all"
           >
             Contact Support →
           </a>

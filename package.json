@@ -12,9 +12,9 @@
     "@supabase/supabase-js": "^2.39.0",
     "@types/pdf-parse": "^1.1.5",
     "@vercel/analytics": "^2.0.1",
+    "adm-zip": "^0.5.17",
     "docx": "^8.5.0",
     "epub-gen-memory": "^1.1.2",
-    "epub2": "^3.0.2",
     "inngest": "^3.54.0",
     "jszip": "^3.10.1",
     "mammoth": "^1.6.0",
@@ -26,6 +26,7 @@
     "stripe": "^14.0.0"
   },
   "devDependencies": {
+    "@types/adm-zip": "^0.5.8",
     "@types/node": "^20.0.0",
     "@types/react": "^18.2.0",
     "autoprefixer": "^10.4.0",

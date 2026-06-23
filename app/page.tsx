@@ -190,12 +190,12 @@ function FooterSignup({ serifFont }: { serifFont: React.CSSProperties }) {
               onChange={(e) => setEmail(e.target.value)}
               placeholder="your@email.com"
               required
-              className="flex-1 px-4 py-3 rounded-xl bg-gray-800 border border-gray-700 text-white placeholder-gray-500 focus:border-violet-500 focus:outline-none text-sm"
+              className="flex-1 px-4 py-3 rounded-xl bg-gray-800 border border-gray-700 text-white placeholder-gray-500 focus:border-brand focus:outline-none text-sm"
             />
             <button
               type="submit"
               disabled={state === 'loading'}
-              className="px-6 py-3 bg-gradient-to-r from-blue-600 to-violet-600 text-white rounded-xl font-bold text-sm shadow-lg hover:shadow-violet-500/25 transition-all disabled:opacity-60 whitespace-nowrap"
+              className="px-6 py-3 bg-brand text-white rounded-xl font-bold text-sm shadow-lg hover:shadow-brand/25 transition-all disabled:opacity-60 whitespace-nowrap"
             >
               {state === 'loading' ? 'Subscribing…' : 'Subscribe free →'}
             </button>
@@ -561,19 +561,19 @@ export default function Home() {
   }
 
   // Serif font style
-  const serifFont = { fontFamily: "'Instrument Serif', Georgia, serif" }
+  const serifFont = { fontFamily: "'EB Garamond', Georgia, serif" }
 
   // Landing Page
   if (currentView === 'landing') {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-violet-50">
+      <div className="min-h-screen bg-cream">
         {/* Google Font */}
-        <style>{`@import url('https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&display=swap');`}</style>
+        <style>{`@import url('https://fonts.googleapis.com/css2?family=EB+Garamond:ital,wght@0,400;0,500;0,600;1,400&display=swap');`}</style>
 
         <EmailSignupPopup />
 
         {/* Top pricing bar */}
-        <div className="bg-gradient-to-r from-blue-600 to-violet-600 text-white text-sm py-2 px-4 text-center">
+        <div className="bg-brand text-white text-sm py-2 px-4 text-center">
           <span className="font-semibold">From $99 per language</span>
           <span className="hidden sm:inline">
             <span className="mx-2 opacity-60">·</span>
@@ -585,8 +585,8 @@ export default function Home() {
 
         <header className="relative overflow-hidden">
           <div className="absolute inset-0 opacity-30">
-            <div className="absolute top-20 left-10 w-72 h-72 bg-blue-200 rounded-full blur-3xl" />
-            <div className="absolute top-40 right-20 w-96 h-96 bg-violet-200 rounded-full blur-3xl" />
+            <div className="absolute top-20 left-10 w-72 h-72 bg-amber-200 rounded-full blur-3xl" />
+            <div className="absolute top-40 right-20 w-96 h-96 bg-brand-light rounded-full blur-3xl" />
           </div>
 
           <nav className="relative z-10 flex items-center justify-between px-4 sm:px-8 py-6 max-w-7xl mx-auto">
@@ -594,15 +594,15 @@ export default function Home() {
               <Logo size="lg" />
             </div>
             <div className="flex items-center gap-3 sm:gap-6">
-              <a href="/examples" className="text-gray-600 hover:text-violet-700 font-medium transition-colors hidden sm:block">
+              <a href="/examples" className="text-gray-600 hover:text-brand-dark font-medium transition-colors hidden sm:block">
                 Examples
               </a>
-              <a href="/publishers" className="text-gray-600 hover:text-violet-700 font-medium transition-colors hidden sm:block">
+              <a href="/publishers" className="text-gray-600 hover:text-brand-dark font-medium transition-colors hidden sm:block">
                 Publishers
               </a>
               <button
                 onClick={() => setCurrentView('upload')}
-                className="px-4 py-2 sm:px-6 sm:py-2.5 bg-gradient-to-r from-blue-600 to-violet-600 text-white rounded-full text-sm sm:text-base font-semibold shadow-lg hover:shadow-xl transition-all whitespace-nowrap"
+                className="px-4 py-2 sm:px-6 sm:py-2.5 bg-brand text-white rounded-full text-sm sm:text-base font-semibold shadow-lg hover:shadow-xl transition-all whitespace-nowrap"
               >
                 Start Translating
               </button>
@@ -612,14 +612,14 @@ export default function Home() {
           <div className="relative z-10 max-w-7xl mx-auto px-8 pt-20 pb-32">
             <div className="grid lg:grid-cols-2 gap-16 items-center">
               <div>
-                <div className="inline-flex items-center gap-2 px-4 py-2 bg-white/80 rounded-full text-sm font-medium text-violet-700 mb-8">
+                <div className="inline-flex items-center gap-2 px-4 py-2 bg-white/80 rounded-full text-sm font-medium text-brand-dark mb-8">
                   <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
                   From $99 per language · Editorial review included
                 </div>
 
                 <h1 className="text-6xl font-bold text-gray-900 leading-tight mb-6" style={serifFont}>
                   Translate Your Book
-                  <span className="block bg-gradient-to-r from-blue-600 to-violet-600 bg-clip-text text-transparent">
+                  <span className="block bg-brand bg-clip-text text-transparent">
                     in Hours, Not Months
                   </span>
                 </h1>
@@ -639,13 +639,13 @@ export default function Home() {
                 <div className="flex flex-wrap gap-4 items-center">
                   <button
                     onClick={() => setCurrentView('upload')}
-                    className="px-8 py-4 bg-gradient-to-r from-blue-600 to-violet-600 text-white rounded-2xl font-bold text-lg shadow-xl hover:shadow-2xl transition-all hover:-translate-y-1"
+                    className="px-8 py-4 bg-brand text-white rounded-2xl font-bold text-lg shadow-xl hover:shadow-2xl transition-all hover:-translate-y-1"
                   >
                     Upload Your Book →
                   </button>
                   <a
                     href="/examples"
-                    className="px-8 py-4 bg-white border-2 border-violet-200 text-violet-700 rounded-2xl font-bold text-lg hover:border-violet-400 hover:bg-violet-50 transition-all"
+                    className="px-8 py-4 bg-white border-2 border-brand-light text-brand-dark rounded-2xl font-bold text-lg hover:border-brand-light hover:bg-[#F3F0F8] transition-all"
                   >
                     See Examples
                   </a>
@@ -666,10 +666,10 @@ export default function Home() {
               </div>
 
               <div className="relative">
-                <div className="absolute -inset-4 bg-gradient-to-r from-blue-400/20 to-violet-400/20 rounded-3xl blur-2xl" />
-                <div className="relative bg-white rounded-3xl shadow-2xl p-8 border border-blue-100/50">
+                <div className="absolute -inset-4 bg-gradient-to-r from-amber-300/20 to-brand/20 rounded-3xl blur-2xl" />
+                <div className="relative bg-white rounded-3xl shadow-2xl p-8 border border-brand-light/50">
                   <div className="flex items-center gap-4 mb-6">
-                    <div className="w-16 h-20 bg-gradient-to-br from-blue-500 to-violet-600 rounded-lg shadow-lg flex items-center justify-center">
+                    <div className="w-16 h-20 bg-gradient-to-br from-brand to-brand-dark rounded-lg shadow-lg flex items-center justify-center">
                       <span className="text-white text-2xl">📘</span>
                     </div>
                     <div>
@@ -683,7 +683,7 @@ export default function Home() {
                       <span key={l.code} className="text-2xl">{l.flag}</span>
                     ))}
                     <span className="text-lg">+</span>
-                    <span className="ml-1 px-2 py-1 bg-violet-100 text-violet-700 text-xs font-semibold rounded-full">
+                    <span className="ml-1 px-2 py-1 bg-brand-light text-brand-dark text-xs font-semibold rounded-full">
                       6 Languages
                     </span>
                   </div>
@@ -694,7 +694,7 @@ export default function Home() {
                       <span className="text-xs text-green-600 font-medium">40% bundle discount applied · Save $358</span>
                     </div>
                     <div className="text-right">
-                      <span className="font-bold text-2xl text-violet-600">$536</span>
+                      <span className="font-bold text-2xl text-brand">$536</span>
                       <span className="text-xs text-gray-400 line-through block">$894</span>
                     </div>
                   </div>
@@ -763,12 +763,12 @@ export default function Home() {
                 </ul>
               </div>
 
-              <div className="bg-gradient-to-br from-blue-50 to-blue-100 rounded-3xl p-8 border border-blue-200">
+              <div className="bg-gradient-to-br from-[#F3F0F8] to-brand-light rounded-3xl p-8 border border-brand-light">
                 <div className="flex items-center gap-4 mb-6">
-                  <div className="w-14 h-14 bg-blue-600 rounded-2xl flex items-center justify-center text-white text-2xl font-bold shadow-lg">2</div>
+                  <div className="w-14 h-14 bg-brand rounded-2xl flex items-center justify-center text-white text-2xl font-bold shadow-lg">2</div>
                   <div>
                     <h3 className="text-xl font-bold text-gray-900" style={serifFont}>Translation Pass</h3>
-                    <p className="text-sm text-blue-600">AI-powered accuracy</p>
+                    <p className="text-sm text-brand">AI-powered accuracy</p>
                   </div>
                 </div>
                 <p className="text-gray-700 mb-4">
@@ -777,18 +777,18 @@ export default function Home() {
                 <ul className="space-y-2">
                   {['Preserves author voice & style', 'Maintains book formatting', 'Handles technical terms accurately', 'Keeps proper nouns consistent'].map((item, i) => (
                     <li key={i} className="flex items-center gap-2 text-gray-700 text-sm">
-                      <span className="text-blue-600">✓</span>{item}
+                      <span className="text-brand">✓</span>{item}
                     </li>
                   ))}
                 </ul>
               </div>
 
-              <div className="bg-gradient-to-br from-violet-50 to-violet-100 rounded-3xl p-8 border border-violet-200">
+              <div className="bg-gradient-to-br from-violet-50 to-violet-100 rounded-3xl p-8 border border-brand-light">
                 <div className="flex items-center gap-4 mb-6">
-                  <div className="w-14 h-14 bg-violet-600 rounded-2xl flex items-center justify-center text-white text-2xl font-bold shadow-lg">3</div>
+                  <div className="w-14 h-14 bg-brand rounded-2xl flex items-center justify-center text-white text-2xl font-bold shadow-lg">3</div>
                   <div>
                     <h3 className="text-xl font-bold text-gray-900" style={serifFont}>Editorial Review</h3>
-                    <p className="text-sm text-violet-600">Premium quality check</p>
+                    <p className="text-sm text-brand">Premium quality check</p>
                   </div>
                 </div>
                 <p className="text-gray-700 mb-4">
@@ -797,7 +797,7 @@ export default function Home() {
                 <ul className="space-y-2">
                   {['Matches your book\'s tone', 'Region-specific language settings', 'Natural phrasing & idioms', 'All changes highlighted in yellow'].map((item, i) => (
                     <li key={i} className="flex items-center gap-2 text-gray-700 text-sm">
-                      <span className="text-violet-600">✓</span>{item}
+                      <span className="text-brand">✓</span>{item}
                     </li>
                   ))}
                 </ul>
@@ -831,8 +831,8 @@ export default function Home() {
                     , "no en nuestras suposiciones previas."
                   </p>
                 </div>
-                <div className="bg-violet-50 px-4 py-3 border-t border-violet-100">
-                  <p className="text-sm text-violet-700">
+                <div className="bg-[#F3F0F8] px-4 py-3 border-t border-violet-100">
+                  <p className="text-sm text-brand-dark">
                     <span className="font-semibold">💡 2 editorial improvements highlighted</span> - Review and approve each change
                   </p>
                 </div>
@@ -849,7 +849,7 @@ export default function Home() {
               <p className="text-gray-600">Depending on what you upload</p>
             </div>
             <div className="grid md:grid-cols-2 gap-6">
-              <div className="bg-gradient-to-br from-blue-50 to-white rounded-2xl p-6 border border-blue-100">
+              <div className="bg-gradient-to-br from-blue-50 to-white rounded-2xl p-6 border border-[#EBE6F4]">
                 <div className="flex items-center gap-3 mb-4">
                   <span className="text-2xl">📱</span>
                   <h3 className="font-bold text-gray-900">If you upload EPUB</h3>
@@ -878,12 +878,12 @@ export default function Home() {
         </section>
 
         {/* Pricing */}
-        <section className="py-24 bg-gradient-to-b from-white to-slate-50">
+        <section className="py-24 bg-gradient-to-b from-white to-cream">
           <div className="max-w-7xl mx-auto px-8">
             <div className="text-center mb-16">
               <h2 className="text-4xl font-bold text-gray-900 mb-4" style={serifFont}>Simple, transparent pricing</h2>
               <p className="text-xl text-gray-600">Per language • Includes editorial review</p>
-              <p className="text-lg text-violet-600 font-medium mt-3">Upload your book and we automatically calculate your exact price — no need to pick a tier</p>
+              <p className="text-lg text-brand font-medium mt-3">Upload your book and we automatically calculate your exact price — no need to pick a tier</p>
             </div>
 
             <div className="grid md:grid-cols-3 gap-6 max-w-4xl mx-auto mb-16">
@@ -891,11 +891,11 @@ export default function Home() {
                 <div
                   key={key}
                   className={`relative bg-white rounded-3xl p-8 border-2 cursor-default ${
-                    key === 'medium' ? 'border-violet-400 shadow-lg' : 'border-gray-100'
+                    key === 'medium' ? 'border-brand shadow-lg' : 'border-gray-100'
                   }`}
                 >
                   {key === 'medium' && (
-                    <div className="absolute -top-3 left-1/2 -translate-x-1/2 px-4 py-1 bg-gradient-to-r from-blue-600 to-violet-600 text-white text-sm font-bold rounded-full">
+                    <div className="absolute -top-3 left-1/2 -translate-x-1/2 px-4 py-1 bg-brand text-white text-sm font-bold rounded-full">
                       Most Popular
                     </div>
                   )}
@@ -910,14 +910,14 @@ export default function Home() {
                       {key === 'medium' && 'Standard books'}
                       {key === 'large' && 'Large books & textbooks'}
                     </p>
-                    <p className="text-xs text-violet-600 font-medium mt-3">Auto-detected after upload</p>
+                    <p className="text-xs text-brand font-medium mt-3">Auto-detected after upload</p>
                   </div>
                 </div>
               ))}
             </div>
 
             {/* Bundle discounts */}
-            <div className="bg-gradient-to-br from-violet-50 to-blue-50 rounded-3xl p-8 max-w-4xl mx-auto">
+            <div className="bg-[#F3F0F8] rounded-3xl p-8 max-w-4xl mx-auto">
               <h3 className="text-2xl font-bold text-gray-900 text-center mb-6" style={serifFont}>Bundle & Save</h3>
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                 {Object.entries(BUNDLE_DISCOUNTS).map(([num, info]) => (
@@ -932,14 +932,14 @@ export default function Home() {
                 ))}
               </div>
               <p className="text-center text-gray-600 mt-6">
-                Example: 80k novel → All 6 languages = <span className="font-bold text-violet-600">${(149 * 6 * 0.60).toFixed(0)}</span> <span className="text-gray-400 line-through">${149 * 6}</span> (40% bundle discount)
+                Example: 80k novel → All 6 languages = <span className="font-bold text-brand">${(149 * 6 * 0.60).toFixed(0)}</span> <span className="text-gray-400 line-through">${149 * 6}</span> (40% bundle discount)
               </p>
             </div>
 
             <div className="text-center mt-12">
               <button
                 onClick={() => setCurrentView('upload')}
-                className="px-10 py-4 bg-gradient-to-r from-blue-600 to-violet-600 text-white rounded-2xl font-bold text-lg shadow-xl hover:shadow-2xl transition-all"
+                className="px-10 py-4 bg-brand text-white rounded-2xl font-bold text-lg shadow-xl hover:shadow-2xl transition-all"
               >
                 Upload Your Book to See Your Price →
               </button>
@@ -983,11 +983,11 @@ export default function Home() {
                   link: { href: '/publishers', label: 'Learn more →' },
                 },
               ].map((item, i) => (
-                <div key={i} className="bg-gradient-to-br from-slate-50 to-blue-50 rounded-2xl p-6 border border-blue-100">
+                <div key={i} className="bg-gradient-to-br from-cream to-[#F3F0F8] rounded-2xl p-6 border border-[#EBE6F4]">
                   <h3 className="text-lg font-bold text-gray-900 mb-3" style={serifFont}>{item.q}</h3>
                   <p className="text-gray-600 leading-relaxed">{item.a}</p>
                   {'link' in item && item.link && (
-                    <a href={item.link.href} className="inline-block mt-3 text-sm font-semibold text-violet-600 hover:text-violet-800 transition-colors">
+                    <a href={item.link.href} className="inline-block mt-3 text-sm font-semibold text-brand hover:text-brand-dark transition-colors">
                       {item.link.label}
                     </a>
                   )}
@@ -1008,7 +1008,7 @@ export default function Home() {
             </div>
             <p className="mb-2">
               Questions? Email us at{' '}
-              <a href="mailto:hello@booklingua.io" className="text-violet-400 hover:text-violet-300 transition-colors">
+              <a href="mailto:hello@booklingua.io" className="text-amber-400 hover:text-amber-300 transition-colors">
                 hello@booklingua.io
               </a>
             </p>
@@ -1021,8 +1021,8 @@ export default function Home() {
 
   // Upload Flow
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-violet-50">
-      <style>{`@import url('https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&display=swap');`}</style>
+    <div className="min-h-screen bg-cream">
+      <style>{`@import url('https://fonts.googleapis.com/css2?family=EB+Garamond:ital,wght@0,400;0,500;0,600;1,400&display=swap');`}</style>
 
       <nav className="flex items-center justify-between px-8 py-6 max-w-5xl mx-auto">
         <button onClick={() => { setCurrentView('landing'); setCheckoutStep(1) }} className="flex items-center gap-3">
@@ -1034,7 +1034,7 @@ export default function Home() {
             <div key={step} className="flex items-center gap-2">
               <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold ${
                 checkoutStep > i + 1 ? 'bg-green-500 text-white' :
-                checkoutStep === i + 1 ? 'bg-violet-600 text-white' : 'bg-gray-200 text-gray-500'
+                checkoutStep === i + 1 ? 'bg-brand text-white' : 'bg-gray-200 text-gray-500'
               }`}>
                 {checkoutStep > i + 1 ? '✓' : i + 1}
               </div>
@@ -1059,7 +1059,7 @@ export default function Home() {
             {!uploadedFile ? (
               <div
                 className={`relative border-2 border-dashed rounded-3xl p-16 text-center transition-all cursor-pointer ${
-                  dragActive ? 'border-violet-500 bg-violet-50' : 'border-gray-300 bg-white hover:border-violet-400'
+                  dragActive ? 'border-brand bg-[#F3F0F8]' : 'border-gray-300 bg-white hover:border-brand-light'
                 }`}
                 onDragEnter={handleDrag}
                 onDragLeave={handleDrag}
@@ -1072,7 +1072,7 @@ export default function Home() {
                   onChange={handleDrop}
                   className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
                 />
-                <div className="w-24 h-24 mx-auto mb-6 rounded-2xl bg-gradient-to-br from-blue-100 to-violet-100 flex items-center justify-center">
+                <div className="w-24 h-24 mx-auto mb-6 rounded-2xl bg-gradient-to-br from-amber-100 to-brand-light flex items-center justify-center">
                   <span className="text-5xl">📤</span>
                 </div>
                 <h3 className="text-2xl font-bold text-gray-800 mb-2" style={serifFont}>Drag & drop your manuscript</h3>
@@ -1086,16 +1086,16 @@ export default function Home() {
                 </div>
               </div>
             ) : (
-              <div className="bg-white rounded-3xl shadow-xl p-8 border border-blue-100">
+              <div className="bg-white rounded-3xl shadow-xl p-8 border border-[#EBE6F4]">
                 {isProcessing ? (
                   <div className="text-center py-12">
-                    <div className="w-16 h-16 mx-auto mb-6 rounded-full border-4 border-violet-200 border-t-violet-600 animate-spin" />
+                    <div className="w-16 h-16 mx-auto mb-6 rounded-full border-4 border-brand-light border-t-violet-600 animate-spin" />
                     <p className="text-gray-600">Processing your manuscript...</p>
                   </div>
                 ) : (
                   <>
                     <div className="flex items-start gap-6 mb-8 pb-8 border-b border-gray-100">
-                      <div className="w-20 h-24 bg-gradient-to-br from-blue-500 to-violet-600 rounded-xl shadow-lg flex items-center justify-center">
+                      <div className="w-20 h-24 bg-gradient-to-br from-brand to-brand-dark rounded-xl shadow-lg flex items-center justify-center">
                         <span className="text-white text-3xl">
                           {fileFormat === '.epub' ? '📱' : '📕'}
                         </span>
@@ -1105,14 +1105,14 @@ export default function Home() {
                           type="text"
                           value={bookTitle}
                           onChange={(e) => setBookTitle(e.target.value)}
-                          className="text-2xl font-bold text-gray-900 w-full bg-transparent border-b-2 border-transparent hover:border-gray-200 focus:border-violet-400 focus:outline-none pb-1 mb-2"
+                          className="text-2xl font-bold text-gray-900 w-full bg-transparent border-b-2 border-transparent hover:border-gray-200 focus:border-brand-light focus:outline-none pb-1 mb-2"
                           style={serifFont}
                           placeholder="Book Title"
                         />
                         <p className="text-gray-500">{uploadedFile.name}</p>
                         <div className="flex items-center gap-4 mt-2">
-                          <span className="text-violet-600 font-semibold">{wordCount.toLocaleString()} words</span>
-                          <span className="px-2 py-1 bg-violet-100 text-violet-700 text-xs font-semibold rounded-full">
+                          <span className="text-brand font-semibold">{wordCount.toLocaleString()} words</span>
+                          <span className="px-2 py-1 bg-brand-light text-brand-dark text-xs font-semibold rounded-full">
                             {WORD_TIERS[selectedTier!]?.label}
                           </span>
                           <span className="px-2 py-1 bg-gray-100 text-gray-600 text-xs font-semibold rounded-full">
@@ -1135,7 +1135,7 @@ export default function Home() {
                           type="text"
                           value={authorName}
                           onChange={(e) => setAuthorName(e.target.value)}
-                          className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:border-violet-400 focus:ring-2 focus:ring-violet-100 outline-none"
+                          className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:border-brand-light focus:ring-2 focus:ring-brand-light outline-none"
                           placeholder="Your name"
                         />
                       </div>
@@ -1145,7 +1145,7 @@ export default function Home() {
                           type="email"
                           value={email}
                           onChange={(e) => setEmail(e.target.value)}
-                          className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:border-violet-400 focus:ring-2 focus:ring-violet-100 outline-none"
+                          className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:border-brand-light focus:ring-2 focus:ring-brand-light outline-none"
                           placeholder="you@example.com"
                         />
                       </div>
@@ -1156,7 +1156,7 @@ export default function Home() {
                       <select
                         value={selectedGenre}
                         onChange={(e) => setSelectedGenre(e.target.value)}
-                        className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:border-violet-400 outline-none"
+                        className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:border-brand-light outline-none"
                       >
                         <option value="">Select genre...</option>
                         {BOOK_GENRES.map(genre => (
@@ -1183,7 +1183,7 @@ export default function Home() {
                               onClick={() => setHeatLevel(opt.value)}
                               className={`p-3 rounded-xl border-2 text-left transition-all ${
                                 heatLevel === opt.value
-                                  ? 'border-violet-500 bg-violet-50'
+                                  ? 'border-brand bg-[#F3F0F8]'
                                   : 'border-gray-200 hover:border-violet-300'
                               }`}
                             >
@@ -1226,7 +1226,7 @@ export default function Home() {
                                 key={i}
                                 type="button"
                                 onClick={() => setSpecialInstructions(prev => prev ? `${prev}\n${tip}` : tip)}
-                                className="text-xs px-3 py-1.5 rounded-full bg-violet-50 border border-violet-200 text-violet-700 hover:bg-violet-100 transition-colors text-left"
+                                className="text-xs px-3 py-1.5 rounded-full bg-[#F3F0F8] border border-brand-light text-brand-dark hover:bg-brand-light transition-colors text-left"
                               >
                                 + {tip}
                               </button>
@@ -1237,7 +1237,7 @@ export default function Home() {
                       <textarea
                         value={specialInstructions}
                         onChange={(e) => setSpecialInstructions(e.target.value)}
-                        className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:border-violet-400 outline-none resize-none"
+                        className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:border-brand-light outline-none resize-none"
                         rows={3}
                         placeholder="Any specific instructions for your translator…"
                       />
@@ -1245,8 +1245,8 @@ export default function Home() {
 
                     {/* Upload status indicator */}
                     {!uploadComplete && !uploadError && (
-                      <div className="flex items-center gap-2 text-sm text-blue-600 mb-4 px-1">
-                        <div className="w-4 h-4 border-2 border-blue-400 border-t-blue-600 rounded-full animate-spin" />
+                      <div className="flex items-center gap-2 text-sm text-brand mb-4 px-1">
+                        <div className="w-4 h-4 border-2 border-brand-light border-t-brand rounded-full animate-spin" />
                         Uploading your file securely…
                       </div>
                     )}
@@ -1302,7 +1302,7 @@ export default function Home() {
                                         ? 'border-red-400 bg-red-50'
                                         : 'border-gray-200 hover:border-red-300'
                                       : scanResponses[finding.original] === opt.value
-                                        ? 'border-violet-500 bg-violet-50'
+                                        ? 'border-brand bg-[#F3F0F8]'
                                         : 'border-gray-200 hover:border-violet-300'
                                   }`}>
                                     <input
@@ -1311,7 +1311,7 @@ export default function Home() {
                                       value={opt.value}
                                       checked={scanResponses[finding.original] === opt.value}
                                       onChange={() => setScanResponses(prev => ({ ...prev, [finding.original]: opt.value }))}
-                                      className={`mt-1 w-4 h-4 ${opt.value === 'false_positive' ? 'text-red-500' : 'text-violet-600'}`}
+                                      className={`mt-1 w-4 h-4 ${opt.value === 'false_positive' ? 'text-red-500' : 'text-brand'}`}
                                     />
                                     <div>
                                       <p className={`font-medium text-sm ${opt.value === 'false_positive' ? 'text-red-700' : 'text-gray-900'}`}>{opt.label}</p>
@@ -1333,7 +1333,7 @@ export default function Home() {
                           </button>
                           <button
                             onClick={applyScanResponses}
-                            className="flex-1 py-3 bg-gradient-to-r from-blue-600 to-violet-600 text-white rounded-xl font-bold text-sm shadow-lg hover:shadow-xl transition-all"
+                            className="flex-1 py-3 bg-brand text-white rounded-xl font-bold text-sm shadow-lg hover:shadow-xl transition-all"
                           >
                             Save Preferences & Continue →
                           </button>
@@ -1346,7 +1346,7 @@ export default function Home() {
                       disabled={!email || !bookTitle || !uploadComplete}
                       className={`w-full py-4 rounded-2xl font-bold text-lg transition-all ${
                         email && bookTitle && uploadComplete
-                          ? 'bg-gradient-to-r from-blue-600 to-violet-600 text-white shadow-xl hover:shadow-2xl'
+                          ? 'bg-brand text-white shadow-xl hover:shadow-2xl'
                           : 'bg-gray-200 text-gray-400 cursor-not-allowed'
                       }`}
                     >
@@ -1367,8 +1367,8 @@ export default function Home() {
               <p className="text-gray-600 text-lg">Choose one or bundle multiple for bigger savings</p>
             </div>
 
-            <div className="bg-white rounded-3xl shadow-xl p-8 border border-blue-100">
-              <div className="bg-gradient-to-r from-blue-600 to-violet-600 rounded-2xl p-6 mb-8 text-white">
+            <div className="bg-white rounded-3xl shadow-xl p-8 border border-[#EBE6F4]">
+              <div className="bg-brand rounded-2xl p-6 mb-8 text-white">
                 <div className="flex items-center justify-between">
                   <div>
                     <h3 className="text-xl font-bold mb-1">🎉 Bundle All 6 Languages & Save 40%</h3>
@@ -1376,7 +1376,7 @@ export default function Home() {
                   </div>
                   <button
                     onClick={selectAllCore}
-                    className="px-6 py-3 bg-white text-violet-600 rounded-xl font-bold hover:shadow-lg transition-all"
+                    className="px-6 py-3 bg-white text-brand rounded-xl font-bold hover:shadow-lg transition-all"
                   >
                     Select All 6
                   </button>
@@ -1390,7 +1390,7 @@ export default function Home() {
                     onClick={() => toggleLanguage(lang.code)}
                     className={`p-4 rounded-2xl border-2 text-left transition-all ${
                       selectedLanguages.includes(lang.code)
-                        ? 'border-violet-500 bg-violet-50'
+                        ? 'border-brand bg-[#F3F0F8]'
                         : 'border-gray-200 hover:border-violet-300'
                     }`}
                   >
@@ -1402,7 +1402,7 @@ export default function Home() {
                       </div>
                       <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center ${
                         selectedLanguages.includes(lang.code)
-                          ? 'border-violet-500 bg-violet-500 text-white'
+                          ? 'border-brand bg-[#F3F0F8]0 text-white'
                           : 'border-gray-300'
                       }`}>
                         {selectedLanguages.includes(lang.code) && '✓'}
@@ -1434,7 +1434,7 @@ export default function Home() {
                   )}
                   <div className="border-t border-gray-200 pt-4 flex justify-between items-center">
                     <span className="text-lg font-bold text-gray-900">Total</span>
-                    <span className="text-3xl font-bold text-violet-600">
+                    <span className="text-3xl font-bold text-brand">
                       ${calculatePrice(selectedTier, selectedLanguages.length)}
                     </span>
                   </div>
@@ -1453,7 +1453,7 @@ export default function Home() {
                   disabled={selectedLanguages.length === 0 || scanLoading}
                   className={`flex-1 py-4 rounded-2xl font-bold text-lg transition-all ${
                     selectedLanguages.length > 0 && !scanLoading
-                      ? 'bg-gradient-to-r from-blue-600 to-violet-600 text-white shadow-xl'
+                      ? 'bg-brand text-white shadow-xl'
                       : 'bg-gray-200 text-gray-400 cursor-not-allowed'
                   }`}
                 >
@@ -1512,7 +1512,7 @@ export default function Home() {
                                 ? 'border-red-400 bg-red-50'
                                 : 'border-gray-200 hover:border-red-300'
                               : scanResponses[finding.original] === opt.value
-                                ? 'border-violet-500 bg-violet-50'
+                                ? 'border-brand bg-[#F3F0F8]'
                                 : 'border-gray-200 hover:border-violet-300'
                           }`}>
                             <input
@@ -1521,7 +1521,7 @@ export default function Home() {
                               value={opt.value}
                               checked={scanResponses[finding.original] === opt.value}
                               onChange={() => setScanResponses(prev => ({ ...prev, [finding.original]: opt.value }))}
-                              className={`mt-1 w-4 h-4 ${opt.value === 'false_positive' ? 'text-red-500' : 'text-violet-600'}`}
+                              className={`mt-1 w-4 h-4 ${opt.value === 'false_positive' ? 'text-red-500' : 'text-brand'}`}
                             />
                             <div>
                               <p className={`font-medium text-sm ${opt.value === 'false_positive' ? 'text-red-700' : 'text-gray-900'}`}>{opt.label}</p>
@@ -1549,7 +1549,7 @@ export default function Home() {
                   </button>
                   <button
                     onClick={() => { applyScanResponses(); setCheckoutStep(4); }}
-                    className="flex-1 py-3 bg-gradient-to-r from-blue-600 to-violet-600 text-white rounded-xl font-bold text-sm shadow-lg hover:shadow-xl transition-all"
+                    className="flex-1 py-3 bg-brand text-white rounded-xl font-bold text-sm shadow-lg hover:shadow-xl transition-all"
                   >
                     Save Preferences & Continue →
                   </button>
@@ -1569,11 +1569,11 @@ export default function Home() {
 
             <div className="grid lg:grid-cols-3 gap-8">
               <div className="lg:col-span-2 space-y-6">
-                <div className="bg-white rounded-3xl shadow-xl p-8 border border-blue-100">
+                <div className="bg-white rounded-3xl shadow-xl p-8 border border-[#EBE6F4]">
                   <h3 className="text-xl font-bold text-gray-900 mb-6" style={serifFont}>Order Summary</h3>
 
                   <div className="flex items-start gap-4 mb-6 pb-6 border-b border-gray-100">
-                    <div className="w-16 h-20 bg-gradient-to-br from-blue-500 to-violet-600 rounded-xl shadow-lg flex items-center justify-center">
+                    <div className="w-16 h-20 bg-gradient-to-br from-brand to-brand-dark rounded-xl shadow-lg flex items-center justify-center">
                       <span className="text-white text-2xl">
                         {fileFormat === '.epub' ? '📱' : '📕'}
                       </span>
@@ -1588,7 +1588,7 @@ export default function Home() {
                         })}
                       </div>
                       {affiliateCode && (
-                        <p className="text-xs text-violet-600 mt-1">Referred by: {affiliateCode}</p>
+                        <p className="text-xs text-brand mt-1">Referred by: {affiliateCode}</p>
                       )}
                     </div>
                     <p className="text-xl font-bold text-gray-900">
@@ -1603,7 +1603,7 @@ export default function Home() {
                   </div>
                 </div>
 
-                <div className="bg-white rounded-3xl shadow-xl p-8 border border-blue-100">
+                <div className="bg-white rounded-3xl shadow-xl p-8 border border-[#EBE6F4]">
                   <div className="flex items-center gap-3 mb-6">
                     <span className="text-2xl">🚀</span>
                     <div>
@@ -1620,14 +1620,14 @@ export default function Home() {
                         className={`w-full p-5 rounded-2xl border-2 text-left transition-all ${
                           upsell.id === 'launch-pack'
                             ? selectedUpsells.includes(upsell.id)
-                              ? 'border-violet-500 bg-violet-50'
-                              : 'border-violet-200 bg-gradient-to-br from-violet-50/60 to-white hover:border-violet-400'
+                              ? 'border-brand bg-[#F3F0F8]'
+                              : 'border-brand-light bg-gradient-to-br from-violet-50/60 to-white hover:border-brand-light'
                             : upsell.id === 'dual-format'
                             ? selectedUpsells.includes(upsell.id)
                               ? 'border-blue-500 bg-blue-50'
-                              : 'border-blue-200 bg-gradient-to-br from-blue-50/60 to-white hover:border-blue-400'
+                              : 'border-brand-light bg-gradient-to-br from-blue-50/60 to-white hover:border-blue-400'
                             : selectedUpsells.includes(upsell.id)
-                              ? 'border-violet-500 bg-violet-50'
+                              ? 'border-brand bg-[#F3F0F8]'
                               : 'border-gray-200 hover:border-violet-300'
                         }`}
                       >
@@ -1652,7 +1652,7 @@ export default function Home() {
                               <div className="mt-3 grid grid-cols-1 gap-1">
                                 {upsell.details.map((d, i) => (
                                   <div key={i} className="flex items-center gap-2 text-xs text-gray-700">
-                                    <span className="text-violet-500 font-bold flex-shrink-0">✓</span>
+                                    <span className="text-brand font-bold flex-shrink-0">✓</span>
                                     <span>{d}</span>
                                   </div>
                                 ))}
@@ -1705,7 +1705,7 @@ export default function Home() {
               </div>
 
               <div className="lg:col-span-1">
-                <div className="bg-white rounded-3xl shadow-xl p-6 border border-blue-100 sticky top-8">
+                <div className="bg-white rounded-3xl shadow-xl p-6 border border-[#EBE6F4] sticky top-8">
                   <h3 className="text-lg font-bold text-gray-900 mb-4" style={serifFont}>Order Total</h3>
 
                   <div className="space-y-3 mb-6">
@@ -1734,7 +1734,7 @@ export default function Home() {
                         {voucherApplied && (
                           <span className="text-gray-400 line-through text-sm mr-2">${calculateTotal()}</span>
                         )}
-                        <span className="text-2xl font-bold text-violet-600">${calculateFinalTotal()}</span>
+                        <span className="text-2xl font-bold text-brand">${calculateFinalTotal()}</span>
                       </div>
                     </div>
                   </div>
@@ -1749,12 +1749,12 @@ export default function Home() {
                           value={voucherCode}
                           onChange={(e) => setVoucherCode(e.target.value.toUpperCase())}
                           placeholder="Enter code"
-                          className="flex-1 px-3 py-2 rounded-xl border border-gray-200 focus:border-violet-400 outline-none text-sm"
+                          className="flex-1 px-3 py-2 rounded-xl border border-gray-200 focus:border-brand-light outline-none text-sm"
                         />
                         <button
                           onClick={applyVoucher}
                           disabled={voucherLoading || !voucherCode.trim()}
-                          className="px-4 py-2 bg-violet-100 text-violet-700 rounded-xl font-medium text-sm hover:bg-violet-200 disabled:opacity-50"
+                          className="px-4 py-2 bg-brand-light text-brand-dark rounded-xl font-medium text-sm hover:bg-brand-light disabled:opacity-50"
                         >
                           {voucherLoading ? '...' : 'Apply'}
                         </button>
@@ -1778,7 +1778,7 @@ export default function Home() {
                       type="checkbox"
                       checked={copyrightConfirmed}
                       onChange={e => setCopyrightConfirmed(e.target.checked)}
-                      className="mt-0.5 w-4 h-4 rounded border-gray-300 text-violet-600 focus:ring-violet-500 cursor-pointer"
+                      className="mt-0.5 w-4 h-4 rounded border-gray-300 text-brand focus:ring-brand cursor-pointer"
                     />
                     <span className="text-sm text-gray-500 group-hover:text-gray-700 leading-snug">
                       I confirm I own the copyright to this content, or have permission to have it translated.
@@ -1788,7 +1788,7 @@ export default function Home() {
                   <button
                     onClick={handleCheckout}
                     disabled={isProcessing || !copyrightConfirmed}
-                    className="w-full py-4 bg-gradient-to-r from-blue-600 to-violet-600 text-white rounded-2xl font-bold text-lg shadow-xl hover:shadow-2xl transition-all mb-4 disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="w-full py-4 bg-brand text-white rounded-2xl font-bold text-lg shadow-xl hover:shadow-2xl transition-all mb-4 disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     {isProcessing ? 'Processing...' : `Pay $${calculateFinalTotal()} →`}
                   </button>

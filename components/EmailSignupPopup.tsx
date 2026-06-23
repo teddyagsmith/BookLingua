@@ -74,16 +74,16 @@ export default function EmailSignupPopup() {
           </button>
 
           {/* Header gradient strip */}
-          <div className="bg-gradient-to-r from-blue-600 to-violet-600 px-8 pt-8 pb-10">
+          <div className="bg-brand px-8 pt-8 pb-10">
             <div className="flex items-center gap-3 mb-4">
               <Image src="/logo.png" alt="BookLingua" width={36} height={36} className="object-contain" />
-              <span className="text-white font-bold text-lg" style={{ fontFamily: "'Instrument Serif', Georgia, serif" }}>
+              <span className="text-white font-bold text-lg" style={{ fontFamily: "'EB Garamond', Georgia, serif" }}>
                 BookLingua
               </span>
             </div>
             <h2
               className="text-2xl font-bold text-white mb-2 leading-snug"
-              style={{ fontFamily: "'Instrument Serif', Georgia, serif" }}
+              style={{ fontFamily: "'EB Garamond', Georgia, serif" }}
             >
               Reach readers in<br />6 new languages 🌍
             </h2>
@@ -94,17 +94,17 @@ export default function EmailSignupPopup() {
 
           {/* Body */}
           <div className="px-8 py-6 -mt-4">
-            <div className="bg-white rounded-2xl shadow-sm border border-blue-100 p-4 mb-5">
+            <div className="bg-white rounded-2xl shadow-sm border border-brand-light p-4 mb-5">
               <div className="flex items-center gap-2 text-sm text-gray-700">
-                <span className="text-violet-500 font-bold">✓</span>
+                <span className="text-brand font-bold">✓</span>
                 Tips for selling your book in foreign markets
               </div>
               <div className="flex items-center gap-2 text-sm text-gray-700 mt-1.5">
-                <span className="text-violet-500 font-bold">✓</span>
+                <span className="text-brand font-bold">✓</span>
                 Language + launch guides for self-published authors
               </div>
               <div className="flex items-center gap-2 text-sm text-gray-700 mt-1.5">
-                <span className="text-violet-500 font-bold">✓</span>
+                <span className="text-brand font-bold">✓</span>
                 Exclusive subscriber discounts (we never spam)
               </div>
             </div>
@@ -117,13 +117,13 @@ export default function EmailSignupPopup() {
                   onChange={(e) => setEmail(e.target.value)}
                   placeholder="your@email.com"
                   required
-                  className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:border-violet-400 focus:ring-2 focus:ring-violet-100 outline-none mb-3 text-sm"
+                  className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:border-brand focus:ring-2 focus:ring-brand-light outline-none mb-3 text-sm"
                 />
                 {error && <p className="text-red-500 text-xs mb-2">{error}</p>}
                 <button
                   type="submit"
                   disabled={loading}
-                  className="w-full py-3 bg-gradient-to-r from-blue-600 to-violet-600 text-white rounded-xl font-bold text-sm shadow-lg hover:shadow-xl transition-all disabled:opacity-60"
+                  className="w-full py-3 bg-brand text-white rounded-xl font-bold text-sm shadow-lg hover:shadow-xl transition-all disabled:opacity-60"
                 >
                   {loading ? 'Subscribing…' : 'Subscribe — it\'s free'}
                 </button>
@@ -134,7 +134,7 @@ export default function EmailSignupPopup() {
             ) : (
               <div className="text-center py-4">
                 <div className="text-4xl mb-3">🎉</div>
-                <h3 className="font-bold text-gray-900 mb-1" style={{ fontFamily: "'Instrument Serif', Georgia, serif" }}>
+                <h3 className="font-bold text-gray-900 mb-1" style={{ fontFamily: "'EB Garamond', Georgia, serif" }}>
                   You're in!
                 </h3>
                 <p className="text-sm text-gray-500">
