@@ -1,6 +1,6 @@
 import { Document, Paragraph, TextRun, HeadingLevel, AlignmentType, ShadingType, Packer } from 'docx'
 
-interface SegmentMeta { id: number; type: 'heading' | 'paragraph' | string; level: number }
+interface SegmentMeta { id: number; type: 'heading' | 'paragraph' | string; level: number; text: string }
 
 interface TypedSegment {
   type: 'heading' | 'paragraph'
@@ -8,12 +8,20 @@ interface TypedSegment {
   text: string
 }
 
+// ─── Heading level mapping (supports H1–H4) ─────────────────────────────────
+
+function headingLevelFromSegment(level: number): HeadingLevel {
+  switch (level) {
+    case 1: return HeadingLevel.HEADING_1
+    case 2: return HeadingLevel.HEADING_2
+    case 3: return HeadingLevel.HEADING_3
+    case 4: return HeadingLevel.HEADING_4
+    default: return HeadingLevel.HEADING_1
+  }
+}
+
 // ─── Public builders ─────────────────────────────────────────────────────────
 
-/**
- * Build review DOCX (with yellow highlights) using segment type metadata.
- * Headings are correct because we KNOW their types — no regex guessing.
- */
 export async function buildReviewDocxFromSegments(
   translatedText: string,
   segmentMeta: SegmentMeta[],
@@ -35,7 +43,7 @@ export async function buildReviewDocxFromSegments(
     }),
     new Paragraph({
       children: [new TextRun({
-        text: 'Yellow highlighted text = original first-pass translation. Clean text = editorial improvement.',
+        text: 'Yellow highlighted text = editorial improvement. Clean text = original first-pass translation.',
         color: '374151', size: 20,
       })],
       spacing: { after: 60 },
@@ -55,7 +63,7 @@ export async function buildReviewDocxFromSegments(
     if (seg.type === 'heading') {
       children.push(new Paragraph({
         text: seg.text,
-        heading: seg.level === 2 ? HeadingLevel.HEADING_2 : HeadingLevel.HEADING_1,
+        heading: headingLevelFromSegment(seg.level),
         spacing: { before: 240, after: 120 },
       }))
     } else {
@@ -70,9 +78,6 @@ export async function buildReviewDocxFromSegments(
   return Buffer.from(await Packer.toBuffer(doc))
 }
 
-/**
- * Build final clean DOCX using segment type metadata.
- */
 export async function buildFinalDocxFromSegments(
   translatedText: string,
   segmentMeta: SegmentMeta[],
@@ -81,20 +86,23 @@ export async function buildFinalDocxFromSegments(
 ): Promise<Buffer> {
   const segments = mapTextToSegments(translatedText, segmentMeta)
 
-  const children: Paragraph[] = [
-    new Paragraph({ text: bookTitle, heading: HeadingLevel.TITLE }),
-    new Paragraph({
+  const children: Paragraph[] = []
+
+  // Only prepend cover block if title is NOT already in the translation
+  if (!hasTitleInTranslation(segments, bookTitle)) {
+    children.push(new Paragraph({ text: bookTitle, heading: HeadingLevel.TITLE }))
+    children.push(new Paragraph({
       children: [new TextRun({ text: `Translated into ${langDisplay} by BookLingua`, italics: true, color: '555555' })],
       alignment: AlignmentType.CENTER,
-    }),
-    new Paragraph({ text: '' }),
-  ]
+    }))
+    children.push(new Paragraph({ text: '' }))
+  }
 
   for (const seg of segments) {
     if (seg.type === 'heading') {
       children.push(new Paragraph({
         text: seg.text,
-        heading: seg.level === 2 ? HeadingLevel.HEADING_2 : HeadingLevel.HEADING_1,
+        heading: headingLevelFromSegment(seg.level),
         spacing: { before: 240, after: 120 },
       }))
     } else {
@@ -110,27 +118,76 @@ export async function buildFinalDocxFromSegments(
   return Buffer.from(await Packer.toBuffer(doc))
 }
 
-// ─── Core: map translated text → typed segments ──────────────────────────────
+// ─── Core: map translated text → typed segments with drift correction ────────
 
-/**
- * Maps plain translated text to typed segments using segment metadata.
- * The translation pipeline outputs paragraphs (double-newline separated).
- * We match them positionally to the segment metadata to restore types.
- */
-function mapTextToSegments(translatedText: string, meta: SegmentMeta[]): TypedSegment[] {
-  // Split into paragraphs, filtering empties
+function mapTextToSegments(
+  translatedText: string,
+  meta: SegmentMeta[]
+): TypedSegment[] {
   const paras = translatedText
     .split(/\n\n+/)
     .map(p => p.trim())
     .filter(p => p.length > 0)
 
-  return paras.map((text, i) => {
+  // Build heading-position index from meta
+  const headingsInMeta = meta
+    .map((m, i) => ({ ...m, pos: i / Math.max(meta.length - 1, 1) }))
+    .filter(m => m.type === 'heading')
+
+  // Pass 1: try positional match
+  const result: TypedSegment[] = paras.map((text, i) => {
     const m = meta[i]
-    return {
-      type: (m?.type === 'heading' ? 'heading' : 'paragraph') as 'heading' | 'paragraph',
-      level: m?.level ?? 0,
-      text,
+    if (m) {
+      return {
+        type: m.type === 'heading' ? 'heading' : 'paragraph',
+        level: m.level ?? 0,
+        text,
+      }
     }
+    return { type: 'paragraph', level: 0, text }
+  })
+
+  // Pass 2: drift correction
+  const foundHeadings = result.filter(r => r.type === 'heading').length
+  const expectedHeadings = headingsInMeta.length
+
+  if (foundHeadings >= expectedHeadings * 0.85) {
+    return result
+  }
+
+  // Drift detected — use position-ratio matching
+  const corrected = result.map(r => ({ ...r }))
+  corrected.forEach(r => { r.type = 'paragraph'; r.level = 0 })
+
+  headingsInMeta.forEach(mh => {
+    const targetIdx = Math.round(mh.pos * (corrected.length - 1))
+    let bestIdx = targetIdx
+    for (let offset = 0; offset <= 5; offset++) {
+      for (const delta of [offset, -offset]) {
+        const idx = targetIdx + delta
+        if (idx >= 0 && idx < corrected.length && corrected[idx].type !== 'heading') {
+          bestIdx = idx
+          break
+        }
+      }
+      if (corrected[bestIdx].type !== 'heading') break
+    }
+    corrected[bestIdx].type = 'heading'
+    corrected[bestIdx].level = mh.level
+  })
+
+  return corrected
+}
+
+// ─── Duplicate title guard ───────────────────────────────────────────────────
+
+function hasTitleInTranslation(segments: TypedSegment[], titleText: string): boolean {
+  if (!titleText) return false
+  const normalise = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, '')
+  const normTitle = normalise(titleText)
+  return segments.slice(0, 5).some(s => {
+    const normSeg = normalise(s.text)
+    return normSeg.includes(normTitle) || normTitle.includes(normSeg)
   })
 }
 
@@ -141,7 +198,15 @@ function stripMarkers(text: string): string {
     .replace(/\[\[ORIGINAL:([^\]]|\](?!\]))*\]\]/g, '')
     .replace(/===SEGMENT_\d+_(START|END)===/g, '')
     .replace(/###CHAPTER:[^#]*###/g, '')
+    .replace(/###SEGMENT:\d+:\w+:\d+###/g, '')
+    .replace(/===TRANSLATION_NOTES===[\s\S]*?===TRANSLATION_NOTES===/g, '')
+    .replace(/\[TRANSLATION_NOTES\][\s\S]*?\[TRANSLATION_NOTES\]/g, '')
+    .replace(/BookLingua Translation Notes[\s\S]*?(?=\n─{3,}|\n={3,}|$)/g, '')
+    .replace(/\n\n(?:\*\*\d+\.\s[^\n]+\n?)+/g, '\n\n')
+    .replace(/\n\n[^\n]*(?:RAE|ASALE|ortografía académica)[^\n]*\n/g, '\n')
+    .replace(/\n\n[^\n]*(?:fórmula más natural|término estándar|calco del inglés)[^\n]*\n/g, '\n')
     .replace(/[^\S\n]{2,}/g, ' ')
+    .replace(/\n{3,}/g, '\n\n')
     .trim()
 }
 
@@ -172,28 +237,40 @@ function parseInlineRuns(text: string, size = 20): TextRun[] {
 
 function parseHighlightedRuns(text: string, size = 20): TextRun[] {
   const runs: TextRun[] = []
-  const re = /\[\[ORIGINAL:\s*([^\]]+?)\]\]/g
-  let last = 0
-  let m: RegExpExecArray | null
+  const markerRe = /\[\[ORIGINAL:\s*[^\]]*?\]\](.*?)(?=\[\[ORIGINAL:|$)/gs
+  let lastIndex = 0
 
-  while ((m = re.exec(text)) !== null) {
-    if (m.index > last) {
-      const before = text.slice(last, m.index)
-      if (before) runs.push(...parseInlineRuns(before, size))
+  const firstMarker = text.indexOf('[[ORIGINAL:')
+  if (firstMarker > 0) {
+    runs.push(new TextRun({ text: text.slice(0, firstMarker), size }))
+    lastIndex = firstMarker
+  }
+
+  markerRe.lastIndex = lastIndex
+  let match: RegExpExecArray | null
+
+  while ((match = markerRe.exec(text)) !== null) {
+    const improvedPhrase = match[1]
+    if (improvedPhrase.trim()) {
+      runs.push(new TextRun({
+        text: improvedPhrase,
+        size,
+        shading: { type: ShadingType.SOLID, color: 'FFEB3B', fill: 'FFEB3B' },
+      }))
     }
-    // Yellow highlight for the original phrase
-    runs.push(new TextRun({
-      text: m[1],
-      size,
-      shading: { type: ShadingType.SOLID, color: 'FFEB3B', fill: 'FFEB3B' },
-    }))
-    last = re.lastIndex
+    lastIndex = markerRe.lastIndex
   }
 
-  if (last < text.length) {
-    const rest = text.slice(last)
-    if (rest.trim()) runs.push(...parseInlineRuns(rest, size))
+  if (lastIndex < text.length) {
+    const trailing = text.slice(lastIndex)
+    if (trailing.trim()) {
+      runs.push(new TextRun({ text: trailing, size }))
+    }
   }
 
-  return runs.length ? runs : [new TextRun({ text, size })]
+  if (runs.length === 0) {
+    runs.push(new TextRun({ text, size }))
+  }
+
+  return runs
 }

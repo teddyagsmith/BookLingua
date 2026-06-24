@@ -111,7 +111,40 @@ function extractParagraphInfo(node: any): ParagraphInfo {
   }
 }
 
-// ─── Main DOCX extractor ────────────────────────────────────────────────────
+// ─── Heading level extraction (robust to spacing variations) ────────────────
+
+function extractHeadingLevel(styleId?: string, styleName?: string): number {
+  const sid = (styleId ?? '').toLowerCase().replace(/\s/g, '')
+  const sna = (styleName ?? '').toLowerCase().replace(/\s/g, '')
+  const combined = sid + '|' + sna
+
+  // Match heading1, heading 1, h1, etc.
+  const m = combined.match(/heading(\d)/)
+  if (m) {
+    const n = parseInt(m[1])
+    return n >= 1 && n <= 4 ? n : 1
+  }
+  return 1 // fallback: unknown heading style → H1
+}
+
+// ─── Pages H2-inflation guard ───────────────────────────────────────────────
+
+function sanitizePagesExport(segments: Segment[]): Segment[] {
+  const total = segments.length
+  if (total === 0) return segments
+
+  const headings = segments.filter(s => s.type === 'heading')
+  const allH2 = headings.length > 0 && headings.every(s => s.level === 2)
+
+  if (!allH2) return segments
+
+  // Everything is H2 — this is a Pages export. Use heuristic to assign H1 vs H2.
+  return segments.map(s => {
+    if (s.type !== 'heading') return s
+    const isTopLevel = /^(introduction|preface|foreword|dedication|conclusion|epilogue|chapter|chapitre|capítulo|kapitel|capitolo|teil|parte|section)/i.test(s.text.trim())
+    return { ...s, level: isTopLevel ? 1 : 2 }
+  })
+}
 
 export interface ExtractionResult {
   segments: Segment[]
@@ -146,11 +179,9 @@ export async function extractDocxSegments(buffer: Buffer): Promise<ExtractionRes
         const para = paragraphs[i]
 
         // Method 1: Proper Word styles
-        if (para.styleId?.toLowerCase().includes('heading') ||
-            para.styleName?.toLowerCase().includes('heading')) {
-          const level = para.styleId?.includes('Heading1') || para.styleName?.includes('Heading 1') ? 1
-                      : para.styleId?.includes('Heading2') || para.styleName?.includes('Heading 2') ? 2
-                      : 1
+        if (para.styleId?.toLowerCase().replace(/\s/g,'').includes('heading') ||
+            para.styleName?.toLowerCase().replace(/\s/g,'').includes('heading')) {
+          const level = extractHeadingLevel(para.styleId, para.styleName)
           segments.push({
             id: segmentId++,
             type: 'heading',
@@ -198,7 +229,7 @@ export async function extractDocxSegments(buffer: Buffer): Promise<ExtractionRes
   console.log(`[extractDocxSegments] Extracted ${segments.length} segments (${headingCount} headings)`)
 
   const quality = assessQuality(segments)
-  return { segments, quality }
+  return { segments: sanitizePagesExport(segments), quality }
 }
 
 // ─── TXT extractor ───────────────────────────────────────────────────────────

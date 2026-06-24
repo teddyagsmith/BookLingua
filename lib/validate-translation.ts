@@ -49,10 +49,25 @@ export function validateTranslation(
       })
     }
 
-    // Heading count mismatch
+    // Heading structure validation (NEW — blocking)
+    const headingCheck = validateHeadingStructure(segmentMeta, translatedParas)
+    if (!headingCheck.pass) {
+      headingCheck.errors.forEach(e => issues.push({
+        check: 'heading-structure',
+        severity: 'error',
+        message: e,
+        details: 'Heading hierarchy lost during translation. Rebuild required.',
+      }))
+    }
+    headingCheck.warnings.forEach(w => issues.push({
+      check: 'heading-structure',
+      severity: 'warning',
+      message: w,
+    }))
+
+    // Heading count mismatch (old check, now relaxed)
     const headingCount = segmentMeta.filter((s) => s.type === 'heading').length
     const translatedHeadings = translatedParas.filter((p) => p.match(/^#{1,3}\s|^(Chapter|Chapitre|Capítulo|Kapitel|Capitolo)\s/i)).length
-    // Relaxed check: headings may not be tagged if metadata is missing, so only warn if drastically different
     if (headingCount > 0 && translatedHeadings === 0 && translatedParas.length > 20) {
       issues.push({
         check: 'heading-loss',
@@ -64,6 +79,7 @@ export function validateTranslation(
   }
 
   // ── 2. English leak check ──
+  // ... rest of existing validation code ...
   // Sample chunks of 500 chars, check for >30% English words
   const chunks = translatedText.match(/.{1,500}/g) || []
   const englishWords = [
@@ -202,4 +218,102 @@ export function formatValidationAlert(result: ValidationResult): string {
     ),
   ]
   return lines.join('\n')
+}
+
+// ─── Heading structure validator (blocking) ─────────────────────────────────
+
+interface HeadingMeta {
+  id: number
+  type: 'heading' | 'paragraph' | 'listitem' | 'blockquote'
+  level: number
+}
+
+interface HeadingCheckResult {
+  pass: boolean
+  errors: string[]
+  warnings: string[]
+}
+
+function validateHeadingStructure(
+  originalSegments: HeadingMeta[],
+  translatedParas: string[]
+): HeadingCheckResult {
+  const errors: string[] = []
+  const warnings: string[] = []
+
+  const origHeadings = originalSegments.filter((s) => s.type === 'heading')
+
+  if (origHeadings.length === 0) {
+    return { pass: true, errors, warnings }
+  }
+
+  // Infer heading structure from translated text (positional + heuristic)
+  const translatedHeadings = translatedParas
+    .map((text, i) => ({ text, i, isHeading: false, level: 0 }))
+
+  // Heuristic: headings are short, start with capital, don't end with period
+  // Also check for known heading patterns
+  const HEADING_RE = /^(chapter|chapitre|capítulo|kapitel|capitolo|introduction|preface|foreword|dedication|conclusion|epilogue|teil|parte|section|capítulo|capitulo)\s/i
+
+  translatedHeadings.forEach((h) => {
+    const t = h.text.trim()
+    const len = t.length
+    if (len === 0) return
+
+    if (HEADING_RE.test(t)) {
+      h.isHeading = true
+      h.level = 1
+      return
+    }
+
+    if (len <= 100 && len >= 3 && /^[A-ZÁÉÍÓÚÀÈÌÒÙÄËÏÖÜÂÊÎÔÛÑ]/.test(t) && !/[.!?]$/.test(t)) {
+      h.isHeading = true
+      h.level = 2
+    }
+  })
+
+  const transHeadings = translatedHeadings.filter((h) => h.isHeading)
+
+  // Count by level
+  const origByLevel: Record<number, number> = {}
+  const transByLevel: Record<number, number> = {}
+  origHeadings.forEach((h) => { origByLevel[h.level] = (origByLevel[h.level] ?? 0) + 1 })
+  transHeadings.forEach((h) => { transByLevel[h.level] = (transByLevel[h.level] ?? 0) + 1 })
+
+  // Total heading count — must be within 85%
+  if (transHeadings.length < origHeadings.length * 0.85) {
+    errors.push(
+      `Heading count too low: ${transHeadings.length} translated vs ${origHeadings.length} original. ` +
+      `Min acceptable: ${Math.ceil(origHeadings.length * 0.85)}.`
+    )
+  }
+
+  // H1 count — must be within 2 of source
+  const origH1 = origByLevel[1] ?? 0
+  const transH1 = transByLevel[1] ?? 0
+  if (origH1 > 0 && transH1 === 0) {
+    errors.push(
+      `Source has ${origH1} H1 headings but translation has 0. ` +
+      `Chapter titles have been lost or demoted.`
+    )
+  } else if (origH1 > 0 && transH1 < origH1 - 2) {
+    errors.push(
+      `H1 count mismatch: ${transH1} translated vs ${origH1} original. ` +
+      `Chapter titles are being demoted to H2.`
+    )
+  }
+
+  // H3/H4 — warn if source has them but translation has none
+  for (const level of [3, 4]) {
+    const origCount = origByLevel[level] ?? 0
+    const transCount = transByLevel[level] ?? 0
+    if (origCount > 5 && transCount === 0) {
+      warnings.push(
+        `Source has ${origCount} H${level} headings but translation has 0. ` +
+        `Sub-heading structure may have been flattened.`
+      )
+    }
+  }
+
+  return { pass: errors.length === 0, errors, warnings }
 }
