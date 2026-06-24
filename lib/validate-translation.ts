@@ -226,6 +226,7 @@ interface HeadingMeta {
   id: number
   type: 'heading' | 'paragraph' | 'listitem' | 'blockquote'
   level: number
+  text?: string
 }
 
 interface HeadingCheckResult {

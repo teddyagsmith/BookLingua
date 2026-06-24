@@ -1,6 +1,6 @@
 import { Document, Paragraph, TextRun, HeadingLevel, AlignmentType, ShadingType, Packer } from 'docx'
 
-interface SegmentMeta { id: number; type: 'heading' | 'paragraph' | string; level: number; text: string }
+interface SegmentMeta { id: number; type: 'heading' | 'paragraph' | string; level: number; text?: string }
 
 interface TypedSegment {
   type: 'heading' | 'paragraph'
@@ -10,7 +10,7 @@ interface TypedSegment {
 
 // ─── Heading level mapping (supports H1–H4) ─────────────────────────────────
 
-function headingLevelFromSegment(level: number): HeadingLevel {
+function headingLevelFromSegment(level: number): any {
   switch (level) {
     case 1: return HeadingLevel.HEADING_1
     case 2: return HeadingLevel.HEADING_2
@@ -237,7 +237,7 @@ function parseInlineRuns(text: string, size = 20): TextRun[] {
 
 function parseHighlightedRuns(text: string, size = 20): TextRun[] {
   const runs: TextRun[] = []
-  const markerRe = /\[\[ORIGINAL:\s*[^\]]*?\]\](.*?)(?=\[\[ORIGINAL:|$)/gs
+  const markerRe = /\[\[ORIGINAL:\s*[^\]]*?\]\]([\s\S]*?)(?=\[\[ORIGINAL:|$)/g
   let lastIndex = 0
 
   const firstMarker = text.indexOf('[[ORIGINAL:')
