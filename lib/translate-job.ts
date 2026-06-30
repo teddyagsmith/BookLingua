@@ -84,6 +84,10 @@ function stripMarkers(text: string): string {
     .replace(/\[\[ORIGINAL:([^\]]|\](?!\]))*\]\]/g, '')
     .replace(/===SEGMENT_\d+_(START|END)===/g, '')
     .replace(/###CHAPTER:[^#]*###/g, '')
+    // Strip translation notes block that Claude appends to the last editorial chunk
+    .replace(/===TRANSLATION_NOTES===([\s\S]*?)(===END_NOTES===|$)/g, '')
+    // Strip any leftover section delimiters from the 4-part response format
+    .replace(/===\w[\w_]*===\n?/g, '')
     .replace(/[^\S\n]{2,}/g, ' ')
     .trim()
 }

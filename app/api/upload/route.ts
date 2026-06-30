@@ -15,36 +15,86 @@ import AdmZip from 'adm-zip'
 
 // ---------------------------------------------------------------------------
 // EPUB text extraction
-// EPUBs are ZIP files. We unzip, find all .xhtml / .html content files,
-// strip the HTML tags, and join the text. No epub2 package needed.
+// EPUBs are ZIP files. We parse the OPF manifest+spine to get the correct
+// reading order, then extract only spine items — no duplicates, correct order.
 // ---------------------------------------------------------------------------
 function extractEpubText(buffer: Buffer): string {
   try {
     const zip = new AdmZip(buffer)
     const entries = zip.getEntries()
+    const entryMap: Record<string, AdmZip.IZipEntry> = {}
+    for (const e of entries) entryMap[e.entryName] = e
 
-    // Find the content files — they live in OEBPS/ or similar and are .xhtml/.html
+    // ── Step 1: find the OPF file via META-INF/container.xml ────────────────
+    const containerEntry = entries.find(e => e.entryName === 'META-INF/container.xml')
+    let opfPath: string | null = null
+    if (containerEntry) {
+      const containerXml = containerEntry.getData().toString('utf8')
+      const m = containerXml.match(/full-path="([^"]+\.opf)"/)
+      if (m) opfPath = m[1]
+    }
+    if (!opfPath) {
+      // Fallback: find any .opf file
+      const opfEntry = entries.find(e => e.entryName.endsWith('.opf'))
+      if (opfEntry) opfPath = opfEntry.entryName
+    }
+
+    if (opfPath && entryMap[opfPath]) {
+      // ── Step 2: parse OPF manifest and spine ──────────────────────────────
+      const opfDir = opfPath.includes('/') ? opfPath.slice(0, opfPath.lastIndexOf('/') + 1) : ''
+      const opfXml = entryMap[opfPath].getData().toString('utf8')
+
+      // Build manifest: id → href
+      const manifest: Record<string, string> = {}
+      const manifestRe = /<item\s[^>]*id="([^"]+)"[^>]*href="([^"]+)"[^>]*>/g
+      let mm: RegExpExecArray | null
+      while ((mm = manifestRe.exec(opfXml)) !== null) {
+        manifest[mm[1]] = mm[2]
+      }
+
+      // Get spine idref order
+      const spineIdrefs: string[] = []
+      const spineRe = /<itemref\s[^>]*idref="([^"]+)"/g
+      let sm: RegExpExecArray | null
+      while ((sm = spineRe.exec(opfXml)) !== null) {
+        spineIdrefs.push(sm[1])
+      }
+
+      if (spineIdrefs.length > 0) {
+        const texts: string[] = []
+        for (const idref of spineIdrefs) {
+          const href = manifest[idref]
+          if (!href) continue
+          // Resolve relative to OPF directory
+          const fullPath = opfDir + href.split('#')[0] // strip fragment
+          const entry = entryMap[fullPath] || entryMap[href.split('#')[0]]
+          if (!entry) continue
+          const n = fullPath.toLowerCase()
+          // Skip nav/toc/cover even if in spine
+          if (n.includes('toc') || n.includes('nav') || n.includes('cover')) continue
+          texts.push(stripHTML(entry.getData().toString('utf8')))
+        }
+        if (texts.length > 0) return texts.join('\n')
+      }
+    }
+
+    // ── Fallback: alphabetical sort (old behaviour) ─────────────────────────
+    console.warn('[EPUB] Could not parse OPF spine — falling back to alphabetical sort')
     const contentFiles = entries
       .filter(e => {
         const n = e.entryName.toLowerCase()
         return (n.endsWith('.xhtml') || n.endsWith('.html')) &&
-               !n.includes('toc') &&
-               !n.includes('nav') &&
-               !n.includes('cover')
+               !n.includes('toc') && !n.includes('nav') && !n.includes('cover')
       })
       .sort((a, b) => a.entryName.localeCompare(b.entryName))
 
     if (contentFiles.length === 0) {
-      // Fallback: grab any text-like entry
       return entries
         .filter(e => e.entryName.toLowerCase().endsWith('.xhtml') || e.entryName.toLowerCase().endsWith('.html'))
         .map(e => stripHTML(e.getData().toString('utf8')))
         .join('\n')
     }
-
-    return contentFiles
-      .map(e => stripHTML(e.getData().toString('utf8')))
-      .join('\n')
+    return contentFiles.map(e => stripHTML(e.getData().toString('utf8'))).join('\n')
   } catch (err) {
     console.error('EPUB extraction error:', err)
     return ''

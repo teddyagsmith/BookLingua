@@ -199,8 +199,12 @@ function stripMarkers(text: string): string {
     .replace(/===SEGMENT_\d+_(START|END)===/g, '')
     .replace(/###CHAPTER:[^#]*###/g, '')
     .replace(/###SEGMENT:\d+:\w+:\d+###/g, '')
-    .replace(/===TRANSLATION_NOTES===[\s\S]*?===TRANSLATION_NOTES===/g, '')
-    .replace(/\[TRANSLATION_NOTES\][\s\S]*?\[TRANSLATION_NOTES\]/g, '')
+    // Strip translation notes blocks — handles both delimited and open-ended forms
+    .replace(/===TRANSLATION_NOTES===([\s\S]*?)(===END_NOTES===|===TRANSLATION_NOTES===)/g, '')
+    .replace(/===TRANSLATION_NOTES===([\s\S]*)$/, '')  // open-ended: notes at end of document
+    .replace(/\[TRANSLATION_NOTES\][\s\S]*?\[\/TRANSLATION_NOTES\]/g, '')
+    // Strip any leftover section delimiters
+    .replace(/===\w[\w_]*===\n?/g, '')
     .replace(/BookLingua Translation Notes[\s\S]*?(?=\n─{3,}|\n={3,}|$)/g, '')
     .replace(/\n\n(?:\*\*\d+\.\s[^\n]+\n?)+/g, '\n\n')
     .replace(/\n\n[^\n]*(?:RAE|ASALE|ortografía académica)[^\n]*\n/g, '\n')

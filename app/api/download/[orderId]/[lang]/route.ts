@@ -47,7 +47,14 @@ function stripHighlightMarkers(text: string): string {
   // Remove [[ORIGINAL: ...]] — keep only the improved text that follows
   // The ORIGINAL text may contain single ] characters (e.g. [citations]),
   // so we must match ] only when NOT followed by another ] (i.e. not ]])
-  return text.replace(/\[\[ORIGINAL:([^\]]|\](?!\]))*\]\]/g, '').replace(/[^\S\n]{2,}/g, ' ')
+  return text
+    .replace(/\[\[ORIGINAL:([^\]]|\](?!\]))*\]\]/g, '')
+    // Strip translation notes that Claude appends to the last editorial chunk
+    .replace(/===TRANSLATION_NOTES===([\s\S]*?)(===END_NOTES===|===TRANSLATION_NOTES===)/g, '')
+    .replace(/===TRANSLATION_NOTES===([\s\S]*)$/, '')
+    // Strip any leftover section delimiters
+    .replace(/===\w[\w_]*===\n?/g, '')
+    .replace(/[^\S\n]{2,}/g, ' ')
 }
 
 function stripChapterMarkers(text: string): string {
