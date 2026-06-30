@@ -443,16 +443,17 @@ async function buildFinalEpub(
 ): Promise<Buffer> {
   const clean = stripHighlightMarkers(
     content
-      .replace(/===TRANSLATION_NOTES===[\s\S]*?(?=###CHAPTER:|===END_NOTES===)/g, '')
+      .replace(/===TRANSLATION_NOTES===[\s\S]*?(?=###CHAPTER:|###H[1-6]:|===END_NOTES===)/g, '')
       .replace(/===END_NOTES===/g, '')
   ).trim()
 
-  // Split by chapter markers (###CHAPTER:Title###) — find all markers and their positions
-  const markerRe = /###CHAPTER:([^#]*)###\n*/g
-  const markers: Array<{ index: number; title: string; end: number }> = []
+  // Split by chapter markers (###CHAPTER:Title### or ###H1:Title###) — find all markers and their positions
+  const markerRe = /###(?:CHAPTER|H[1-6]):([^#]*)###\n*/g
+  const markers: Array<{ index: number; title: string; level: string; end: number }> = []
   let m
   while ((m = markerRe.exec(clean)) !== null) {
-    markers.push({ index: m.index, title: m[1].trim(), end: m.index + m[0].length })
+    const levelMatch = m[0].match(/^###(CHAPTER|H[1-6]):/)
+    markers.push({ index: m.index, title: m[1].trim(), level: levelMatch ? levelMatch[1] : 'CHAPTER', end: m.index + m[0].length })
   }
 
   const chapters: { title: string; content: string }[] = []
