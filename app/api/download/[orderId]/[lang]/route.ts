@@ -441,27 +441,49 @@ async function buildFinalEpub(
   bookTitle: string,
   langDisplay: string,
 ): Promise<Buffer> {
-  const clean = stripHighlightMarkers(
-    content
-      .replace(/===TRANSLATION_NOTES===[\s\S]*?(?=###CHAPTER:|###H[1-6]:|===END_NOTES===)/g, '')
-      .replace(/===END_NOTES===/g, '')
-  ).trim()
-
-  // Split by chapter markers (###CHAPTER:Title### or ###H1:Title###) — find all markers and their positions
+  // Step 1: Find chapter/heading markers in the ORIGINAL content (before stripping)
   const markerRe = /###(?:CHAPTER|H[1-6]):([^#]*)###\n*/g
   const markers: Array<{ index: number; title: string; level: string; end: number }> = []
   let m
-  while ((m = markerRe.exec(clean)) !== null) {
+  while ((m = markerRe.exec(content)) !== null) {
     const levelMatch = m[0].match(/^###(CHAPTER|H[1-6]):/)
     markers.push({ index: m.index, title: m[1].trim(), level: levelMatch ? levelMatch[1] : 'CHAPTER', end: m.index + m[0].length })
   }
 
+  // Step 2: Strip all pipeline markers for clean output
+  let clean = content
+    // Strip segment markers
+    .replace(/===SEGMENT_\d+_(START|END)===\n?/g, '')
+    // Strip translation notes blocks
+    .replace(/===TRANSLATION_NOTES===[\s\S]*?(?:===END_NOTES===|\n{3,}|$)/g, '')
+    .replace(/===END_NOTES===/g, '')
+    // Strip any remaining === markers
+    .replace(/===\w[\w_]*===\n?/g, '')
+    // Strip [[ORIGINAL:]] markers
+    .replace(/\[\[ORIGINAL:([^\]]|\](?!\]))*\]\]/g, '')
+    // Strip chapter/heading markers (they've been recorded already)
+    .replace(/###CHAPTER:[^#]*###\n?/g, '')
+    .replace(/###H[1-6]:[^#]*###\n?/g, '')
+    .trim()
+
   const chapters: { title: string; content: string }[] = []
+
+  // Step 3: Split into chapters using recorded marker positions
   if (markers.length > 0) {
-    for (let i = 0; i < markers.length; i++) {
-      const title = markers[i].title || `Chapter ${i + 1}`
-      const start = markers[i].end
-      const end = i + 1 < markers.length ? markers[i + 1].index : clean.length
+    // Recalculate positions in the CLEANED text
+    // We need to map original positions to cleaned positions
+    // Simpler approach: split cleaned text by the marker text pattern
+    const cleanMarkerRe = /###(?:CHAPTER|H[1-6]):([^#]*)###\n*/g
+    const cleanMarkers: Array<{ index: number; title: string; end: number }> = []
+    let cm
+    while ((cm = cleanMarkerRe.exec(clean)) !== null) {
+      cleanMarkers.push({ index: cm.index, title: cm[1].trim(), end: cm.index + cm[0].length })
+    }
+
+    for (let i = 0; i < cleanMarkers.length; i++) {
+      const title = cleanMarkers[i].title || `Chapter ${i + 1}`
+      const start = cleanMarkers[i].end
+      const end = i + 1 < cleanMarkers.length ? cleanMarkers[i + 1].index : clean.length
       const chapterText = clean.slice(start, end).trim()
       if (chapterText) {
         chapters.push({
