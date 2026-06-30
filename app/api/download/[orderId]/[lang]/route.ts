@@ -68,9 +68,12 @@ function isHeading(line: string): boolean {
   return (
     /^#{1,3}\s/.test(t) ||  // Markdown # headings
     /^###H[1-6]:/.test(t) ||  // EPUB heading markers (###H1:...###)
-    // For chapter headings: only match if line is reasonably short (< 120 chars) to avoid
-    // matching body text that starts with "Capítulo 1" followed by a long paragraph
+    // Chapter titles: "Chapter 1", "Kapitel 1", "Capítulo 1", etc. (with or without following text)
     (len < 120 && /^(chapter|chapitre|capítulo|kapitel|capitolo|capitulo)\s+\d+/i.test(t)) ||
+    // Standalone chapter number + name pattern: "1. Lily", "1 - Lily", "1: Lily"
+    (len < 80 && /^\d+\s*[.:\-]\s*\w+/i.test(t) && len > 2) ||
+    // Character name chapters (common in romance): single word or two-word title case, < 30 chars
+    (len < 30 && len > 2 && /^[A-Z][a-z]+(\s+[A-Z][a-z]+)?$/.test(t)) ||
     // For intro/outro words: only match if line is short (< 80 chars) to avoid
     // matching body text that starts with e.g. "Introducción Cuando me..."
     (len < 80 && /^(prologue|epilogue|introduction|conclusion|foreword|preface|préface|préambule|postface|avertissement|prólogo|epílogo|introducción|conclusión|vorwort|nachwort|vorrede|einleitung|schluss|prefazione|postfazione|introduzione|prefácio|posfácio)\b/i.test(t)) ||
