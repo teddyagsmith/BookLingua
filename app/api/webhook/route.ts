@@ -101,6 +101,7 @@ export async function POST(request: NextRequest) {
           type: 'original',
           language: 'en',
           content: tempUpload.content,
+          pipeline_version: process.env.PIPELINE_VERSION || 'unknown',
         })
         // Clean up temp upload
         await supabaseAdmin.from('temp_uploads').delete().eq('session_id', sessionId)

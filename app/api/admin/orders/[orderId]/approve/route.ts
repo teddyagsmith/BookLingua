@@ -1,7 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase'
 import { buildDownloadUrl } from '@/lib/download-token'
+import { runMandatoryQA } from '@/lib/delivery-gate'
 import { Resend } from 'resend'
+import fs from 'fs'
+import path from 'path'
 
 const resend = new Resend(process.env.RESEND_API_KEY)
 
@@ -50,6 +53,68 @@ export async function POST(
       reviewUrl: buildDownloadUrl(orderId, lang, 'review'),
       finalUrl: buildDownloadUrl(orderId, lang, 'final'),
     }))
+
+    // ── MANDATORY QA GATE — block delivery if gate or compare fails ──
+    const tmpDir = `/tmp/booklingua-qa-${orderId}`
+    fs.mkdirSync(tmpDir, { recursive: true })
+
+    // Fetch original content
+    const { data: originalFile } = await supabaseAdmin
+      .from('files')
+      .select('content')
+      .eq('order_id', orderId)
+      .eq('type', 'original')
+      .maybeSingle()
+
+    const originalPath = path.join(tmpDir, 'original.txt')
+    fs.writeFileSync(originalPath, originalFile?.content || '')
+
+    let qaErrors: string[] = []
+
+    for (const lang of languages) {
+      const { data: translatedFile } = await supabaseAdmin
+        .from('files')
+        .select('content')
+        .eq('order_id', orderId)
+        .eq('language', lang)
+        .eq('type', 'translated')
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle()
+
+      if (!translatedFile?.content) {
+        qaErrors.push(`No translated content found for ${lang}`)
+        continue
+      }
+
+      const translatedPath = path.join(tmpDir, `translated-${lang}.txt`)
+      fs.writeFileSync(translatedPath, translatedFile.content)
+
+      const qa = runMandatoryQA(originalPath, translatedPath, 'clean', lang)
+      if (!qa.passed) {
+        qaErrors.push(...qa.errors)
+      }
+    }
+
+    // Clean up temp files
+    try { fs.rmSync(tmpDir, { recursive: true, force: true }) } catch {}
+
+    if (qaErrors.length > 0) {
+      await supabaseAdmin
+        .from('orders')
+        .update({
+          status: 'qa_blocked',
+          qa_errors: qaErrors.join('\n\n'),
+        })
+        .eq('id', orderId)
+
+      console.error(`[QA BLOCKED] Order ${orderId}:`, qaErrors)
+      return NextResponse.json(
+        { error: 'QA check failed', details: qaErrors },
+        { status: 400 }
+      )
+    }
+    // ── END MANDATORY QA GATE ──
 
     // Fetch the pre-composed customer email from the files table
     // This is the EXACT email Gilly reviewed — now sent to the customer

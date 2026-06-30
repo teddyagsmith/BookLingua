@@ -1,0 +1,7 @@
+# Test fixtures — original source files are large binaries not tracked in git
+# Store them in shared storage or generate on-demand in CI
+test-fixtures/**/*.docx
+test-fixtures/**/*.epub
+test-fixtures/**/*.txt
+!test-fixtures/**/expected-*.json
+!test-fixtures/manifest.json

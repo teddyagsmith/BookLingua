@@ -1,0 +1,20 @@
+[
+  {
+    "name": "study-strategies",
+    "originalPath": "test-fixtures/study-strategies/original.docx",
+    "expectedHeadings": {"h1": 15, "h2": 38, "h3": 44, "h4": 6},
+    "expectedParaRange": {"min": 850, "max": 950}
+  },
+  {
+    "name": "adult-kids",
+    "originalPath": "test-fixtures/adult-kids/original.txt",
+    "expectedHeadings": {"h1": 12, "h2": 35, "h3": 40, "h4": 0},
+    "expectedParaRange": {"min": 1100, "max": 1300}
+  },
+  {
+    "name": "rockstar-bosshole",
+    "originalPath": "test-fixtures/rockstar-bosshole/original.epub",
+    "expectedHeadings": {"h1": 25, "h2": 0, "h3": 0, "h4": 0},
+    "expectedParaRange": {"min": 1000, "max": 1150}
+  }
+]
