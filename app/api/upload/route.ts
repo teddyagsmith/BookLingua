@@ -22,7 +22,7 @@ function extractEpubText(buffer: Buffer): string {
   try {
     const zip = new AdmZip(buffer)
     const entries = zip.getEntries()
-    const entryMap: Record<string, AdmZip.IZipEntry> = {}
+    const entryMap: Record<string, any> = {}
     for (const e of entries) entryMap[e.entryName] = e
 
     // ── Step 1: find the OPF file via META-INF/container.xml ────────────────
