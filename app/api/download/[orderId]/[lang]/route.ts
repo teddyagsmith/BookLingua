@@ -760,6 +760,20 @@ export async function GET(
     // ── Final version: clean, in effective format ──
     if (effectiveFormat === '.epub') {
       const buffer = await buildFinalEpub(file.content, order.book_title, langDisplay)
+      
+      // Validate EPUB with epubcheck before delivery
+      const { validateEpub } = await import('@/lib/epub-validator')
+      const validation = validateEpub(buffer)
+      if (!validation.valid) {
+        console.error('[BookLingua] EPUB validation failed:', validation.output)
+        return NextResponse.json({
+          error: 'EPUB validation failed',
+          details: validation.errors,
+          warnings: validation.warnings,
+        }, { status: 500 })
+      }
+      console.log('[BookLingua] EPUB validation passed: 0 errors, 0 warnings')
+      
       return new NextResponse(new Uint8Array(buffer), {
         headers: {
           'Content-Type': 'application/epub+zip',
