@@ -102,18 +102,46 @@ function extractEpubText(buffer: Buffer): string {
 }
 
 function stripHTML(html: string): string {
-  return html
-    .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '')
-    .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '')
-    .replace(/<[^>]+>/g, ' ')
+  // 1. Remove <script> and <style> blocks entirely
+  let text = html
+    .replace(/<style\b[^>]*>[\s\S]*?<\/style>/gi, '')
+    .replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, '')
+
+  // 2. Convert structural headings to markers
+  text = text
+    .replace(/<h1\b[^>]*>([\s\S]*?)<\/h1>/gi, '\n\n###H1:$1###\n\n')
+    .replace(/<h2\b[^>]*>([\s\S]*?)<\/h2>/gi, '\n\n###H2:$1###\n\n')
+    .replace(/<h3\b[^>]*>([\s\S]*?)<\/h3>/gi, '\n\n###H3:$1###\n\n')
+    .replace(/<h4\b[^>]*>([\s\S]*?)<\/h4>/gi, '\n\n###H4:$1###\n\n')
+    .replace(/<h5\b[^>]*>([\s\S]*?)<\/h5>/gi, '\n\n###H5:$1###\n\n')
+    .replace(/<h6\b[^>]*>([\s\S]*?)<\/h6>/gi, '\n\n###H6:$1###\n\n')
+
+  // 3. Convert paragraphs
+  text = text.replace(/<p\b[^>]*>([\s\S]*?)<\/p>/gi, '$1\n\n')
+
+  // 4. Strip all remaining HTML tags
+  text = text.replace(/<[^>]+>/g, ' ')
+
+  // 5. Decode common HTML entities
+  text = text
     .replace(/&nbsp;/g, ' ')
     .replace(/&amp;/g, '&')
     .replace(/&lt;/g, '<')
     .replace(/&gt;/g, '>')
     .replace(/&quot;/g, '"')
     .replace(/&#39;/g, "'")
-    .replace(/\s{2,}/g, ' ')
+    .replace(/&mdash;/g, '--')
+    .replace(/&ndash;/g, '-')
+    .replace(/&hellip;/g, '...')
+    .replace(/&[a-z]+;/gi, '')   // catch-all for any remaining entities
+
+  // 6. Clean whitespace
+  text = text
+    .replace(/[^\S\n]{2,}/g, ' ')
+    .replace(/\n{3,}/g, '\n\n')
     .trim()
+
+  return text
 }
 
 function countWords(text: string): number {

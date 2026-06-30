@@ -67,6 +67,7 @@ function isHeading(line: string): boolean {
   const len = t.length
   return (
     /^#{1,3}\s/.test(t) ||  // Markdown # headings
+    /^###H[1-6]:/.test(t) ||  // EPUB heading markers (###H1:...###)
     // For chapter headings: only match if line is reasonably short (< 120 chars) to avoid
     // matching body text that starts with "Capítulo 1" followed by a long paragraph
     (len < 120 && /^(chapter|chapitre|capítulo|kapitel|capitolo|capitulo)\s+\d+/i.test(t)) ||
@@ -82,7 +83,24 @@ function isHeading(line: string): boolean {
 }
 
 function stripMarkdownHeading(t: string): string {
-  return t.replace(/^#{1,3}\s+/, '')
+  return t
+    .replace(/^#{1,3}\s+/, '')
+    .replace(/^###H[1-6]:/, '')
+    .replace(/###$/, '')
+}
+
+function headingLevelFromMarker(t: string): any {
+  const match = t.match(/^###H([1-6]):/)
+  if (!match) return HeadingLevel.HEADING_1
+  const levels: Record<string, any> = {
+    '1': HeadingLevel.HEADING_1,
+    '2': HeadingLevel.HEADING_2,
+    '3': HeadingLevel.HEADING_3,
+    '4': HeadingLevel.HEADING_4,
+    '5': HeadingLevel.HEADING_5,
+    '6': HeadingLevel.HEADING_6,
+  }
+  return levels[match[1]] || HeadingLevel.HEADING_1
 }
 
 // Parse inline *italic*, **bold**, _italic_ into TextRuns
@@ -369,7 +387,7 @@ function buildReviewDocx(
     if (!t) { paragraphs.push(new Paragraph({ text: '' })); continue }
 
     if (isHeading(t)) {
-      paragraphs.push(new Paragraph({ text: stripMarkdownHeading(t), heading: HeadingLevel.HEADING_1 }))
+      paragraphs.push(new Paragraph({ text: stripMarkdownHeading(t), heading: headingLevelFromMarker(t) }))
     } else {
       for (const line of t.split('\n')) {
         if (!line.trim()) continue
@@ -404,7 +422,7 @@ function buildFinalDocx(content: string, bookTitle: string, langDisplay: string)
     if (!t) { paragraphs.push(new Paragraph({ text: '' })); continue }
 
     if (isHeading(t)) {
-      paragraphs.push(new Paragraph({ text: stripMarkdownHeading(t), heading: HeadingLevel.HEADING_1 }))
+      paragraphs.push(new Paragraph({ text: stripMarkdownHeading(t), heading: headingLevelFromMarker(t) }))
     } else {
       for (const line of t.split('\n')) {
         if (!line.trim()) continue

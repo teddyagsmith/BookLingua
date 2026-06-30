@@ -198,6 +198,7 @@ function stripMarkers(text: string): string {
     .replace(/\[\[ORIGINAL:([^\]]|\](?!\]))*\]\]/g, '')
     .replace(/===SEGMENT_\d+_(START|END)===/g, '')
     .replace(/###CHAPTER:[^#]*###/g, '')
+    .replace(/###H[1-6]:[^#]*###/g, '')
     .replace(/###SEGMENT:\d+:\w+:\d+###/g, '')
     // Strip translation notes blocks — handles both delimited and open-ended forms
     .replace(/===TRANSLATION_NOTES===([\s\S]*?)(===END_NOTES===|===TRANSLATION_NOTES===)/g, '')
