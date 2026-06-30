@@ -272,6 +272,7 @@ CRITICAL FORMATTING RULES:
 - Preserve any indentation patterns
 - If there are bullet points or numbered lists, keep them formatted the same way
 - PRESERVE ###CHAPTER: markers but TRANSLATE the title inside to the target language. Keep the exact format: ###CHAPTER:Spanish Title###
+- PRESERVE ###H1: ###H2: ###H3: ###H4: ###H5: and ###H6: heading markers exactly — translate the title inside but keep the format: ###H1:Translated Title###
 - PRESERVE all segment markers exactly: ===SEGMENT_123_START=== and ===SEGMENT_123_END=== markers must NOT be translated or modified. Only translate the text BETWEEN these markers.
 
 LANGUAGE SETTINGS:
@@ -372,8 +373,8 @@ CRITICAL - HIGHLIGHTING FORMAT:
 Only highlight phrases you actually changed.
 
 PRESERVE ALL FORMATTING from the translation (paragraph breaks, chapters, etc.)
-- PRESERVE ###CHAPTER: markers exactly as they appear
-- NEVER create new ###CHAPTER: markers for sub-headings
+- PRESERVE ###CHAPTER: markers exactly as they appear. NEVER create new ###CHAPTER: markers for sub-headings
+- PRESERVE ###H1: through ###H6: markers exactly as they appear. Do not create new heading markers. Only translate the text inside the markers.
 
 ${i === editorialChunks.length - 1 ? `
 
