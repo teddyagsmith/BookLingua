@@ -1084,6 +1084,11 @@ export default function Home() {
                     </span>
                   ))}
                 </div>
+                <p className="text-sm text-gray-500 mt-4 max-w-md mx-auto">
+                  <strong>Tip:</strong> DOCX gives you the fastest turnaround and most accurate chapter structure. 
+                  If you have both EPUB and DOCX, use DOCX. No DOCX? EPUB works great too — we manually verify 
+                  structure before delivery.
+                </p>
               </div>
             ) : (
               <div className="bg-white rounded-3xl shadow-xl p-8 border border-[#EBE6F4]">
