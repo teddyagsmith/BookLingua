@@ -500,6 +500,16 @@ def main():
 
     # Build EPUB
     build_epub(mapped_chapters, args.title, args.author, args.output, args.lang, args.subtitle)
+
+    # EPUB Gate — comprehensive quality checks
+    from booklingua_epub_gate import check_epub
+    gate_fails = check_epub(args.output, args.lang, args.template)
+    if gate_fails:
+        print(f'ERROR: EPUB gate failed with {len(gate_fails)} checks:')
+        for fail in gate_fails:
+            print(f'  - {fail}')
+        sys.exit(1)
+    print('EPUB gate passed: all checks OK')
     size = os.path.getsize(args.output)
     print(f"Built: {args.output} ({size:,} bytes)")
 
