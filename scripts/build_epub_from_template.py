@@ -64,20 +64,15 @@ def strip_pipeline_markers(text: str) -> str:
 
 def split_into_sentences(text: str) -> list:
     """Split text into sentences, preserving dialogue."""
-    # Match sentence endings that are followed by space and uppercase
-    # But be careful with abbreviations (Mr., Mrs., Dr., etc.)
     sentences = re.split(
-        r'(?<=[.!?»""\'\'])\s+(?=[A-ZÄÖÜÉÈÀÌÍ""''\u00AB])',
+        r'(?<=[.!?»""\'\'\u00BB])\s+(?=[A-ZÄÖÜÉÈÀÌÍ""\'\'\u00AB])',
         text
     )
     return [s.strip() for s in sentences if s.strip()]
 
 
 def distribute_sentences(text: str, n_paras: int, target_words_per_para: list = None) -> list:
-    """
-    Distribute text across exactly n_paras paragraphs.
-    If target_words_per_para is provided, try to match those lengths.
-    """
+    """Distribute text across exactly n_paras paragraphs."""
     text = text.strip()
     if not text:
         return [''] * n_paras
@@ -87,13 +82,11 @@ def distribute_sentences(text: str, n_paras: int, target_words_per_para: list = 
         return [''] * n_paras
 
     if len(sentences) <= n_paras:
-        # Not enough sentences — some paragraphs will be empty or short
         result = list(sentences)
         while len(result) < n_paras:
             result.append('')
         return result[:n_paras]
 
-    # Distribute sentences roughly evenly
     result = []
     step = len(sentences) / n_paras
     for i in range(n_paras):
@@ -104,44 +97,33 @@ def distribute_sentences(text: str, n_paras: int, target_words_per_para: list = 
     return result
 
 
+def fix_dropcap(text: str, lang: str = '') -> str:
+    """Remove drop-cap spacing artifacts at paragraph start: 'D as' → 'Das', 'G age' → 'Gage'."""
+    # Match optional opening quote, then single uppercase, space, lowercase
+    m = re.match(r'^(["\u201C\u201E])?([A-ZÄÖÜÁÉÍÓÚÑ]) ([a-zäöüáéíóúñ])', text)
+    if m:
+        letter = m.group(2)
+        # Skip 'I' in Italian — it's the plural article (I baci = the kisses)
+        if letter == 'I' and lang.lower() in ('it', 'italian'):
+            return text
+        # Remove space between letter and lowercase continuation
+        space_pos = m.start(2) + 1
+        text = text[:space_pos] + text[space_pos + 1:]
+    return text
+
+
 # ─── Chapter Extraction from Translated Text ─────────────────────────────────
 
-def fix_dropcap(text: str) -> str:
-    """Remove drop-cap spacing artifacts: 'D as ist' → 'Das ist', 'W affles' → 'Waffles'."""
-    # Only at start of paragraph (after stripping heading)
-    # Pattern: word-boundary, single uppercase, space, then lowercase continuation
-    # Guard: must not be a known standalone Italian/Spanish article (I, A)
-    # to avoid "I baci" → "Ibaci" (Italian: "the kisses")
-    lines = text.split('\n')
-    fixed = []
-    for line in lines:
-        # Only fix at start of a non-empty line (paragraph opening)
-        m = re.match(r'^([A-ZÄÖÜ]) ([a-zäöüáéíóúñ])', line)
-        if m:
-            letter = m.group(1)
-            # Skip 'I' only — Italian plural article (I baci = the kisses)
-            if letter not in ('I',):
-                line = letter + line[2:]  # remove the space
-        fixed.append(line)
-    return '\n'.join(fixed)
-
-
 def extract_chapters_from_translation(translated_text: str, template: dict) -> list:
-    """
-    Split translated text into chapters matching the template's chapter count.
-    Uses heading detection + source word counts as guides.
-    """
-    # Numbered chapter headings (KAPITEL 1 LILY, CAPITOLO 2 GAGE, etc.)
+    """Split translated text into chapters using heading markers."""
     heading_pattern = re.compile(
         r'^\s*(KAPITEL|CAPITOLO|CAP[IÍ]TULO|CHAPTER)\s+(\d+)(?:\s+([A-Z][A-Z]+))?',
         re.I | re.M
     )
-    # Epilogue — in any language
     epilog_pattern = re.compile(
         r'^\s*(EP[IÍ]LOG(?:UE|O|UO)?)(?:\s+([A-Z][A-Z]+))?',
         re.I | re.M
     )
-    # Sneak peek — English or localized (ADELANTO, ANTEPRIMA, LESEPROBE, VORSCHAU)
     sneak_pattern = re.compile(
         r'^\s*(SNEAK\s*PE[EA]K|ADELANTO|ANTEPRIMA|LESEPROBE|VORSCHAU)(?:\s+([A-Z][A-Z]+))?',
         re.I | re.M
@@ -178,8 +160,8 @@ def extract_chapters_from_translation(translated_text: str, template: dict) -> l
 
     all_headings.sort(key=lambda x: x['pos'])
 
-    # Deduplicate — by number for chapters, by heading text for unnumbered
-    seen_nums:     set = set()
+    # Deduplicate
+    seen_nums: set = set()
     seen_headings: set = set()
     unique_headings = []
     for h in all_headings:
@@ -201,20 +183,14 @@ def extract_chapters_from_translation(translated_text: str, template: dict) -> l
         end = unique_headings[i + 1]['pos'] if i + 1 < len(unique_headings) else len(translated_text)
         content = translated_text[start:end].strip()
 
-        # FIX: Strip the heading PREFIX only (not the entire first line).
-        # Previously used first_nl which removed heading + inline body when
-        # they were on the same line (all three languages have this pattern).
+        # Strip heading prefix only (not entire first line)
         heading_text = h['heading']
         if content.startswith(heading_text):
             content = content[len(heading_text):].strip()
         else:
-            # Fallback: strip first line if heading not found at start
             first_nl = content.find('\n')
             if first_nl > 0:
                 content = content[first_nl:].strip()
-
-        # Fix drop-cap spacing artifacts
-        content = fix_dropcap(content)
 
         chapters.append({
             'heading': h['heading'],
@@ -225,15 +201,11 @@ def extract_chapters_from_translation(translated_text: str, template: dict) -> l
     return chapters
 
 
-def map_chapters_to_template(translated_chapters: list, template: dict) -> list:
-    """
-    Map extracted translated chapters to template chapters.
-    Uses template word counts to detect and truncate oversized chapters.
-    Returns list of {heading, paragraphs} dicts.
-    """
+def map_chapters_to_template(translated_chapters: list, template: dict, lang: str = '') -> list:
+    """Map extracted chapters to template. Returns {heading, paragraphs} list."""
     template_chapters = template['chapters']
 
-    # Calculate language expansion factor from well-matched chapters
+    # Calculate language expansion factor
     good_ratios = []
     for i, t_ch in enumerate(template_chapters):
         if i < len(translated_chapters):
@@ -254,7 +226,7 @@ def map_chapters_to_template(translated_chapters: list, template: dict) -> list:
             content = strip_pipeline_markers(tr_ch['content'])
             n_paras = t_ch['para_count']
 
-            # FIX 1: Use translated heading (includes chapter number) when available
+            # Use translated heading when available
             translated_heading = tr_ch.get('heading', '').strip()
             template_heading = t_ch['heading'].strip()
             if translated_heading and len(translated_heading) > len(template_heading):
@@ -262,45 +234,34 @@ def map_chapters_to_template(translated_chapters: list, template: dict) -> list:
             else:
                 heading = template_heading
 
-            # FIX: Localize German sneak peek heading
+            # Localize German sneak peek
             if heading.upper().startswith('SNEAK PEAK'):
-                heading = 'VORSCHAU' + heading[10:]  # Replace "SNEAK PEAK" with "VORSCHAU"
+                heading = 'VORSCHAU' + heading[10:]
 
-            # Check for oversized content (duplicate content leaked in)
+            # Truncate oversized
             tr_words = len(content.split())
             expected_words = int(t_ch['word_count'] * lang_factor)
             ratio = tr_words / expected_words if expected_words > 0 else 1.0
-
-            flag = ''
             if ratio > 1.5:
                 print(f"  ch{i+1} {heading[:30]:30} OVERSIZED: {tr_words} words, truncating to ~{expected_words}")
                 words = content.split()
                 content = ' '.join(words[:expected_words])
 
-            # Distribute content across required paragraph count
+            # Distribute into paragraphs, then fix drop-caps on each
             paragraphs = distribute_sentences(content, n_paras)
+            paragraphs = [fix_dropcap(p, lang) for p in paragraphs]
 
-            result.append({
-                'heading': heading,
-                'paragraphs': paragraphs,
-            })
+            result.append({'heading': heading, 'paragraphs': paragraphs})
         else:
-            # FIX 2: Missing chapter — use English content from template for back-matter
+            # Missing chapter — use English template content
             english_paras = [p['text'] for p in t_ch['paragraphs'] if p['text'].strip()]
             if english_paras:
                 english_words = sum(len(p.split()) for p in english_paras)
                 print(f"  ch{i+1} {t_ch['heading'][:30]:30} MISSING — using English "
                       f"content ({english_words} words, {len(english_paras)} paras)")
-                result.append({
-                    'heading': t_ch['heading'],
-                    'paragraphs': english_paras,
-                })
+                result.append({'heading': t_ch['heading'], 'paragraphs': english_paras})
             else:
-                # Missing chapter — create empty placeholders
-                result.append({
-                    'heading': t_ch['heading'],
-                    'paragraphs': [''] * t_ch['para_count'],
-                })
+                result.append({'heading': t_ch['heading'], 'paragraphs': [''] * t_ch['para_count']})
 
     return result
 
@@ -311,11 +272,9 @@ def build_epub(chapters: list, title: str, author: str, output_path: str, lang: 
     """Build a valid EPUB3 from chapter data."""
     tmpdir = tempfile.mkdtemp()
     try:
-        # mimetype
         with open(os.path.join(tmpdir, 'mimetype'), 'w') as f:
             f.write('application/epub+zip')
 
-        # container.xml
         os.makedirs(os.path.join(tmpdir, 'META-INF'))
         with open(os.path.join(tmpdir, 'META-INF', 'container.xml'), 'w') as f:
             f.write('<?xml version="1.0" encoding="UTF-8"?>\n'
@@ -327,11 +286,10 @@ def build_epub(chapters: list, title: str, author: str, output_path: str, lang: 
         oebps = os.path.join(tmpdir, 'OEBPS')
         os.makedirs(oebps)
 
-        # CSS
         with open(os.path.join(oebps, 'content.css'), 'w') as f:
             f.write(EPUB_CSS)
 
-        # Front matter — title page with subtitle and author
+        # Title page with subtitle and author
         title_body = f'<h1 class="title">{title}</h1>'
         if subtitle:
             title_body += f'\n<p class="author">{subtitle}</p>'
@@ -367,13 +325,11 @@ def build_epub(chapters: list, title: str, author: str, output_path: str, lang: 
 </ol></nav>
 </body></html>''')
 
-        # Chapter files
         ch_files = []
         for i, ch in enumerate(chapters):
             fname = f'chapter_{i+1:03d}.xhtml'
             safe_h = ch['heading'].replace('&','&amp;').replace('<','&lt;').replace('>','&gt;')
 
-            # Build paragraph HTML
             body_html = ''
             for p in ch['paragraphs']:
                 if p.strip():
@@ -393,7 +349,6 @@ def build_epub(chapters: list, title: str, author: str, output_path: str, lang: 
                 f.write(xhtml)
             ch_files.append(fname)
 
-        # OPF
         book_id = str(uuid.uuid4())
         modified = datetime.now().strftime('%Y-%m-%dT%H:%M:%SZ')
 
@@ -429,7 +384,6 @@ def build_epub(chapters: list, title: str, author: str, output_path: str, lang: 
   </spine>
 </package>''')
 
-        # Zip
         with ZipFile(output_path, 'w') as zf:
             zf.write(os.path.join(tmpdir, 'mimetype'), 'mimetype', compress_type=zipfile.ZIP_STORED)
             zf.write(os.path.join(tmpdir, 'META-INF', 'container.xml'), 'META-INF/container.xml')
@@ -467,59 +421,46 @@ def main():
     parser.add_argument('--lang',       default='en', help='Language code (de, it, es, etc.)')
     args = parser.parse_args()
 
-    # Load template
     with open(args.template, 'r') as f:
         template = json.load(f)
 
-    # Load translated text
     with open(args.translated, 'r', encoding='utf-8') as f:
         translated_text = f.read()
 
-    # Gate check: scan for artifacts
     artifacts = check_for_artifacts(translated_text)
     if artifacts:
-        print(f"ERROR: Template artifacts found in translated text:")
-        for a in artifacts:
-            print(f"  - {a}")
+        print(f"ERROR: Template artifacts found: {artifacts}")
         sys.exit(1)
 
     print(f"Template: {template['total_chapters']} chapters, {template['total_paragraphs']} paragraphs")
 
-    # Extract chapters from translated text
     translated_chapters = extract_chapters_from_translation(translated_text, template)
-    print(f"Detected {len(translated_chapters)} chapters in translated text")
+    print(f"Detected {len(translated_chapters)} chapters")
 
-    # Map to template structure
-    mapped_chapters = map_chapters_to_template(translated_chapters, template)
+    mapped_chapters = map_chapters_to_template(translated_chapters, template, args.lang)
     print(f"Mapped to {len(mapped_chapters)} template chapters")
 
-    # Verify paragraph counts match template
     for i, (mc, tc) in enumerate(zip(mapped_chapters, template['chapters'])):
         if len(mc['paragraphs']) != tc['para_count']:
             print(f"WARNING: ch{i+1} has {len(mc['paragraphs'])} paragraphs, expected {tc['para_count']}")
 
-    # Build EPUB
     build_epub(mapped_chapters, args.title, args.author, args.output, args.lang, args.subtitle)
 
-    # EPUB Gate — comprehensive quality checks
     from booklingua_epub_gate import check_epub
     gate_fails = check_epub(args.output, args.lang, args.template)
     if gate_fails:
-        print(f'ERROR: EPUB gate failed with {len(gate_fails)} checks:')
-        for fail in gate_fails:
-            print(f'  - {fail}')
+        print(f'ERROR: EPUB gate failed: {gate_fails}')
         sys.exit(1)
-    print('EPUB gate passed: all checks OK')
+    print('EPUB gate passed')
+
     size = os.path.getsize(args.output)
     print(f"Built: {args.output} ({size:,} bytes)")
 
-    # Validate
     import subprocess
     result = subprocess.run(['epubcheck', args.output], capture_output=True, text=True)
     if '0 fatals' in result.stdout and '0 errors' in result.stdout:
-        print("epubcheck: PASS (0 fatals, 0 errors)")
+        print("epubcheck: PASS")
     else:
-        print("epubcheck output:")
         print(result.stdout)
         print(result.stderr)
 
