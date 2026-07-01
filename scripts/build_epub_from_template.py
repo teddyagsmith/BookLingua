@@ -262,6 +262,10 @@ def map_chapters_to_template(translated_chapters: list, template: dict) -> list:
             else:
                 heading = template_heading
 
+            # FIX: Localize German sneak peek heading
+            if heading.upper().startswith('SNEAK PEAK'):
+                heading = 'VORSCHAU' + heading[10:]  # Replace "SNEAK PEAK" with "VORSCHAU"
+
             # Check for oversized content (duplicate content leaked in)
             tr_words = len(content.split())
             expected_words = int(t_ch['word_count'] * lang_factor)
@@ -303,7 +307,7 @@ def map_chapters_to_template(translated_chapters: list, template: dict) -> list:
 
 # ─── EPUB Builder ────────────────────────────────────────────────────────────
 
-def build_epub(chapters: list, title: str, author: str, output_path: str, lang: str = 'en'):
+def build_epub(chapters: list, title: str, author: str, output_path: str, lang: str = 'en', subtitle: str = ''):
     """Build a valid EPUB3 from chapter data."""
     tmpdir = tempfile.mkdtemp()
     try:
@@ -327,9 +331,14 @@ def build_epub(chapters: list, title: str, author: str, output_path: str, lang: 
         with open(os.path.join(oebps, 'content.css'), 'w') as f:
             f.write(EPUB_CSS)
 
-        # Front matter
+        # Front matter — title page with subtitle and author
+        title_body = f'<h1 class="title">{title}</h1>'
+        if subtitle:
+            title_body += f'\n<p class="author">{subtitle}</p>'
+        title_body += f'\n<p class="author">{author}</p>'
+
         for fid, fname, body in [
-            ('title_page', 'title_page.xhtml', f'<h1 class="title">{title}</h1>'),
+            ('title_page', 'title_page.xhtml', title_body),
             ('copyright',  'copyright.xhtml',  f'<p class="copyright">Copyright \u00a9 2023</p>'),
         ]:
             with open(os.path.join(oebps, fname), 'w') as f:
@@ -454,6 +463,7 @@ def main():
     parser.add_argument('--output',     required=True, help='Output EPUB path')
     parser.add_argument('--title',      default='Untitled', help='Book title')
     parser.add_argument('--author',     default='Unknown', help='Author name')
+    parser.add_argument('--subtitle',   default='', help='Book subtitle')
     parser.add_argument('--lang',       default='en', help='Language code (de, it, es, etc.)')
     args = parser.parse_args()
 
@@ -489,7 +499,7 @@ def main():
             print(f"WARNING: ch{i+1} has {len(mc['paragraphs'])} paragraphs, expected {tc['para_count']}")
 
     # Build EPUB
-    build_epub(mapped_chapters, args.title, args.author, args.output, args.lang)
+    build_epub(mapped_chapters, args.title, args.author, args.output, args.lang, args.subtitle)
     size = os.path.getsize(args.output)
     print(f"Built: {args.output} ({size:,} bytes)")
 
