@@ -218,13 +218,22 @@ def map_chapters_to_template(translated_chapters: list, template: dict) -> list:
             content = strip_pipeline_markers(tr_ch['content'])
             n_paras = t_ch['para_count']
 
+            # FIX 1: Use translated heading (includes chapter number) when available
+            translated_heading = tr_ch.get('heading', '').strip()
+            template_heading = t_ch['heading'].strip()
+            if translated_heading and len(translated_heading) > len(template_heading):
+                heading = translated_heading
+            else:
+                heading = template_heading
+
             # Check for oversized content (duplicate content leaked in)
             tr_words = len(content.split())
             expected_words = int(t_ch['word_count'] * lang_factor)
             ratio = tr_words / expected_words if expected_words > 0 else 1.0
 
+            flag = ''
             if ratio > 1.5:
-                print(f"  ch{i+1} {t_ch['heading'][:30]:30} OVERSIZED: {tr_words} words, truncating to ~{expected_words}")
+                print(f"  ch{i+1} {heading[:30]:30} OVERSIZED: {tr_words} words, truncating to ~{expected_words}")
                 words = content.split()
                 content = ' '.join(words[:expected_words])
 
@@ -232,15 +241,26 @@ def map_chapters_to_template(translated_chapters: list, template: dict) -> list:
             paragraphs = distribute_sentences(content, n_paras)
 
             result.append({
-                'heading': t_ch['heading'],
+                'heading': heading,
                 'paragraphs': paragraphs,
             })
         else:
-            # Missing chapter — create empty placeholders
-            result.append({
-                'heading': t_ch['heading'],
-                'paragraphs': [''] * t_ch['para_count'],
-            })
+            # FIX 2: Missing chapter — use English content from template for back-matter
+            english_paras = [p['text'] for p in t_ch['paragraphs'] if p['text'].strip()]
+            if english_paras:
+                english_words = sum(len(p.split()) for p in english_paras)
+                print(f"  ch{i+1} {t_ch['heading'][:30]:30} MISSING — using English "
+                      f"content ({english_words} words, {len(english_paras)} paras)")
+                result.append({
+                    'heading': t_ch['heading'],
+                    'paragraphs': english_paras,
+                })
+            else:
+                # Missing chapter — create empty placeholders
+                result.append({
+                    'heading': t_ch['heading'],
+                    'paragraphs': [''] * t_ch['para_count'],
+                })
 
     return result
 
