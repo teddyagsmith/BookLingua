@@ -106,26 +106,47 @@ def distribute_sentences(text: str, n_paras: int, target_words_per_para: list = 
 
 # ─── Chapter Extraction from Translated Text ─────────────────────────────────
 
+def fix_dropcap(text: str) -> str:
+    """Remove drop-cap spacing artifacts: 'D as ist' → 'Das ist', 'W affles' → 'Waffles'."""
+    # Only at start of paragraph (after stripping heading)
+    # Pattern: word-boundary, single uppercase, space, then lowercase continuation
+    # Guard: must not be a known standalone Italian/Spanish article (I, A)
+    # to avoid "I baci" → "Ibaci" (Italian: "the kisses")
+    lines = text.split('\n')
+    fixed = []
+    for line in lines:
+        # Only fix at start of a non-empty line (paragraph opening)
+        m = re.match(r'^([A-ZÄÖÜ]) ([a-zäöüáéíóúñ])', line)
+        if m:
+            letter = m.group(1)
+            # Skip 'I' only — Italian plural article (I baci = the kisses)
+            if letter not in ('I',):
+                line = letter + line[2:]  # remove the space
+        fixed.append(line)
+    return '\n'.join(fixed)
+
+
 def extract_chapters_from_translation(translated_text: str, template: dict) -> list:
     """
     Split translated text into chapters matching the template's chapter count.
     Uses heading detection + source word counts as guides.
     """
-    # Find chapter headings in translated text
+    # Numbered chapter headings (KAPITEL 1 LILY, CAPITOLO 2 GAGE, etc.)
     heading_pattern = re.compile(
         r'^\s*(KAPITEL|CAPITOLO|CAP[IÍ]TULO|CHAPTER)\s+(\d+)(?:\s+([A-Z][A-Z]+))?',
         re.I | re.M
     )
+    # Epilogue — in any language
     epilog_pattern = re.compile(
         r'^\s*(EP[IÍ]LOG(?:UE|O|UO)?)(?:\s+([A-Z][A-Z]+))?',
         re.I | re.M
     )
+    # Sneak peek — English or localized (ADELANTO, ANTEPRIMA, LESEPROBE, VORSCHAU)
     sneak_pattern = re.compile(
-        r'^\s*(SNEAK\s*PE[EA]K)',
+        r'^\s*(SNEAK\s*PE[EA]K|ADELANTO|ANTEPRIMA|LESEPROBE|VORSCHAU)(?:\s+([A-Z][A-Z]+))?',
         re.I | re.M
     )
 
-    # Build a combined pattern for all headings
     all_headings = []
 
     for m in heading_pattern.finditer(translated_text):
@@ -141,7 +162,7 @@ def extract_chapters_from_translation(translated_text: str, template: dict) -> l
         all_headings.append({
             'pos': m.start(),
             'type': 'epilog',
-            'num': 999,  # Sort after chapters
+            'num': 999,
             'heading': m.group(0).strip(),
             'pov': m.group(2) or '',
         })
@@ -152,20 +173,25 @@ def extract_chapters_from_translation(translated_text: str, template: dict) -> l
             'type': 'sneak',
             'num': 1000,
             'heading': m.group(0).strip(),
-            'pov': '',
+            'pov': m.group(2) or '',
         })
 
-    # Sort by position
     all_headings.sort(key=lambda x: x['pos'])
 
-    # Deduplicate by chapter number (first occurrence wins)
-    seen = set()
+    # Deduplicate — by number for chapters, by heading text for unnumbered
+    seen_nums:     set = set()
+    seen_headings: set = set()
     unique_headings = []
     for h in all_headings:
-        key = (h['type'], h['num'])
-        if key in seen:
-            continue
-        seen.add(key)
+        if h['type'] == 'chapter':
+            if h['num'] in seen_nums:
+                continue
+            seen_nums.add(h['num'])
+        else:
+            key = h['heading'].upper()[:30]
+            if key in seen_headings:
+                continue
+            seen_headings.add(key)
         unique_headings.append(h)
 
     # Extract content for each chapter
@@ -175,10 +201,20 @@ def extract_chapters_from_translation(translated_text: str, template: dict) -> l
         end = unique_headings[i + 1]['pos'] if i + 1 < len(unique_headings) else len(translated_text)
         content = translated_text[start:end].strip()
 
-        # Remove the heading line from content
-        first_nl = content.find('\n')
-        if first_nl > 0:
-            content = content[first_nl:].strip()
+        # FIX: Strip the heading PREFIX only (not the entire first line).
+        # Previously used first_nl which removed heading + inline body when
+        # they were on the same line (all three languages have this pattern).
+        heading_text = h['heading']
+        if content.startswith(heading_text):
+            content = content[len(heading_text):].strip()
+        else:
+            # Fallback: strip first line if heading not found at start
+            first_nl = content.find('\n')
+            if first_nl > 0:
+                content = content[first_nl:].strip()
+
+        # Fix drop-cap spacing artifacts
+        content = fix_dropcap(content)
 
         chapters.append({
             'heading': h['heading'],
@@ -299,16 +335,24 @@ def build_epub(chapters: list, title: str, author: str, output_path: str, lang: 
             with open(os.path.join(oebps, fname), 'w') as f:
                 f.write(_xhtml(fid.replace('_',' ').title(), body, lang))
 
-        # TOC
+        # TOC with localized heading
+        toc_headings = {
+            'de': 'Inhaltsverzeichnis',
+            'it': 'Indice',
+            'es': 'Tabla de contenidos',
+            'fr': 'Table des matières',
+            'pt': 'Índice',
+        }
+        toc_heading = toc_headings.get(lang, 'Table of Contents')
         items = '\n'.join(f'    <li><a href="chapter_{i+1:03d}.xhtml">{ch["heading"]}</a></li>'
                           for i, ch in enumerate(chapters))
         with open(os.path.join(oebps, 'toc.xhtml'), 'w') as f:
             f.write(f'''<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE html>
 <html xmlns="http://www.w3.org/1999/xhtml" xmlns:epub="http://www.idpf.org/2007/ops" xml:lang="{lang}">
-<head><title>Table of Contents</title><link rel="stylesheet" href="content.css"/></head>
+<head><title>{toc_heading}</title><link rel="stylesheet" href="content.css"/></head>
 <body>
-<h1>Table of Contents</h1>
+<h1>{toc_heading}</h1>
 <nav epub:type="toc"><ol>
 {items}
 </ol></nav>
