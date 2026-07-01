@@ -443,6 +443,7 @@ async function buildFinalEpub(
   content: string,
   bookTitle: string,
   langDisplay: string,
+  lang: string,
 ): Promise<Buffer> {
   // Step 1: Find chapter/heading markers in the ORIGINAL content (before stripping)
   const markerRe = /###(?:CHAPTER|H[1-6]):([^#]*)###\n*/g
@@ -759,13 +760,79 @@ export async function GET(
 
     // ── Final version: clean, in effective format ──
     if (effectiveFormat === '.epub') {
-      const buffer = await buildFinalEpub(file.content, order.book_title, langDisplay)
-      
-      // Validate EPUB with epubcheck before delivery
+      const { execSync } = await import('child_process')
+      const { writeFileSync, mkdtempSync, readFileSync, rmSync } = await import('fs')
+      const { tmpdir } = await import('os')
+      const { join } = await import('path')
+
+      // ── Artifact gate: scan translated text before building ──────────────
+      const { detectArtifacts } = await import('@/lib/artifact-gate')
+      const artifactCheck = detectArtifacts(file.content)
+      if (!artifactCheck.clean) {
+        console.error('[Artifact Gate] Violations in translated text:', artifactCheck.violations)
+        return NextResponse.json({
+          error: 'Template artifacts found in translation',
+          violations: artifactCheck.violations,
+        }, { status: 500 })
+      }
+
+      const tmpDir = mkdtempSync(join(tmpdir(), 'booklingua-epub-'))
+      const contentPath = join(tmpDir, 'content.txt')
+      const outputPath  = join(tmpDir, 'output.epub')
+      const bcpLang = lang === 'es-latam' ? 'es' : lang
+
+      writeFileSync(contentPath, file.content)
+
+      // ── Try template-based builder first ─────────────────────────────────
+      const { data: structureFile } = await supabaseAdmin
+        .from('files')
+        .select('content')
+        .eq('order_id', orderId)
+        .eq('type', 'structure')
+        .eq('language', 'en')
+        .maybeSingle()
+
+      let scriptPath: string
+      let scriptArgs: string
+
+      if (structureFile?.content) {
+        // Template-based: structure comes from template, content from translation
+        const templatePath = join(tmpDir, 'template.json')
+        writeFileSync(templatePath, structureFile.content)
+        scriptPath = join(process.cwd(), 'scripts', 'build_epub_from_template.py')
+        scriptArgs =
+          `--template "${templatePath}" ` +
+          `--translated "${contentPath}" ` +
+          `--output "${outputPath}" ` +
+          `--title "${order.book_title.replace(/"/g, '\\"')}" ` +
+          `--author "Translated by BookLingua" ` +
+          `--lang "${bcpLang}"`
+        console.log('[BookLingua] Using template-based EPUB builder')
+      } else {
+        // Legacy: derive structure from translated text
+        scriptPath = join(process.cwd(), 'scripts', 'build_epub.py')
+        scriptArgs =
+          `--content "${contentPath}" ` +
+          `--output "${outputPath}" ` +
+          `--title "${order.book_title.replace(/"/g, '\\"')}" ` +
+          `--author "Translated by BookLingua" ` +
+          `--lang "${bcpLang}"`
+        console.log('[BookLingua] Using legacy EPUB builder (no template found)')
+      }
+
+      execSync(`python3 "${scriptPath}" ${scriptArgs}`, {
+        encoding: 'utf-8',
+        maxBuffer: 10 * 1024 * 1024,
+      })
+
+      const buffer = readFileSync(outputPath)
+
+      // Validate with epubcheck
       const { validateEpub } = await import('@/lib/epub-validator')
       const validation = validateEpub(buffer)
       if (!validation.valid) {
         console.error('[BookLingua] EPUB validation failed:', validation.output)
+        rmSync(tmpDir, { recursive: true, force: true })
         return NextResponse.json({
           error: 'EPUB validation failed',
           details: validation.errors,
@@ -773,7 +840,9 @@ export async function GET(
         }, { status: 500 })
       }
       console.log('[BookLingua] EPUB validation passed: 0 errors, 0 warnings')
-      
+
+      rmSync(tmpDir, { recursive: true, force: true })
+
       return new NextResponse(new Uint8Array(buffer), {
         headers: {
           'Content-Type': 'application/epub+zip',
@@ -782,7 +851,6 @@ export async function GET(
         },
       })
     }
-
     if (fileFormat === '.txt') {
       const clean = stripHighlightMarkers(file.content)
       return new NextResponse(clean, {

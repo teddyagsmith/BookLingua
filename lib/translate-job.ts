@@ -228,6 +228,74 @@ export const translateBook = inngest.createFunction(
       }
     })
 
+    // ── Step 2b: Generate structure template (EPUB/DOCX orders only) ──────────
+    // Parses the source document and stores a JSON template in Supabase that
+    // captures chapter count, headings, and paragraph counts per chapter.
+    // This template drives all downstream builders — no structure is ever
+    // derived from translated text.
+    await step.run('generate-structure-template', async () => {
+      // Skip if template already exists
+      const { data: existing } = await supabaseAdmin
+        .from('files')
+        .select('id')
+        .eq('order_id', orderId)
+        .eq('type', 'structure')
+        .maybeSingle()
+
+      if (existing) {
+        console.log('[Template] Structure template already exists — skipping')
+        return
+      }
+
+      if (!originalBuffer) {
+        console.log('[Template] No binary file — skipping template generation')
+        return
+      }
+
+      const fileFormat = (order.file_format || '').toLowerCase()
+      if (fileFormat !== '.epub' && fileFormat !== '.docx') {
+        console.log(`[Template] Skipping template for format: ${fileFormat}`)
+        return
+      }
+
+      try {
+        const { writeFileSync, mkdtempSync, readFileSync, rmSync } = await import('fs')
+        const { tmpdir } = await import('os')
+        const { join } = await import('path')
+        const { execSync } = await import('child_process')
+
+        const tmpDir = mkdtempSync(join(tmpdir(), 'bl-template-'))
+        try {
+          const sourcePath = join(tmpDir, `source${fileFormat}`)
+          const templatePath = join(tmpDir, 'template.json')
+          writeFileSync(sourcePath, originalBuffer)
+
+          const scriptPath = join(process.cwd(), 'scripts', 'booklingua_template.py')
+          execSync(`python3 "${scriptPath}" "${sourcePath}" "${templatePath}"`, {
+            encoding: 'utf-8',
+            maxBuffer: 10 * 1024 * 1024,
+            timeout: 60000,
+          })
+
+          const template = JSON.parse(readFileSync(templatePath, 'utf-8'))
+
+          await supabaseAdmin.from('files').insert({
+            order_id: orderId,
+            type: 'structure',
+            language: 'en',
+            content: JSON.stringify(template),
+          })
+
+          console.log(`[Template] Generated: ${template.total_chapters} chapters, ${template.total_paragraphs} paragraphs`)
+        } finally {
+          rmSync(tmpDir, { recursive: true, force: true })
+        }
+      } catch (e) {
+        // Non-fatal — pipeline can still run without a template
+        console.warn('[Template] Generation failed (non-fatal):', e)
+      }
+    })
+
     // ── Step 3: Update order status ──
     await step.run('update-status-processing', async () => {
       await supabaseAdmin.from('orders').update({ status: 'processing' }).eq('id', orderId)
