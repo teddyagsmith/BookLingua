@@ -21,10 +21,17 @@ export function validateEpub(epubBuffer: Buffer): EpubCheckResult {
       output = execSync(
         `epubcheck "${epubPath}"`,
         { encoding: 'utf-8', maxBuffer: 10 * 1024 * 1024 } as ExecSyncOptions
-      )
+      ) as string
     } catch (e: any) {
       // epubcheck exits with non-zero code when errors are found
-      output = e.stdout || e.message || ''
+      const stdout = e.stdout
+      if (typeof stdout === 'string') {
+        output = stdout
+      } else if (Buffer.isBuffer(stdout)) {
+        output = stdout.toString('utf-8')
+      } else {
+        output = e.message || ''
+      }
     }
 
     const errors: string[] = []
