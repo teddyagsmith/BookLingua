@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { supabaseAdmin } from '@/lib/supabase'
+import { getSupabaseAdmin } from '@/lib/supabase'
 
 export async function POST(req: NextRequest) {
   try {
@@ -12,7 +12,7 @@ export async function POST(req: NextRequest) {
     const normalised = email.toLowerCase().trim()
 
     // Upsert so duplicate emails don't throw
-    const { error } = await supabaseAdmin
+    const { error } = await getSupabaseAdmin()
       .from('email_subscribers')
       .upsert(
         { email: normalised, source: source || 'unknown', subscribed_at: new Date().toISOString() },

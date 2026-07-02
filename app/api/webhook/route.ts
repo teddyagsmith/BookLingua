@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import Stripe from 'stripe'
 import { Resend } from 'resend'
-import { supabaseAdmin } from '@/lib/supabase'
+import { getSupabaseAdmin } from '@/lib/supabase'
 import { inngest } from '@/lib/inngest'
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
@@ -31,7 +31,7 @@ export async function POST(request: NextRequest) {
     const session = event.data.object as Stripe.Checkout.Session
 
     // Idempotency check: ignore duplicate webhook events for the same Stripe session
-    const { data: existingOrder } = await supabaseAdmin
+    const { data: existingOrder } = await getSupabaseAdmin()
       .from('orders')
       .select('id')
       .eq('stripe_session_id', session.id)
@@ -62,7 +62,7 @@ export async function POST(request: NextRequest) {
     const upsells = JSON.parse(selectedUpsells || '[]')
 
     // 1. Create order in Supabase
-    const { data: order, error: orderError } = await supabaseAdmin
+    const { data: order, error: orderError } = await getSupabaseAdmin()
       .from('orders')
       .insert({
         stripe_session_id: session.id,
@@ -89,14 +89,14 @@ export async function POST(request: NextRequest) {
 
     // 2. Link uploaded file from temp_uploads to the order's files table
     if (sessionId) {
-      const { data: tempUpload } = await supabaseAdmin
+      const { data: tempUpload } = await getSupabaseAdmin()
         .from('temp_uploads')
         .select('*')
         .eq('session_id', sessionId)
         .single()
 
       if (tempUpload) {
-        await supabaseAdmin.from('files').insert({
+        await getSupabaseAdmin().from('files').insert({
           order_id: order.id,
           type: 'original',
           language: 'en',
@@ -104,14 +104,14 @@ export async function POST(request: NextRequest) {
           pipeline_version: process.env.PIPELINE_VERSION || 'unknown',
         })
         // Clean up temp upload
-        await supabaseAdmin.from('temp_uploads').delete().eq('session_id', sessionId)
+        await getSupabaseAdmin().from('temp_uploads').delete().eq('session_id', sessionId)
       } else {
         console.error(`No temp upload found for sessionId: ${sessionId}`)
       }
     }
 
     // 3. Send confirmation email to customer
-    await resend.emails.send({
+    await getResend().emails.send({
       from: 'BookLingua <orders@booklingua.io>',
       to: customerEmail,
       subject: `Order Confirmed: ${bookTitle} Translation`,
@@ -147,7 +147,7 @@ export async function POST(request: NextRequest) {
     })
 
     // 4. Send notification to admin
-    await resend.emails.send({
+    await getResend().emails.send({
       from: 'BookLingua <orders@booklingua.io>',
       to: process.env.ADMIN_EMAIL!,
       subject: `🎉 New Order: ${bookTitle} - $${(session.amount_total! / 100).toFixed(2)}`,

@@ -5,7 +5,7 @@ const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
   apiVersion: '2023-10-16',
 })
 
-import { supabaseAdmin } from '@/lib/supabase'
+import { getSupabaseAdmin } from '@/lib/supabase'
 
 // Voucher codes - add/remove codes here
 const VOUCHER_CODES: Record<string, { discount: number; type: 'percent' | 'fixed'; description: string; maxUses?: number; expiresAt?: string; oncePerEmail?: boolean }> = {
@@ -33,7 +33,7 @@ async function validateVoucher(code: string, subtotal: number, email?: string): 
 
   // Check once-per-email restriction
   if (voucher.oncePerEmail && email) {
-    const { data: previousOrder } = await supabaseAdmin
+    const { data: previousOrder } = await getSupabaseAdmin()
       .from('orders')
       .select('id')
       .eq('email', email.toLowerCase().trim())
@@ -182,7 +182,7 @@ export async function POST(request: NextRequest) {
         status: 'pending',
       }
 
-      const { data: order, error: orderError } = await supabaseAdmin
+      const { data: order, error: orderError } = await getSupabaseAdmin()
         .from('orders')
         .insert(orderData)
         .select()
@@ -195,20 +195,20 @@ export async function POST(request: NextRequest) {
 
       // Link temp upload file
       if (sessionId) {
-        const { data: tempUpload } = await supabaseAdmin
+        const { data: tempUpload } = await getSupabaseAdmin()
           .from('temp_uploads')
           .select('*')
           .eq('session_id', sessionId)
           .single()
 
         if (tempUpload) {
-          await supabaseAdmin.from('files').insert({
+          await getSupabaseAdmin().from('files').insert({
             order_id: order.id,
             type: 'original',
             language: 'en',
             content: tempUpload.content,
           })
-          await supabaseAdmin.from('temp_uploads').delete().eq('session_id', sessionId)
+          await getSupabaseAdmin().from('temp_uploads').delete().eq('session_id', sessionId)
         }
       }
 

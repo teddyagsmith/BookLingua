@@ -1,12 +1,18 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { supabaseAdmin } from '@/lib/supabase'
+import { getSupabaseAdmin } from '@/lib/supabase'
 import { buildDownloadUrl } from '@/lib/download-token'
 import { runMandatoryQA } from '@/lib/delivery-gate'
 import { Resend } from 'resend'
 import fs from 'fs'
 import path from 'path'
 
-const resend = new Resend(process.env.RESEND_API_KEY)
+let resend: Resend | null = null
+function getResend() {
+  if (!resend) {
+    resend = new Resend(process.env.RESEND_API_KEY!)
+  }
+  return resend
+}
 
 const LANGUAGE_NAMES: Record<string, string> = {
   'es-es': 'Spanish (Spain)',
@@ -34,7 +40,7 @@ export async function POST(
   const { orderId } = params
 
   try {
-    const { data: order, error } = await supabaseAdmin
+    const { data: order, error } = await getSupabaseAdmin()
       .from('orders')
       .select('*')
       .eq('id', orderId)
@@ -59,7 +65,7 @@ export async function POST(
     fs.mkdirSync(tmpDir, { recursive: true })
 
     // Fetch original content
-    const { data: originalFile } = await supabaseAdmin
+    const { data: originalFile } = await getSupabaseAdmin()
       .from('files')
       .select('content')
       .eq('order_id', orderId)
@@ -72,7 +78,7 @@ export async function POST(
     let qaErrors: string[] = []
 
     for (const lang of languages) {
-      const { data: translatedFile } = await supabaseAdmin
+      const { data: translatedFile } = await getSupabaseAdmin()
         .from('files')
         .select('content')
         .eq('order_id', orderId)
@@ -100,7 +106,7 @@ export async function POST(
     try { fs.rmSync(tmpDir, { recursive: true, force: true }) } catch {}
 
     if (qaErrors.length > 0) {
-      await supabaseAdmin
+      await getSupabaseAdmin()
         .from('orders')
         .update({
           status: 'qa_blocked',
@@ -118,7 +124,7 @@ export async function POST(
 
     // Fetch the pre-composed customer email from the files table
     // This is the EXACT email Gilly reviewed — now sent to the customer
-    const { data: emailFile } = await supabaseAdmin
+    const { data: emailFile } = await getSupabaseAdmin()
       .from('files')
       .select('content')
       .eq('order_id', orderId)
@@ -145,7 +151,7 @@ export async function POST(
     `
 
     // Send the exact same email to the customer
-    await resend.emails.send({
+    await getResend().emails.send({
       from: 'BookLingua <orders@booklingua.io>',
       to: order.email,
       subject: `Your translations are ready: ${order.book_title} 🎉`,
@@ -153,7 +159,7 @@ export async function POST(
     })
 
     // Mark order as completed
-    await supabaseAdmin
+    await getSupabaseAdmin()
       .from('orders')
       .update({ status: 'completed', completed_at: new Date().toISOString() })
       .eq('id', orderId)

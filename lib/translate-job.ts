@@ -1,6 +1,6 @@
 import Anthropic from '@anthropic-ai/sdk'
 import { inngest } from '@/lib/inngest'
-import { supabaseAdmin } from '@/lib/supabase'
+import { getSupabaseAdmin } from '@/lib/supabase'
 import { buildDownloadUrl, buildFeedbackUrl } from '@/lib/download-token'
 import { generateLaunchStrategy } from '@/lib/launch-strategy'
 import { Resend } from 'resend'
@@ -148,7 +148,7 @@ export const translateBook = inngest.createFunction(
     console.log(`[BookLingua] Starting translation for order ${orderId}`)
 
     // ── Step 1: Load order and original content ──
-    const { data: order } = await supabaseAdmin
+    const { data: order } = await getSupabaseAdmin()
       .from('orders')
       .select('*')
       .eq('id', orderId)
@@ -161,7 +161,7 @@ export const translateBook = inngest.createFunction(
       console.log(`[BookLingua] Loaded languages from order: ${languages.join(', ')}`)
     }
 
-    const { data: fileData } = await supabaseAdmin
+    const { data: fileData } = await getSupabaseAdmin()
       .from('files')
       .select('content, type')
       .eq('order_id', orderId)
@@ -186,7 +186,7 @@ export const translateBook = inngest.createFunction(
     // ── Step 2: Extract segment metadata (non-fatal) ──
     await step.run('extract-segment-metadata', async () => {
       // Check existing segments and their pipeline version
-      const { data: existing } = await supabaseAdmin
+      const { data: existing } = await getSupabaseAdmin()
         .from('files')
         .select('id, pipeline_version')
         .eq('order_id', orderId)
@@ -202,7 +202,7 @@ export const translateBook = inngest.createFunction(
       // If stale version, delete old segments before re-extracting
       if (existing) {
         console.log(`[Pipeline] Stale segment cache (was ${existing.pipeline_version}, current ${PIPELINE_VERSION}) — re-extracting`)
-        await supabaseAdmin.from('files')
+        await getSupabaseAdmin().from('files')
           .delete()
           .eq('order_id', orderId)
           .eq('type', 'segments')
@@ -214,7 +214,7 @@ export const translateBook = inngest.createFunction(
         const { extractDocxSegments } = await import('./extract-segments')
         const { segments, quality } = await extractDocxSegments(originalBuffer)
         if (quality.status !== 'unprocessable' && segments.length > 0) {
-          await supabaseAdmin.from('files').upsert({
+          await getSupabaseAdmin().from('files').upsert({
             order_id: orderId,
             type: 'segments',
             language: 'en',
@@ -235,7 +235,7 @@ export const translateBook = inngest.createFunction(
     // derived from translated text.
     await step.run('generate-structure-template', async () => {
       // Skip if template already exists
-      const { data: existing } = await supabaseAdmin
+      const { data: existing } = await getSupabaseAdmin()
         .from('files')
         .select('id')
         .eq('order_id', orderId)
@@ -279,7 +279,7 @@ export const translateBook = inngest.createFunction(
 
           const template = JSON.parse(readFileSync(templatePath, 'utf-8'))
 
-          await supabaseAdmin.from('files').insert({
+          await getSupabaseAdmin().from('files').insert({
             order_id: orderId,
             type: 'structure',
             language: 'en',
@@ -298,7 +298,7 @@ export const translateBook = inngest.createFunction(
 
     // ── Step 3: Update order status ──
     await step.run('update-status-processing', async () => {
-      await supabaseAdmin.from('orders').update({ status: 'processing' }).eq('id', orderId)
+      await getSupabaseAdmin().from('orders').update({ status: 'processing' }).eq('id', orderId)
     })
 
     const translations: Record<string, { translated: string; edited: string; notes: string }> = {}
@@ -318,7 +318,7 @@ export const translateBook = inngest.createFunction(
       for (let i = 0; i < chunks.length; i++) {
         const chunk = chunks[i]
         const chunkResult = await step.run(`translate-${langCode}-chunk-${i}`, async () => {
-          const { data: cached } = await supabaseAdmin
+          const { data: cached } = await getSupabaseAdmin()
             .from('translation_chunks')
             .select('content, input_tokens, output_tokens')
             .eq('order_id', orderId).eq('lang_code', langCode).eq('chunk_index', i).eq('pass', 'sonnet')
@@ -357,7 +357,7 @@ ${chunk}`,
           })
 
           const text = response.content[0].type === 'text' ? response.content[0].text : ''
-          await supabaseAdmin.from('translation_chunks').upsert({
+          await getSupabaseAdmin().from('translation_chunks').upsert({
             order_id: orderId, lang_code: langCode, chunk_index: i, pass: 'sonnet',
             content: text, input_tokens: response.usage.input_tokens, output_tokens: response.usage.output_tokens,
           }, { onConflict: 'order_id,lang_code,chunk_index,pass' })
@@ -396,7 +396,7 @@ ${chunk}`,
         const chunkLabel = editorialChunks.length > 1 ? ` (chunk ${i + 1}/${editorialChunks.length})` : ''
 
         const editorialResult = await step.run(`editorial-${langCode}-chunk-${i}`, async () => {
-          const { data: cached } = await supabaseAdmin
+          const { data: cached } = await getSupabaseAdmin()
             .from('translation_chunks')
             .select('content, input_tokens, output_tokens')
             .eq('order_id', orderId).eq('lang_code', langCode).eq('chunk_index', i).eq('pass', 'opus')
@@ -473,7 +473,7 @@ ORIGINAL: [term] | KEPT AS: [term] | REASON: [why untranslated]
           })
 
           const text = response.content[0].type === 'text' ? response.content[0].text : ''
-          await supabaseAdmin.from('translation_chunks').upsert({
+          await getSupabaseAdmin().from('translation_chunks').upsert({
             order_id: orderId, lang_code: langCode, chunk_index: i, pass: 'opus',
             content: text, input_tokens: response.usage.input_tokens, output_tokens: response.usage.output_tokens,
           }, { onConflict: 'order_id,lang_code,chunk_index,pass' })
@@ -508,7 +508,7 @@ ORIGINAL: [term] | KEPT AS: [term] | REASON: [why untranslated]
       // ── Validation ──
       let segmentMeta: Array<{ id: number; type: Segment['type']; level: number }> | null = null
       try {
-        const { data: segFile } = await supabaseAdmin
+        const { data: segFile } = await getSupabaseAdmin()
           .from('files')
           .select('content')
           .eq('order_id', orderId)
@@ -527,7 +527,7 @@ ORIGINAL: [term] | KEPT AS: [term] | REASON: [why untranslated]
       if (!validation.passed) {
         console.warn(`[Pipeline] Validation issues detected for ${langCode}: ${validation.summary} — saving anyway for human review`)
         // Save validation issues to order notes but continue with delivery
-        await supabaseAdmin.from('orders').update({
+        await getSupabaseAdmin().from('orders').update({
           notes: `Validation: ${validation.summary}`,
         }).eq('id', orderId)
         // Continue to save translation below — don't throw
@@ -535,30 +535,30 @@ ORIGINAL: [term] | KEPT AS: [term] | REASON: [why untranslated]
 
       // Save to database
       await step.run(`save-translation-${langCode}`, async () => {
-        await supabaseAdmin.from('files')
+        await getSupabaseAdmin().from('files')
           .delete()
           .eq('order_id', orderId).eq('type', 'translated').eq('language', langCode)
-        await supabaseAdmin.from('files')
+        await getSupabaseAdmin().from('files')
           .delete()
           .eq('order_id', orderId).eq('type', 'notes').eq('language', langCode)
-        await supabaseAdmin.from('files')
+        await getSupabaseAdmin().from('files')
           .delete()
           .eq('order_id', orderId).eq('type', 'email_summary').eq('language', langCode)
 
-        await supabaseAdmin.from('files').insert({
+        await getSupabaseAdmin().from('files').insert({
           order_id: orderId, type: 'translated', language: langCode,
           content: editorialResult, original_content: translatedText,
           pipeline_version: PIPELINE_VERSION,
         })
         if (translationNotesParsed) {
-          await supabaseAdmin.from('files').insert({
+          await getSupabaseAdmin().from('files').insert({
             order_id: orderId, type: 'notes', language: langCode,
             content: translationNotesParsed,
             pipeline_version: PIPELINE_VERSION,
           })
         }
         if (emailSummary) {
-          await supabaseAdmin.from('files').insert({
+          await getSupabaseAdmin().from('files').insert({
             order_id: orderId, type: 'email_summary', language: langCode,
             content: emailSummary,
             pipeline_version: PIPELINE_VERSION,
@@ -638,7 +638,7 @@ doc.save('${rawDocxPath}')
 
     // Generate download token for the order
     await step.run('generate-download-token', async () => {
-      const { data: existingToken } = await supabaseAdmin
+      const { data: existingToken } = await getSupabaseAdmin()
         .from('orders')
         .select('download_token')
         .eq('id', orderId)
@@ -647,7 +647,7 @@ doc.save('${rawDocxPath}')
       if (!existingToken?.download_token) {
         const crypto = require('crypto')
         const token = crypto.randomBytes(32).toString('base64url').replace(/[^a-zA-Z0-9]/g, '').substring(0, 40)
-        await supabaseAdmin.from('orders').update({ download_token: token }).eq('id', orderId)
+        await getSupabaseAdmin().from('orders').update({ download_token: token }).eq('id', orderId)
         console.log(`[Pipeline] Generated download token: ${token.substring(0, 10)}...`)
       }
     })
@@ -657,7 +657,7 @@ doc.save('${rawDocxPath}')
     const actualMargin = ((Number(order.amount_paid) - actualCost) / Number(order.amount_paid) * 100).toFixed(1)
     console.log(`[BookLingua] Order ${orderId} complete. Cost: $${actualCost.toFixed(2)} (${actualMargin}% margin)`)
 
-    await supabaseAdmin.from('orders').update({
+    await getSupabaseAdmin().from('orders').update({
       status: 'pending_review',
       completed_at: new Date().toISOString(),
       api_cost: parseFloat(actualCost.toFixed(4)),
@@ -668,7 +668,7 @@ doc.save('${rawDocxPath}')
     // This email contains EVERYTHING the customer will receive, so Gilly can review
     // before approving. When approved, the exact same email is sent to the customer.
     await step.run('send-review-email', async () => {
-      const { data: filesData } = await supabaseAdmin
+      const { data: filesData } = await getSupabaseAdmin()
         .from('files')
         .select('type, language, content')
         .eq('order_id', orderId)
@@ -735,9 +735,9 @@ doc.save('${rawDocxPath}')
 
       // Store the customer email HTML in the files table for later use
       // This is what gets sent to the customer when approved
-      await supabaseAdmin.from('files').delete()
+      await getSupabaseAdmin().from('files').delete()
         .eq('order_id', orderId).eq('type', 'customer_email')
-      await supabaseAdmin.from('files').insert({
+      await getSupabaseAdmin().from('files').insert({
         order_id: orderId,
         type: 'customer_email',
         language: 'en',
@@ -745,7 +745,7 @@ doc.save('${rawDocxPath}')
       })
 
       // Send review email to Gilly with everything
-      await resend.emails.send({
+      await getResend().emails.send({
         from: 'BookLingua Admin <hello@booklingua.io>',
         to: ['gilly@myromancereads.com'],
         subject: `🔍 REVIEW NEEDED — ${order.book_title} (${languages.join(', ')})`,

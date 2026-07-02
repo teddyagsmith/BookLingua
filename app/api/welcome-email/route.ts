@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { Resend } from 'resend'
-import { supabaseAdmin } from '@/lib/supabase'
+import { getSupabaseAdmin } from '@/lib/supabase'
 
 const resend = new Resend(process.env.RESEND_API_KEY)
 
@@ -388,7 +388,7 @@ export async function POST(req: NextRequest) {
     }
 
     // Send the email
-    const { error } = await resend.emails.send({
+    const { error } = await getResend().emails.send({
       from: 'Teddy @ BookLingua <hello@booklingua.io>',
       to: email,
       subject: sequence.subject,
@@ -402,7 +402,7 @@ export async function POST(req: NextRequest) {
     }
 
     // Update subscriber record with sequence progress
-    const { error: updateError } = await supabaseAdmin
+    const { error: updateError } = await getSupabaseAdmin()
       .from('email_subscribers')
       .update({
         welcome_sequence_day: day,
@@ -443,7 +443,7 @@ export async function GET(req: NextRequest) {
     })
   }
 
-  const { data, error } = await supabaseAdmin
+  const { data, error } = await getSupabaseAdmin()
     .from('email_subscribers')
     .select('welcome_sequence_day, last_email_sent_at, last_email_subject')
     .eq('email', email.toLowerCase().trim())

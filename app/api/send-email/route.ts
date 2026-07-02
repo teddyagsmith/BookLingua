@@ -1,7 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { Resend } from 'resend'
 
-const resend = new Resend(process.env.RESEND_API_KEY)
+let resend: Resend | null = null
+function getResend() {
+  if (!resend) {
+    resend = new Resend(process.env.RESEND_API_KEY!)
+  }
+  return resend
+}
 
 /**
  * Send email from BookLingua
@@ -38,7 +44,7 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    const { data, error } = await resend.emails.send({
+    const { data, error } = await getResend().emails.send({
       from: from || 'BookLingua <hello@booklingua.io>',
       to: recipients,
       subject,
@@ -89,7 +95,8 @@ export async function GET(req: NextRequest) {
   }
 
   // Return subscriber count for broadcast planning
-  const { supabaseAdmin } = await import('@/lib/supabase')
+  const { getSupabaseAdmin } = await import('@/lib/supabase')
+  const supabaseAdmin = getSupabaseAdmin()
   
   const { count, error } = await supabaseAdmin
     .from('email_subscribers')

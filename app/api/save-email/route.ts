@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { supabaseAdmin } from '@/lib/supabase'
+import { getSupabaseAdmin } from '@/lib/supabase'
 
 export async function POST(request: NextRequest) {
   try {
@@ -17,7 +17,7 @@ export async function POST(request: NextRequest) {
 
     // Save email to temp_uploads row for this session
     // NOTE: temp_uploads table needs an 'email' column for this to work
-    const { error } = await supabaseAdmin
+    const { error } = await getSupabaseAdmin()
       .from('temp_uploads')
       .update({ email })
       .eq('session_id', sessionId)

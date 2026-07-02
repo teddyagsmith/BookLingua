@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { supabaseAdmin } from '@/lib/supabase'
+import { getSupabaseAdmin } from '@/lib/supabase'
 import { verifyDownloadToken } from '@/lib/download-token'
 import {
   Document,
@@ -648,7 +648,7 @@ export async function GET(
   }
 
   try {
-    const { data: order } = await supabaseAdmin
+    const { data: order } = await getSupabaseAdmin()
       .from('orders')
       .select('*')
       .eq('id', orderId)
@@ -657,7 +657,7 @@ export async function GET(
     if (!order) return NextResponse.json({ error: 'Order not found' }, { status: 404 })
     if (order.status !== 'completed' && order.status !== 'pending_review') return NextResponse.json({ error: 'Translation not yet complete' }, { status: 400 })
 
-    const { data: file } = await supabaseAdmin
+    const { data: file } = await getSupabaseAdmin()
       .from('files')
       .select('content')
       .eq('order_id', orderId)
@@ -686,7 +686,7 @@ export async function GET(
     // Segment metadata tells us exactly which paragraphs are headings vs body text.
     // When present, we use segment-aware builders (no isHeading() regex guessing).
     // When absent, we fall back to the old regex-based builders.
-    const { data: segFile } = await supabaseAdmin
+    const { data: segFile } = await getSupabaseAdmin()
       .from('files')
       .select('content')
       .eq('order_id', orderId)
@@ -706,7 +706,7 @@ export async function GET(
       // Fetch translation notes from the dedicated `type: 'notes'` file (preferred)
       // Fallback to last-chunk extraction for legacy orders
       let translationNotes: string | undefined
-      const { data: notesFile } = await supabaseAdmin
+      const { data: notesFile } = await getSupabaseAdmin()
         .from('files')
         .select('content')
         .eq('order_id', orderId)
@@ -718,7 +718,7 @@ export async function GET(
       if (notesFile?.content) {
         translationNotes = notesFile.content
       } else {
-        const { data: notesChunk } = await supabaseAdmin
+        const { data: notesChunk } = await getSupabaseAdmin()
           .from('translation_chunks')
           .select('content')
           .eq('order_id', orderId)
@@ -784,7 +784,7 @@ export async function GET(
       writeFileSync(contentPath, file.content)
 
       // ── Try template-based builder first ─────────────────────────────────
-      const { data: structureFile } = await supabaseAdmin
+      const { data: structureFile } = await getSupabaseAdmin()
         .from('files')
         .select('content')
         .eq('order_id', orderId)
@@ -866,7 +866,7 @@ export async function GET(
     let buffer: Buffer | null = null
 
     // Fetch original file to get the binary
-    const { data: originalFile } = await supabaseAdmin
+    const { data: originalFile } = await getSupabaseAdmin()
       .from('files')
       .select('content')
       .eq('order_id', orderId)

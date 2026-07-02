@@ -1,9 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { supabaseAdmin } from '@/lib/supabase'
+import { getSupabaseAdmin } from '@/lib/supabase'
 import { createHmac } from 'crypto'
 import { Resend } from 'resend'
 
-const resend = new Resend(process.env.RESEND_API_KEY)
+let _resend: Resend | null = null
+function getResend() {
+  if (!_resend) {
+    _resend = new Resend(process.env.RESEND_API_KEY!)
+  }
+  return _resend
+}
 
 function signFeedbackToken(orderId: string): string {
   return createHmac('sha256', process.env.STRIPE_WEBHOOK_SECRET!)
@@ -76,7 +82,7 @@ export async function GET(request: NextRequest) {
   }
 
   // Get order
-  const { data: order } = await supabaseAdmin
+  const { data: order } = await getSupabaseAdmin()
     .from('orders')
     .select('book_title, author_name, email, languages')
     .eq('id', orderId)
@@ -85,7 +91,7 @@ export async function GET(request: NextRequest) {
   if (!order) return new NextResponse('Order not found', { status: 404 })
 
   // Idempotent: skip if already rated
-  const { data: existing } = await supabaseAdmin
+  const { data: existing } = await getSupabaseAdmin()
     .from('order_feedback')
     .select('id')
     .eq('order_id', orderId)
@@ -93,14 +99,14 @@ export async function GET(request: NextRequest) {
 
   if (!existing) {
     // Save feedback
-    await supabaseAdmin.from('order_feedback').insert({
+    await getSupabaseAdmin().from('order_feedback').insert({
       order_id: orderId,
       rating,
     })
 
     // Alert admin if rating < 4
     if (rating < 4) {
-      await resend.emails.send({
+      await getResend().emails.send({
         from: 'BookLingua <orders@booklingua.io>',
         to: 'hello@booklingua.io',
         subject: `⚠️ Low Rating (${rating}/5) — ${order.book_title}`,

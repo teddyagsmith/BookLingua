@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { supabaseAdmin } from '@/lib/supabase'
+import { getSupabaseAdmin } from '@/lib/supabase'
 import Anthropic from '@anthropic-ai/sdk'
 
 const anthropic = new Anthropic({
@@ -251,7 +251,7 @@ export async function POST(request: NextRequest) {
 
     // If sessionId provided, fetch from database (handles all formats)
     if (sessionId) {
-      const { data, error } = await supabaseAdmin
+      const { data, error } = await getSupabaseAdmin()
         .from('temp_uploads')
         .select('content, file_format')
         .eq('session_id', sessionId)

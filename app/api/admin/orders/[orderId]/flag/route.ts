@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { supabaseAdmin } from '@/lib/supabase'
+import { getSupabaseAdmin } from '@/lib/supabase'
 
 export async function POST(
   request: NextRequest,
@@ -11,7 +11,7 @@ export async function POST(
   }
 
   try {
-    await supabaseAdmin
+    await getSupabaseAdmin()
       .from('orders')
       .update({ status: 'needs_review' })
       .eq('id', params.orderId)

@@ -9,7 +9,7 @@
 //   npm uninstall epub2   (if present)
 
 import { NextRequest, NextResponse } from 'next/server'
-import { supabaseAdmin } from '@/lib/supabase'
+import { getSupabaseAdmin } from '@/lib/supabase'
 import mammoth from 'mammoth'
 import AdmZip from 'adm-zip'
 
@@ -180,7 +180,7 @@ export async function POST(request: NextRequest) {
       const buffer = Buffer.from(arrayBuffer)
 
       // Store raw file in Supabase Storage for the translation pipeline
-      const { error: uploadError } = await supabaseAdmin.storage
+      const { error: uploadError } = await getSupabaseAdmin().storage
         .from('uploads')
         .upload(`${sessionId}/original.epub`, buffer, {
           contentType: 'application/epub+zip',
@@ -204,7 +204,7 @@ export async function POST(request: NextRequest) {
       const arrayBuffer = await file.arrayBuffer()
       const buffer = Buffer.from(arrayBuffer)
 
-      const { error: uploadError } = await supabaseAdmin.storage
+      const { error: uploadError } = await getSupabaseAdmin().storage
         .from('uploads')
         .upload(`${sessionId}/original.pdf`, buffer, {
           contentType: 'application/pdf',
@@ -222,7 +222,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Store in temp_uploads for the checkout flow
-    const { error: contentError } = await supabaseAdmin
+    const { error: contentError } = await getSupabaseAdmin()
       .from('temp_uploads')
       .upsert({
         session_id: sessionId,
