@@ -572,6 +572,68 @@ ORIGINAL: [term] | KEPT AS: [term] | REASON: [why untranslated]
         notes: translationNotesParsed || '',
       }
       if (translationNotesParsed) translationNotes[langCode] = translationNotesParsed
+
+      // ── Step: Generate and store formatted review DOCX ────────────────
+      await step.run(`format-review-docx-${langCode}`, async () => {
+        try {
+          const { writeFileSync, mkdtempSync, readFileSync, rmSync } = await import('fs')
+          const { tmpdir } = await import('os')
+          const { join } = await import('path')
+          const { execSync } = await import('child_process')
+
+          const tmpDir = mkdtempSync(join(tmpdir(), 'bl-review-'))
+          try {
+            // Build a temporary raw DOCX from the editorial result
+            const rawDocxPath = join(tmpDir, 'raw_review.docx')
+            const formattedDocxPath = join(tmpDir, 'formatted_review.docx')
+
+            // Write editorial result to a temp text file
+            const textPath = join(tmpDir, 'review_text.txt')
+            writeFileSync(textPath, editorialResult)
+
+            // Build raw DOCX using a simple Python script
+            const buildRawScript = `
+from docx import Document
+doc = Document()
+doc.add_heading('${order.book_title.replace(/'/g, "\\'")}', 0)
+doc.add_heading('${langName} Review', level=1)
+with open('${textPath}', 'r') as f:
+    text = f.read()
+for para in text.split('\\n\\n'):
+    if para.strip():
+        doc.add_paragraph(para.strip())
+doc.save('${rawDocxPath}')
+`
+            const buildScriptPath = join(tmpDir, 'build_raw.py')
+            writeFileSync(buildScriptPath, buildRawScript)
+            execSync(`python3 "${buildScriptPath}"`, { encoding: 'utf-8' })
+
+            // Run the review formatter
+            const formatterPath = join(process.cwd(), 'scripts', 'booklingua_review_formatter.py')
+            execSync(
+              `python3 "${formatterPath}" "${rawDocxPath}" "${formattedDocxPath}" --lang "${langName}" --title "${order.book_title}"`,
+              { encoding: 'utf-8', maxBuffer: 10 * 1024 * 1024 }
+            )
+
+            // Upload formatted review to Supabase
+            const formattedBuffer = readFileSync(formattedDocxPath)
+            const { uploadFileToSupabase } = await import('./storage-helper')
+            const storagePath = await uploadFileToSupabase(
+              orderId,
+              'review',
+              langCode,
+              formattedBuffer,
+              `${order.book_title}_${langName}_Review.docx`.replace(/\s+/g, '_')
+            )
+
+            console.log(`[Review] Formatted review DOCX stored: ${storagePath}`)
+          } finally {
+            rmSync(tmpDir, { recursive: true, force: true })
+          }
+        } catch (e) {
+          console.warn(`[Review] Review DOCX generation failed (non-fatal):`, e)
+        }
+      })
     }
 
     // Generate download token for the order
