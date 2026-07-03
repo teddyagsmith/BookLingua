@@ -30,12 +30,15 @@ from docx import Document
 from docx.oxml import OxmlElement
 from docx.oxml.ns import qn
 from docx.shared import Pt, RGBColor
+from docx.enum.text import WD_COLOR_INDEX
 
 
 # ── Constants ─────────────────────────────────────────────────────────────
 
 ORIGINAL_RE = re.compile(r'\[\[ORIGINAL:\s*(.*?)\]\]', re.DOTALL)
 TN_MARKER_RE = re.compile(r'^===TRANSLATION_NOTES===\s*$')
+SEGMENT_RE = re.compile(r'^===SEGMENT_\d+_(START|END)===\s*$')
+SEGMENT_INLINE_RE = re.compile(r'===SEGMENT_\d+_(START|END)===')
 YELLOW = "yellow"
 BRAND = "1F3864"
 ACCENT = "C0392B"
@@ -81,7 +84,46 @@ def _make_run(text: str, bold: bool = False, italic: bool = False,
     return r
 
 
-# ── Paragraph highlighter ─────────────────────────────────────────────────
+def _add_highlighted_runs_to_para(para, text: str) -> int:
+    """Add text with [[ORIGINAL:]] markers to a paragraph as highlighted runs.
+    Uses docx API (not OxmlElement). Returns number of changes found."""
+    if '[[ORIGINAL:' not in text:
+        para.add_run(text)
+        return 0
+
+    all_matches = list(ORIGINAL_RE.finditer(text))
+    if not all_matches:
+        para.add_run(text)
+        return 0
+
+    pos = 0
+    count = 0
+    for idx, m in enumerate(all_matches):
+        if m.start() > pos:
+            para.add_run(text[pos:m.start()])
+        orig_text = m.group(1).strip()
+        next_start = all_matches[idx + 1].start() if idx + 1 < len(all_matches) else len(text)
+        replacement = text[m.end():next_start]
+
+        if orig_text:
+            r = para.add_run(orig_text)
+            r.font.highlight_color = WD_COLOR_INDEX.YELLOW
+            r.font.strike = True
+            r = para.add_run(' → ')
+            r.font.highlight_color = WD_COLOR_INDEX.YELLOW
+        if replacement:
+            r = para.add_run(replacement)
+            r.font.highlight_color = WD_COLOR_INDEX.YELLOW
+        pos = next_start
+        count += 1
+
+    if pos < len(text):
+        para.add_run(text[pos:])
+
+    return count
+
+
+# ── Paragraph highlighter (legacy, for body paragraphs) ───────────────────
 
 def rewrite_paragraph_with_highlights(para) -> int:
     """
@@ -128,6 +170,36 @@ def rewrite_paragraph_with_highlights(para) -> int:
                 p_elem.append(_make_run(replacement, highlight=YELLOW))
 
     return len(all_matches)
+
+
+# ── Inline segment marker stripper ──────────────────────────────────────
+
+def strip_inline_segment_markers(doc: Document) -> int:
+    """Remove inline ===SEGMENT_*=== markers from all paragraph text."""
+    count = 0
+    for para in doc.paragraphs:
+        full_text = para.text
+        if '===SEGMENT_' not in full_text:
+            continue
+        cleaned = SEGMENT_INLINE_RE.sub('', full_text)
+        if cleaned != full_text:
+            p_elem = para._p
+            bold = False
+            italic = False
+            for run in para.runs:
+                rpr = run._element.find(qn('w:rPr'))
+                if rpr is not None:
+                    if rpr.find(qn('w:b')) is not None:
+                        bold = True
+                    if rpr.find(qn('w:i')) is not None:
+                        italic = True
+            for child in list(p_elem):
+                tag = child.tag.split('}')[-1] if '}' in child.tag else child.tag
+                if tag in ('r', 'hyperlink', 'ins', 'del'):
+                    p_elem.remove(child)
+            p_elem.append(_make_run(cleaned, bold=bold, italic=italic))
+            count += 1
+    return count
 
 
 # ── Translation notes extractor ───────────────────────────────────────────
@@ -258,7 +330,13 @@ def prepend_header(doc: Document, title: str, language: str,
             ap(f"─── Chapter {chapter_num} Notes ───", bold=True, color=SECTION_COLOR)
             for line in block.split('\n'):
                 if line.strip():
-                    ap(line.strip())
+                    # Highlight [[ORIGINAL:]] markers in notes too
+                    if '[[ORIGINAL:' in line:
+                        p = doc.add_paragraph()
+                        _add_highlighted_runs_to_para(p, line.strip())
+                        added.append(p._p)
+                    else:
+                        ap(line.strip())
             ap()
 
     divider()
@@ -306,37 +384,53 @@ def format_review_docx(input_path: str, output_path: str,
         elif 'french' in fn or '_fr' in fn:  language = "French"
         else:                                 language = "Translation"
 
+    # Step 0: Strip inline segment markers from all paragraphs
+    print(f"  Stripping inline segment markers...")
+    stripped = strip_inline_segment_markers(doc)
+    print(f"  Stripped {stripped} paragraphs with inline segment markers")
+
     # Step 1: Extract translation notes
     print(f"  Extracting translation notes...")
     notes_blocks, tn_indices = extract_translation_notes(doc)
     print(f"  Found {len(notes_blocks)} note blocks ({len(tn_indices)} paragraphs)")
 
+    # Step 1b: Count [[ORIGINAL:]] markers inside notes blocks (non-fiction pattern)
+    notes_changes = 0
+    for block in notes_blocks:
+        notes_changes += len(ORIGINAL_RE.findall(block))
+    print(f"  Found {notes_changes} changes inside notes blocks")
+
     # Step 2: Highlight [[ORIGINAL:]] markers in body paragraphs
     # Only process paragraphs NOT in the translation notes blocks
     print(f"  Highlighting translation changes...")
     total_changes = 0
+    segment_indices = set()
     for i, para in enumerate(doc.paragraphs):
+        if SEGMENT_RE.match(para.text.strip()):
+            segment_indices.add(i)
+            continue
         if i in tn_indices:
             continue
         if TN_MARKER_RE.match(para.text.strip()):
             continue
         n = rewrite_paragraph_with_highlights(para)
         total_changes += n
-    print(f"  Highlighted {total_changes} changes")
+    total_changes += notes_changes
+    print(f"  Total changes (body + notes): {total_changes}")
 
-    # Step 3: Remove TN paragraphs from body (reverse order to preserve indices)
-    print(f"  Removing inline translation note blocks...")
+    # Step 3: Remove TN paragraphs + segment markers from body (reverse order)
+    print(f"  Removing inline translation note blocks + segment markers...")
     body = doc.element.body
     paragraphs = doc.paragraphs
     removed = 0
-    for idx in sorted(tn_indices, reverse=True):
+    for idx in sorted(tn_indices | segment_indices, reverse=True):
         if idx < len(paragraphs):
             p_elem = paragraphs[idx]._p
             parent = p_elem.getparent()
             if parent is not None:
                 parent.remove(p_elem)
                 removed += 1
-    print(f"  Removed {removed} paragraphs")
+    print(f"  Removed {removed} paragraphs ({len(segment_indices)} segment markers)")
 
     # Step 4: Prepend the header section
     print(f"  Building header section...")
@@ -354,8 +448,11 @@ def format_review_docx(input_path: str, output_path: str,
 
     return {
         "change_count": total_changes,
+        "body_changes": total_changes - notes_changes,
+        "notes_changes": notes_changes,
         "note_blocks": len(notes_blocks),
         "tn_paragraphs_removed": removed,
+        "segment_markers_removed": len(segment_indices) + stripped,
         "language": language,
         "title": title,
     }

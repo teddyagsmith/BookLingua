@@ -223,24 +223,37 @@ def check_pipeline_artifacts(epub_zf: zipfile.ZipFile) -> List[str]:
 
 
 def check_language_metadata(epub_zf: zipfile.ZipFile, target_lang: str) -> List[str]:
-    """6. <dc:language> in OPF must match target language."""
+    """6. <dc:language> AND xml:lang on <package> must match target language.
+    This catches pandoc-generated EPUBs that default to en-US."""
     fails = []
     opf = _read_opf(epub_zf)
-    lang_match = re.search(r'<dc:language>([^<]+)</dc:language>', opf)
-    if not lang_match:
-        fails.append("LANGUAGE META: <dc:language> not found in content.opf")
-        return fails
 
-    opf_lang = lang_match.group(1).strip().lower()
-    # Map es-latam to es, etc.
+    # Normalise target
     normalized_target = target_lang.lower()
     if normalized_target == 'es-latam':
         normalized_target = 'es'
 
-    if opf_lang != normalized_target:
-        fails.append(
-            f"LANGUAGE META: <dc:language> is '{opf_lang}', expected '{normalized_target}'"
-        )
+    # Check <dc:language>
+    lang_match = re.search(r'<dc:language>([^<]+)</dc:language>', opf)
+    if not lang_match:
+        fails.append("LANGUAGE META: <dc:language> not found in content.opf")
+    else:
+        opf_lang = lang_match.group(1).strip().lower()
+        # Accept both exact match and prefix match (e.g. 'de' matches 'de-DE')
+        if not (opf_lang == normalized_target or opf_lang.startswith(normalized_target + '-')):
+            fails.append(
+                f"LANGUAGE META: <dc:language> is '{opf_lang}', expected '{normalized_target}'"
+            )
+
+    # Also check xml:lang on <package> element (catches pandoc en-US default)
+    pkg_lang_match = re.search(r'<package[^>]+xml:lang=["\']([^"\']+)["\']', opf)
+    if pkg_lang_match:
+        pkg_lang = pkg_lang_match.group(1).strip().lower()
+        if not (pkg_lang == normalized_target or pkg_lang.startswith(normalized_target + '-')):
+            fails.append(
+                f"LANGUAGE META: <package xml:lang> is '{pkg_lang}', expected '{normalized_target}'"
+            )
+
     return fails
 
 
