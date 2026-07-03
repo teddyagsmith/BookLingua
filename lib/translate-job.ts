@@ -12,7 +12,13 @@ const anthropic = new Anthropic({
   apiKey: process.env.ANTHROPIC_API_KEY,
 })
 
-const resend = new Resend(process.env.RESEND_API_KEY)
+let _resend: Resend | null = null
+function getResend() {
+  if (!_resend) {
+    _resend = new Resend(process.env.RESEND_API_KEY!)
+  }
+  return _resend
+}
 
 const LANGUAGE_NAMES: Record<string, string> = {
   'es-es': 'Spanish (Spain)',

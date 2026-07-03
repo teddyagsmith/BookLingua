@@ -2,7 +2,13 @@ import { NextRequest, NextResponse } from 'next/server'
 import { Resend } from 'resend'
 import { getSupabaseAdmin } from '@/lib/supabase'
 
-const resend = new Resend(process.env.RESEND_API_KEY)
+let _resend: Resend | null = null
+function getResend() {
+  if (!_resend) {
+    _resend = new Resend(process.env.RESEND_API_KEY!)
+  }
+  return _resend
+}
 
 // Email sequence configuration - 5-day welcome sequence
 const WELCOME_SEQUENCE = [
