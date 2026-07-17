@@ -39,9 +39,11 @@ export default function RootLayout({
     <html lang="en">
       <head>
         <Script
-          src="https://app.revshare.so/js/revshare.js"
+          src="https://www.revshare.so/tracking.js"
           strategy="afterInteractive"
-          data-revshare-domain="booklingua.io"
+          data-program-id="6a5a0eae6e5359ccacaa24b1"
+          data-domain=".booklingua.io"
+          data-cookie-duration="30"
         />
       </head>
       <body>{children}<Analytics /></body>
