@@ -691,10 +691,11 @@ export default function Home() {
                   <div className="flex justify-between items-center py-3 border-t border-gray-100">
                     <div>
                       <span className="text-gray-600 text-sm block">Translation + Editorial Review</span>
-                      <span className="text-xs text-green-600 font-medium">40% bundle discount when you translate to 6 languages</span>
+                      <span className="text-xs text-green-600 font-medium">40% bundle discount applied when you translate to 6 languages</span>
                     </div>
                     <div className="text-right">
-                      <span className="font-bold text-2xl text-brand">$149</span>
+                      <span className="font-bold text-2xl text-brand">$89</span>
+                      <span className="text-xs text-gray-400 line-through block">$149</span>
                       <span className="text-xs text-gray-500 block">per language</span>
                     </div>
                   </div>
