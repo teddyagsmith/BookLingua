@@ -42,6 +42,8 @@ CREATE TABLE temp_uploads (
   file_format TEXT NOT NULL,
   content TEXT,
   word_count INTEGER NOT NULL,
+  cultural_terms JSONB DEFAULT NULL,
+  glossary_decisions JSONB DEFAULT NULL,
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 

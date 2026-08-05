@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getSupabaseAdmin } from '@/lib/supabase'
 import Anthropic from '@anthropic-ai/sdk'
+import { extractCulturalTerms } from '@/lib/cultural-term-extractor'
 
 const anthropic = new Anthropic({
   apiKey: process.env.ANTHROPIC_API_KEY,
@@ -109,7 +110,7 @@ function getContext(text: string, idx: number, termLen: number): string {
 }
 
 interface Finding {
-  type: 'country_specific' | 'proper_name' | 'fantasy_element' | 'potentially_ambiguous'
+  type: 'country_specific' | 'cultural_specific' | 'proper_name' | 'fantasy_element' | 'potentially_ambiguous'
   original: string
   context: string
   question: string
@@ -280,10 +281,49 @@ export async function POST(request: NextRequest) {
     }
 
     if (!textToScan || textToScan.length < 50) {
-      return NextResponse.json({ findings: [] })
+      return NextResponse.json({ findings: [], culturalTerms: [], quality: null })
     }
 
-    // Phase 1: Fast keyword scan
+    // Phase 0: Quality report (paragraph structure issues)
+    let quality = null
+    try {
+      const { assessQuality } = await import('@/lib/extract-segments')
+      // Run a lightweight segment assessment on the text. For DOCX the raw text is
+      // already in temp_uploads.content; for TXT/EPUB we use the same text.
+      const paragraphs = textToScan.split(/\n\n+/).map(p => p.trim()).filter(p => p.length > 0)
+      const segments = paragraphs.map((text, i) => ({
+        id: i,
+        type: /^\s*(Chapter|Chapitre|Capítulo|Kapitel|Capitolo|Part|Section)\s+\d|^\s*\d+\.\s+\w/.test(text) ? 'heading' as const : 'paragraph' as const,
+        level: 0,
+        text,
+        styleName: 'none',
+      }))
+      quality = assessQuality(segments)
+    } catch (e) {
+      console.warn('[scan-text] Quality assessment failed:', e)
+    }
+
+    // Phase 1: Cultural terms extraction (stored by sessionId for pre-payment review)
+    let culturalTerms: any[] = []
+    try {
+      const culturalResult = await extractCulturalTerms(textToScan, 'English', languages || ['de'])
+      culturalTerms = culturalResult.terms
+
+      if (sessionId && culturalResult.hasTerms) {
+        try {
+          await getSupabaseAdmin()
+            .from('temp_uploads')
+            .update({ cultural_terms: JSON.stringify(culturalTerms) })
+            .eq('session_id', sessionId)
+        } catch (e) {
+          console.warn('[scan-text] Failed to store cultural_terms (migration may not be applied yet):', e)
+        }
+      }
+    } catch (err) {
+      console.warn('[scan-text] Cultural terms extraction failed:', err)
+    }
+
+    // Phase 2: Fast keyword scan
     const keywordFindings = keywordScan(textToScan, languages || ['de'])
 
     // Phase 2: AI scan for proper names and fantasy elements
@@ -321,22 +361,36 @@ If nothing notable, return [].`
       console.warn('[scan-text] AI scan failed, using keyword-only:', err)
     }
 
-    // Merge, deduplicate, prioritise country_specific
-    const allFindings = [...keywordFindings]
+    // Transform cultural terms into scanner findings so the same review UI can handle them
+    const culturalFindings: Finding[] = culturalTerms.map((term): Finding => ({
+      type: 'cultural_specific',
+      original: term.term,
+      context: term.exampleSentence,
+      question: `Your text mentions "${term.term}" — a ${term.category} reference. How should we handle it?`,
+      options: [
+        { label: 'Keep in English', value: 'keep', description: `Keep "${term.term}" in English and explain briefly in the target language if needed` },
+        { label: 'Use suggested translation', value: 'adapt', description: `Translate/adapt as: "${term.defaultSuggestion}"` },
+        { label: 'Let translator decide', value: 'translator', description: 'Let BookLingua choose the best local equivalent based on context' },
+      ],
+      defaultOption: 'translator',
+    }))
+
+    // Merge, deduplicate, prioritise country/cultural-specific
+    const allFindings = [...keywordFindings, ...culturalFindings]
     for (const ai of aiFindings) {
       const dup = allFindings.find(f => f.original.toLowerCase() === ai.original.toLowerCase())
       if (!dup) allFindings.push(ai)
     }
 
     const prioritized = [
-      ...allFindings.filter(f => f.type === 'country_specific'),
-      ...allFindings.filter(f => f.type !== 'country_specific'),
+      ...allFindings.filter(f => f.type === 'country_specific' || f.type === 'cultural_specific'),
+      ...allFindings.filter(f => f.type !== 'country_specific' && f.type !== 'cultural_specific'),
     ]
 
-    return NextResponse.json({ findings: prioritized.slice(0, maxFindings) })
+    return NextResponse.json({ findings: prioritized.slice(0, maxFindings), quality })
 
   } catch (error) {
     console.error('Scan text error:', error)
-    return NextResponse.json({ findings: [] })
+    return NextResponse.json({ findings: [], quality: null })
   }
 }

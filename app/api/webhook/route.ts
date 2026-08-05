@@ -109,6 +109,27 @@ export async function POST(request: NextRequest) {
           content: tempUpload.content,
           pipeline_version: process.env.PIPELINE_VERSION || 'unknown',
         })
+
+        // Carry over pre-payment glossary decisions and cultural terms if present
+        if (tempUpload.glossary_decisions) {
+          await getSupabaseAdmin().from('files').insert({
+            order_id: order.id,
+            type: 'glossary',
+            language: 'en',
+            content: JSON.stringify(tempUpload.glossary_decisions),
+            pipeline_version: process.env.PIPELINE_VERSION || 'unknown',
+          })
+        }
+        if (tempUpload.cultural_terms) {
+          await getSupabaseAdmin().from('files').insert({
+            order_id: order.id,
+            type: 'cultural_terms',
+            language: 'en',
+            content: JSON.stringify(tempUpload.cultural_terms),
+            pipeline_version: process.env.PIPELINE_VERSION || 'unknown',
+          })
+        }
+
         // Clean up temp upload
         await getSupabaseAdmin().from('temp_uploads').delete().eq('session_id', sessionId)
       } else {

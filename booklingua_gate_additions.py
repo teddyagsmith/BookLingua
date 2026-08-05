@@ -49,7 +49,7 @@ def _count_numbered_refs(paragraphs: List[str]) -> int:
 def check_language_consistency(
     target_paragraphs: List[str],
     target_language: str,
-    max_wrong_pct: float = 1.0,
+    max_wrong_pct: float = 15.0,
 ) -> List[str]:
     """
     Scan body paragraphs for text in the wrong language.

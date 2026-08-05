@@ -208,6 +208,25 @@ export async function POST(request: NextRequest) {
             language: 'en',
             content: tempUpload.content,
           })
+
+          // Carry over pre-payment glossary decisions and cultural terms if present
+          if (tempUpload.glossary_decisions) {
+            await getSupabaseAdmin().from('files').insert({
+              order_id: order.id,
+              type: 'glossary',
+              language: 'en',
+              content: JSON.stringify(tempUpload.glossary_decisions),
+            })
+          }
+          if (tempUpload.cultural_terms) {
+            await getSupabaseAdmin().from('files').insert({
+              order_id: order.id,
+              type: 'cultural_terms',
+              language: 'en',
+              content: JSON.stringify(tempUpload.cultural_terms),
+            })
+          }
+
           await getSupabaseAdmin().from('temp_uploads').delete().eq('session_id', sessionId)
         }
       }

@@ -237,6 +237,7 @@ export default function Home() {
   const [uploadComplete, setUploadComplete] = useState(false)
   const [uploadError, setUploadError] = useState('')
   const [scanFindings, setScanFindings] = useState<any[]>([])
+  const [scanQuality, setScanQuality] = useState<any | null>(null)
   const [scanResponses, setScanResponses] = useState<Record<string, string>>({})
   const [scanLoading, setScanLoading] = useState(false)
   const [showScanStep, setShowScanStep] = useState(false)
@@ -475,9 +476,10 @@ export default function Home() {
       })
 
       if (!response.ok) throw new Error('Scan failed')
-      const { findings } = await response.json()
+      const { findings, quality } = await response.json()
+      setScanQuality(quality)
 
-      if (findings.length > 0) {
+      if (findings.length > 0 || (quality && quality.issues && quality.issues.length > 0)) {
         setScanFindings(findings)
         const defaults: Record<string, string> = {}
         findings.forEach((f: any) => { defaults[f.original] = f.defaultOption })
@@ -493,7 +495,7 @@ export default function Home() {
     setScanLoading(false)
   }
 
-  const applyScanResponses = () => {
+  const applyScanResponses = async () => {
     const instructionLines: string[] = []
     scanFindings.forEach((finding) => {
       const response = scanResponses[finding.original]
@@ -509,8 +511,30 @@ export default function Home() {
         instructionLines.push(`Convert "${finding.original}" to metric equivalent`)
       } else if (response === 'footnote') {
         instructionLines.push(`Keep "${finding.original}" in English + add local equivalent in brackets on first mention, then just the English term afterwards`)
+      } else if (response === 'translator') {
+        instructionLines.push(`For "${finding.original}": let the translator choose the best local equivalent based on context`)
       }
     })
+
+    const decisions = scanFindings.map((finding) => ({
+      term: finding.original,
+      decision: scanResponses[finding.original],
+      type: finding.type,
+    }))
+
+    // Save glossary decisions to the server so they are available after payment
+    try {
+      await fetch('/api/save-glossary', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          sessionId: sessionIdRef.current,
+          decisions,
+        }),
+      })
+    } catch (err) {
+      console.error('[scan] Failed to save glossary decisions:', err)
+    }
 
     if (instructionLines.length > 0) {
       const scanBlock = `AUTO-DETECTED TRANSLATION PREFERENCES:\n${instructionLines.join('\n')}`
@@ -1338,7 +1362,7 @@ export default function Home() {
                             Skip & Continue →
                           </button>
                           <button
-                            onClick={applyScanResponses}
+                            onClick={async () => { await applyScanResponses(); setCheckoutStep(4); }}
                             className="flex-1 py-3 bg-brand text-white rounded-xl font-bold text-sm shadow-lg hover:shadow-xl transition-all"
                           >
                             Save Preferences & Continue →
@@ -1479,6 +1503,60 @@ export default function Home() {
             </div>
 
             <div className="max-w-3xl mx-auto">
+              {/* Quality report */}
+              {scanQuality && (
+                <div className={`mb-6 rounded-2xl p-5 border-2 ${
+                  scanQuality.status === 'unprocessable'
+                    ? 'bg-red-50 border-red-200'
+                    : scanQuality.status === 'needs_review'
+                      ? 'bg-amber-50 border-amber-200'
+                      : 'bg-green-50 border-green-200'
+                }`}>
+                  <div className="flex items-center justify-between mb-2">
+                    <h3 className={`font-bold ${
+                      scanQuality.status === 'unprocessable'
+                        ? 'text-red-800'
+                        : scanQuality.status === 'needs_review'
+                          ? 'text-amber-800'
+                          : 'text-green-800'
+                    }`}>
+                      {scanQuality.status === 'unprocessable'
+                        ? '⚠️ Upload Quality: Unprocessable'
+                        : scanQuality.status === 'needs_review'
+                          ? '⚡ Upload Quality: Needs Review'
+                          : '✅ Upload Quality: Clean'}
+                    </h3>
+                    <span className={`text-sm font-bold px-2.5 py-1 rounded-full ${
+                      scanQuality.status === 'unprocessable'
+                        ? 'bg-red-100 text-red-700'
+                        : scanQuality.status === 'needs_review'
+                          ? 'bg-amber-100 text-amber-700'
+                          : 'bg-green-100 text-green-700'
+                    }`}>
+                      Score: {scanQuality.score}/100
+                    </span>
+                  </div>
+                  <div className="text-sm text-gray-600 grid grid-cols-2 sm:grid-cols-4 gap-3 mb-3">
+                    <div><span className="font-semibold">{scanQuality.headingCount}</span> headings</div>
+                    <div><span className="font-semibold">{scanQuality.paragraphCount}</span> paragraphs</div>
+                    <div><span className="font-semibold">{Math.round(scanQuality.avgParagraphLength)}</span> avg words</div>
+                    <div><span className="font-semibold">{scanQuality.hasProperStyles ? 'Yes' : 'No'}</span> proper styles</div>
+                  </div>
+                  {scanQuality.issues?.length > 0 && (
+                    <ul className="space-y-1.5">
+                      {scanQuality.issues.map((issue: string, i: number) => (
+                        <li key={i} className={`text-sm flex items-start gap-2 ${
+                          scanQuality.status === 'unprocessable' ? 'text-red-700' : 'text-amber-700'
+                        }`}>
+                          <span className="mt-0.5">•</span>
+                          <span>{issue}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+              )}
+
               <div className="mb-8 bg-gradient-to-br from-amber-50 to-orange-50 rounded-2xl p-6 border-2 border-amber-200">
                 <div className="flex items-center gap-3 mb-4">
                   <span className="text-2xl">🔍</span>
@@ -1494,11 +1572,13 @@ export default function Home() {
                       <div className="flex items-start gap-3 mb-3">
                         <span className={`text-xs font-bold px-2 py-1 rounded-full ${
                           finding.type === 'country_specific' ? 'bg-red-100 text-red-700' :
+                          finding.type === 'cultural_specific' ? 'bg-rose-100 text-rose-700' :
                           finding.type === 'proper_name' ? 'bg-blue-100 text-blue-700' :
                           finding.type === 'fantasy_element' ? 'bg-purple-100 text-purple-700' :
                           'bg-gray-100 text-gray-700'
                         }`}>
                           {finding.type === 'country_specific' ? 'COUNTRY-SPECIFIC' :
+                           finding.type === 'cultural_specific' ? 'CULTURAL REFERENCE' :
                            finding.type === 'proper_name' ? 'PROPER NAME' :
                            finding.type === 'fantasy_element' ? 'FANTASY' : 'MEASUREMENT/BRAND'}
                         </span>
@@ -1554,7 +1634,7 @@ export default function Home() {
                     Skip & Continue →
                   </button>
                   <button
-                    onClick={() => { applyScanResponses(); setCheckoutStep(4); }}
+                    onClick={async () => { await applyScanResponses(); setCheckoutStep(4); }}
                     className="flex-1 py-3 bg-brand text-white rounded-xl font-bold text-sm shadow-lg hover:shadow-xl transition-all"
                   >
                     Save Preferences & Continue →
