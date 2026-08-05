@@ -7,6 +7,8 @@ import { Resend } from 'resend'
 import { PIPELINE_VERSION } from './pipeline-version'
 import type { Segment } from '@/lib/extract-segments'
 import crypto from 'crypto'
+import { extractStyleProfile, storeStyleProfile, loadStylePrompt } from './style-extractor'
+import { extractCulturalTerms, storeCulturalTerms, loadGlossaryPrompt } from './cultural-term-extractor'
 
 const anthropic = new Anthropic({
   apiKey: process.env.ANTHROPIC_API_KEY,
@@ -302,6 +304,41 @@ export const translateBook = inngest.createFunction(
       }
     })
 
+    // ── Step 2c: Extract style profile (pre-Pass 1) ────────────────────────────
+    await step.run('extract-style-profile', async () => {
+      const { data: existing } = await getSupabaseAdmin()
+        .from('files')
+        .select('id')
+        .eq('order_id', orderId)
+        .eq('type', 'style_profile')
+        .maybeSingle()
+      if (existing) return
+
+      const langNames = languages.map(l => LANGUAGE_NAMES[l] || l)
+      const profile = await extractStyleProfile(fileContent, langNames, order.genre || 'general')
+      if (profile) {
+        await storeStyleProfile(orderId, profile, getSupabaseAdmin())
+        console.log(`[Style] Profile extracted: ${profile.summary.slice(0, 80)}...`)
+      }
+    })
+
+    // ── Step 2d: Extract culturally specific terms (pre-Pass 1) ─────────────────
+    await step.run('extract-cultural-terms', async () => {
+      const { data: existing } = await getSupabaseAdmin()
+        .from('files')
+        .select('id')
+        .eq('order_id', orderId)
+        .eq('type', 'cultural_terms')
+        .maybeSingle()
+      if (existing) return
+
+      const culturalResult = await extractCulturalTerms(fileContent, 'English', languages as string[])
+      if (culturalResult.hasTerms) {
+        await storeCulturalTerms(orderId, culturalResult.terms, getSupabaseAdmin())
+        console.log(`[CulturalTerms] ${culturalResult.terms.length} terms extracted`)
+      }
+    })
+
     // ── Step 3: Update order status ──
     await step.run('update-status-processing', async () => {
       await getSupabaseAdmin().from('orders').update({ status: 'processing' }).eq('id', orderId)
@@ -316,6 +353,8 @@ export const translateBook = inngest.createFunction(
       const langName = LANGUAGE_NAMES[langCode] || langCode
       const langSettings = LANGUAGE_SETTINGS[langCode] || `Translate to ${langName}`
       const genreGuidance = GENRE_GUIDANCE[order.genre || 'general'] || GENRE_GUIDANCE['general']
+      const stylePrompt = await loadStylePrompt(orderId, getSupabaseAdmin())
+      const glossaryPrompt = await loadGlossaryPrompt(orderId, getSupabaseAdmin())
 
       // Pass 1: Translation
       const chunks = chunkText(fileContent, MAX_CHUNK_WORDS)
@@ -353,7 +392,10 @@ LANGUAGE SETTINGS:
 ${langSettings}
 
 GENRE & STYLE:
-${genreGuidance}`,
+${genreGuidance}
+
+${stylePrompt}
+${glossaryPrompt}`,
             messages: [{
               role: 'user',
               content: `Translate the following excerpt into ${langName}. This is part ${i + 1} of ${chunks.length} — maintain consistent style.
@@ -424,7 +466,9 @@ LANGUAGE SETTINGS:
 ${langSettings}
 
 GENRE & STYLE:
-${genreGuidance}`,
+${genreGuidance}
+
+${stylePrompt}`,
             messages: [{
               role: 'user',
               content: `TASK: Review and improve this translation${chunkLabel}.
@@ -526,17 +570,15 @@ ORIGINAL: [term] | KEPT AS: [term] | REASON: [why untranslated]
         console.warn('[Pipeline] Could not load segment metadata for validation:', e)
       }
 
-      const { validateTranslation } = await import('./validate-translation')
+      const { validateTranslation, formatValidationAlert } = await import('./validate-translation')
       const validation = validateTranslation(translatedText, editorialResult, segmentMeta, langCode)
       console.log(`[Pipeline] Validation: ${validation.summary}`)
 
       if (!validation.passed) {
-        console.warn(`[Pipeline] Validation issues detected for ${langCode}: ${validation.summary} — saving anyway for human review`)
-        // Save validation issues to order notes but continue with delivery
-        await getSupabaseAdmin().from('orders').update({
-          notes: `Validation: ${validation.summary}`,
-        }).eq('id', orderId)
-        // Continue to save translation below — don't throw
+        throw new Error(
+          `[Validation] BLOCKED — ${langCode}: ${validation.summary}\n` +
+          formatValidationAlert(validation)
+        )
       }
 
       // Save to database
