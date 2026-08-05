@@ -4,7 +4,7 @@ import { useState } from 'react'
 import Image from 'next/image'
 import Link from 'next/link'
 
-const serifFont = { fontFamily: "'Instrument Serif', Georgia, serif" }
+const serifFont = { fontFamily: "'EB Garamond', Georgia, serif" }
 
 const Logo = ({ size = 'md' }: { size?: 'sm' | 'md' | 'lg' }) => {
   const sizes = { sm: 120, md: 200, lg: 300 }
@@ -327,7 +327,7 @@ function PreScanTab() {
   return (
     <div className="max-w-5xl mx-auto">
       {/* Header card */}
-      <div className="bg-white rounded-3xl shadow-xl border border-blue-100 overflow-hidden mb-8">
+      <div className="bg-white rounded-3xl shadow-xl border border-[#EBE6F4] overflow-hidden mb-8">
         <div className="px-6 py-4 bg-gradient-to-r from-amber-50 to-orange-50 border-b border-amber-100 flex items-center gap-4">
           <div className="w-10 h-12 bg-gradient-to-br from-amber-500 to-orange-600 rounded-lg flex items-center justify-center shadow">
             <span className="text-white text-xl">🔍</span>
@@ -349,7 +349,7 @@ function PreScanTab() {
       </div>
 
       {/* Example scan results */}
-      <div className="bg-white rounded-3xl shadow-xl border border-amber-100 overflow-hidden mb-8">
+      <div className="bg-white rounded-3xl shadow-xl border border-[#EBE6F4] overflow-hidden mb-8">
         <div className="px-6 py-4 bg-gradient-to-r from-amber-500 to-orange-500 text-white">
           <h3 className="font-bold text-lg" style={serifFont}>Example: We found 8 items to review</h3>
           <p className="text-white/80 text-sm">Your choices will be saved and applied to the translation</p>
@@ -371,10 +371,10 @@ function PreScanTab() {
               <div className="grid gap-2">
                 {finding.options.map((opt, optIdx) => (
                   <div key={optIdx} className={`flex items-start gap-3 p-3 rounded-xl border-2 ${
-                    optIdx === 0 ? 'border-violet-500 bg-violet-50' : 'border-gray-200'
+                    optIdx === 0 ? 'border-brand bg-[#F3F0F8]' : 'border-gray-200'
                   }`}>
                     <div className={`w-4 h-4 rounded-full border-2 mt-0.5 flex-shrink-0 ${
-                      optIdx === 0 ? 'border-violet-500 bg-violet-500' : 'border-gray-300'
+                      optIdx === 0 ? 'border-brand bg-brand' : 'border-gray-300'
                     }`}>
                       {optIdx === 0 && <div className="w-2 h-2 bg-white rounded-full m-0.5" />}
                     </div>
@@ -409,7 +409,7 @@ function PreScanTab() {
             desc: 'Review flagged terms, choose how each is handled, then proceed to checkout.',
           },
         ].map((step, i) => (
-          <div key={i} className="bg-white rounded-2xl shadow-lg border border-gray-100 p-5">
+          <div key={i} className="bg-white rounded-2xl shadow-lg border border-[#EBE6F4] p-5">
             <div className="text-3xl mb-3">{step.icon}</div>
             <h4 className="font-bold text-gray-900 mb-2">{step.title}</h4>
             <p className="text-sm text-gray-600">{step.desc}</p>
@@ -465,7 +465,7 @@ function TranslationNotesTab() {
   return (
     <div className="max-w-5xl mx-auto">
       {/* Header card */}
-      <div className="bg-white rounded-3xl shadow-xl border border-blue-100 overflow-hidden mb-8">
+      <div className="bg-white rounded-3xl shadow-xl border border-[#EBE6F4] overflow-hidden mb-8">
         <div className="px-6 py-4 bg-gradient-to-r from-blue-50 to-violet-50 border-b border-blue-100 flex items-center gap-4">
           <div className="w-10 h-12 bg-gradient-to-br from-blue-500 to-violet-600 rounded-lg flex items-center justify-center shadow">
             <span className="text-white text-xl">📋</span>
@@ -486,11 +486,11 @@ function TranslationNotesTab() {
       </div>
 
       {/* Table */}
-      <div className="bg-white rounded-3xl shadow-xl border border-blue-100 overflow-hidden mb-6">
+      <div className="bg-white rounded-3xl shadow-xl border border-[#EBE6F4] overflow-hidden mb-6">
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
-              <tr className="bg-gradient-to-r from-blue-600 to-violet-600 text-white">
+              <tr className="bg-gradient-to-r from-brand to-brand-dark text-white">
                 <th className="text-left px-6 py-4 font-semibold w-[22%]">Original</th>
                 <th className="text-left px-6 py-4 font-semibold w-[22%]">Translated</th>
                 <th className="text-left px-6 py-4 font-semibold">Editorial Decision</th>
@@ -538,7 +538,7 @@ function LaunchPackTab() {
         <ul className="space-y-2 mt-3" translate="no">
           {['ficción gótica vampiros', 'terror clásico literatura inglesa', 'drácula español traducción', 'horror victoriano novela', 'bram stoker español'].map((kw, i) => (
             <li key={i} className="flex items-center gap-2 text-[15px] text-gray-700">
-              <span className="w-1.5 h-1.5 bg-blue-500 rounded-full flex-shrink-0" />
+              <span className="w-1.5 h-1.5 bg-brand rounded-full flex-shrink-0" />
               {kw}
             </li>
           ))}
@@ -556,7 +556,7 @@ function LaunchPackTab() {
             <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">Primary</p>
             <div className="flex flex-wrap gap-2">
               {['vampiros ficción', 'terror gótico español', 'clásicos literatura inglesa'].map((kw, i) => (
-                <span key={i} className="px-3 py-1 bg-blue-100 text-blue-800 rounded-full text-sm font-medium">{kw}</span>
+                <span key={i} className="px-3 py-1 bg-brand-light text-brand-dark rounded-full text-sm font-medium">{kw}</span>
               ))}
             </div>
           </div>
@@ -564,7 +564,7 @@ function LaunchPackTab() {
             <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">Long-tail</p>
             <div className="flex flex-wrap gap-2">
               {['novela vampiros adultos', 'terror victoriano español', 'bram stoker libro'].map((kw, i) => (
-                <span key={i} className="px-3 py-1 bg-violet-100 text-violet-800 rounded-full text-sm font-medium">{kw}</span>
+                <span key={i} className="px-3 py-1 bg-[#F3F0F8] text-brand-dark rounded-full text-sm font-medium">{kw}</span>
               ))}
             </div>
           </div>
@@ -601,7 +601,7 @@ function LaunchPackTab() {
           {/* Phase 1 */}
           <div>
             <div className="flex items-center gap-2 mb-2">
-              <span className="px-2 py-0.5 bg-blue-100 text-blue-700 text-xs font-bold rounded-full">4 WEEKS BEFORE</span>
+              <span className="px-2 py-0.5 bg-amber-100 text-amber-700 text-xs font-bold rounded-full">4 WEEKS BEFORE</span>
               <span className="text-xs text-gray-500 font-medium">Build your ARC team</span>
             </div>
             <ul className="space-y-1.5">
@@ -612,7 +612,7 @@ function LaunchPackTab() {
                 'Email 10–15 Spanish gothic/horror bloggers directly — subject line: "ARC request: classic horror, newly translated with editorial review"',
               ].map((item, i) => (
                 <li key={i} className="flex items-start gap-2 text-[13px] text-gray-700">
-                  <span className="w-1.5 h-1.5 bg-blue-400 rounded-full mt-1.5 flex-shrink-0" />
+                  <span className="w-1.5 h-1.5 bg-amber-400 rounded-full mt-1.5 flex-shrink-0" />
                   {item}
                 </li>
               ))}
@@ -621,7 +621,7 @@ function LaunchPackTab() {
           {/* Phase 2 */}
           <div>
             <div className="flex items-center gap-2 mb-2">
-              <span className="px-2 py-0.5 bg-violet-100 text-violet-700 text-xs font-bold rounded-full">LAUNCH WEEK</span>
+              <span className="px-2 py-0.5 bg-brand-light text-brand-dark text-xs font-bold rounded-full">LAUNCH WEEK</span>
               <span className="text-xs text-gray-500 font-medium">Drive the first 10 reviews</span>
             </div>
             <ul className="space-y-1.5">
@@ -632,7 +632,7 @@ function LaunchPackTab() {
                 'Ask your English-language ARC readers to also leave reviews on Amazon.es if they read Spanish',
               ].map((item, i) => (
                 <li key={i} className="flex items-start gap-2 text-[13px] text-gray-700">
-                  <span className="w-1.5 h-1.5 bg-violet-400 rounded-full mt-1.5 flex-shrink-0" />
+                  <span className="w-1.5 h-1.5 bg-brand rounded-full mt-1.5 flex-shrink-0" />
                   {item}
                 </li>
               ))}
@@ -688,7 +688,7 @@ function LaunchPackTab() {
   return (
     <div className="max-w-5xl mx-auto">
       {/* Intro */}
-      <div className="bg-white rounded-3xl shadow-xl border border-blue-100 overflow-hidden mb-8">
+      <div className="bg-white rounded-3xl shadow-xl border border-[#EBE6F4] overflow-hidden mb-8">
         <div className="px-6 py-4 bg-gradient-to-r from-blue-50 to-violet-50 border-b border-blue-100 flex items-center gap-4">
           <div className="w-10 h-12 bg-gradient-to-br from-blue-500 to-violet-600 rounded-lg flex items-center justify-center shadow">
             <span className="text-white text-xl">🚀</span>
@@ -711,8 +711,8 @@ function LaunchPackTab() {
       {/* Section cards */}
       <div className="grid sm:grid-cols-2 gap-5 mb-8">
         {sections.map((section) => (
-          <div key={section.number} className="bg-white rounded-2xl shadow-lg border border-gray-100 overflow-hidden">
-            <div className="px-5 py-4 bg-gradient-to-r from-blue-600 to-violet-600 flex items-center gap-3">
+          <div key={section.number} className="bg-white rounded-2xl shadow-lg border border-[#EBE6F4] overflow-hidden">
+            <div className="px-5 py-4 bg-gradient-to-r from-brand to-brand-dark flex items-center gap-3">
               <span className="w-7 h-7 bg-white/20 rounded-full flex items-center justify-center text-white text-xs font-bold flex-shrink-0">
                 {section.number}
               </span>
@@ -729,7 +729,7 @@ function LaunchPackTab() {
       </div>
 
       {/* CTA */}
-      <div className="bg-gradient-to-r from-blue-600 to-violet-600 rounded-3xl p-8 text-center text-white">
+      <div className="bg-brand rounded-3xl p-8 text-center text-white">
         <p className="text-xl font-bold mb-2" style={serifFont}>Ready to launch your translation?</p>
         <p className="text-white/80 mb-6 text-[15px]">
           Add the Launch Strategy Pack to your translation order for{' '}
@@ -737,7 +737,7 @@ function LaunchPackTab() {
         </p>
         <Link
           href="/"
-          className="inline-flex items-center gap-2 px-8 py-3.5 bg-white text-violet-700 rounded-2xl font-bold text-base shadow-xl hover:shadow-2xl hover:-translate-y-0.5 transition-all"
+          className="inline-flex items-center gap-2 px-8 py-3.5 bg-white text-brand-dark rounded-2xl font-bold text-base shadow-xl hover:shadow-2xl hover:-translate-y-0.5 transition-all"
         >
           <span>Start Translating</span>
           <span>→</span>
@@ -757,21 +757,21 @@ export default function ExamplesPage() {
   const currentLang = LANGUAGES.find(l => l.code === activeLang)!
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-violet-50">
-      <style>{`@import url('https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&display=swap');`}</style>
+    <div className="min-h-screen bg-cream">
+      <style>{`@import url('https://fonts.googleapis.com/css2?family=EB+Garamond:ital,wght@0,400;0,500;0,600;1,400&display=swap');`}</style>
 
       {/* Nav */}
-      <nav className="relative z-10 flex items-center justify-between px-8 py-6 max-w-7xl mx-auto">
+      <nav className="relative z-10 flex items-center justify-between px-4 sm:px-8 py-6 max-w-7xl mx-auto">
         <Link href="/" className="flex items-center gap-3">
           <Logo size="lg" />
         </Link>
-        <div className="flex items-center gap-6">
-          <Link href="/publishers" className="text-gray-600 hover:text-violet-700 font-medium transition-colors hidden sm:block">
+        <div className="flex items-center gap-3 sm:gap-6">
+          <Link href="/publishers" className="text-gray-600 hover:text-brand-dark font-medium transition-colors hidden sm:block">
             Publishers
           </Link>
           <Link
             href="/"
-            className="px-6 py-2.5 bg-gradient-to-r from-blue-600 to-violet-600 text-white rounded-full font-semibold shadow-lg hover:shadow-xl transition-all"
+            className="px-4 py-2 sm:px-6 sm:py-2.5 bg-brand text-white rounded-full text-sm sm:text-base font-semibold shadow-lg hover:shadow-xl transition-all whitespace-nowrap"
           >
             Start Translating
           </Link>
@@ -779,21 +779,21 @@ export default function ExamplesPage() {
       </nav>
 
       {/* Hero */}
-      <section className="relative overflow-hidden pt-12 pb-20">
-        <div className="absolute inset-0 opacity-30 pointer-events-none">
-          <div className="absolute top-10 left-10 w-72 h-72 bg-blue-200 rounded-full blur-3xl" />
-          <div className="absolute top-20 right-20 w-96 h-96 bg-violet-200 rounded-full blur-3xl" />
+      <header className="relative overflow-hidden">
+        <div className="absolute inset-0 opacity-30">
+          <div className="absolute top-20 left-10 w-72 h-72 bg-amber-200 rounded-full blur-3xl" />
+          <div className="absolute top-40 right-20 w-96 h-96 bg-brand-light rounded-full blur-3xl" />
         </div>
 
-        <div className="relative z-10 max-w-4xl mx-auto px-8 text-center">
-          <div className="inline-flex items-center gap-2 px-4 py-2 bg-white/80 rounded-full text-sm font-medium text-violet-700 mb-8">
+        <div className="relative z-10 max-w-4xl mx-auto px-8 pt-12 pb-20 text-center">
+          <div className="inline-flex items-center gap-2 px-4 py-2 bg-white/80 rounded-full text-sm font-medium text-brand-dark mb-8">
             <span className="w-2 h-2 bg-yellow-400 rounded-full" />
             Yellow highlights = editorial improvements
           </div>
 
           <h1 className="text-5xl md:text-6xl font-bold text-gray-900 leading-tight mb-6" style={serifFont}>
             See BookLingua
-            <span className="block bg-gradient-to-r from-blue-600 to-violet-600 bg-clip-text text-transparent">
+            <span className="block bg-gradient-to-r from-brand to-brand-dark bg-clip-text text-transparent">
               in Action
             </span>
           </h1>
@@ -801,7 +801,7 @@ export default function ExamplesPage() {
           <p className="text-xl text-gray-600 leading-relaxed max-w-2xl mx-auto mb-4">
             Every BookLingua translation goes through three steps: a{' '}
             <strong className="text-amber-700">smart cultural scan</strong>, an AI translation layer, then an{' '}
-            <strong className="text-violet-700">editorial review</strong> that refines idioms, adapts cultural
+            <strong className="text-brand-dark">editorial review</strong> that refines idioms, adapts cultural
             conventions, and ensures your book reads as if it were written for that market.
           </p>
           <p className="text-base text-gray-500 max-w-xl mx-auto">
@@ -809,7 +809,7 @@ export default function ExamplesPage() {
             BookLingua languages. Highlighted passages show where our editorial pass made improvements.
           </p>
         </div>
-      </section>
+      </header>
 
       {/* Tab Selector */}
       <div className="sticky top-0 z-20 bg-white/90 backdrop-blur-sm border-b border-gray-200 shadow-sm">
@@ -822,8 +822,8 @@ export default function ExamplesPage() {
                 onClick={() => setActiveTab(lang.code)}
                 className={`flex items-center gap-2 px-5 py-2.5 rounded-full font-semibold text-sm transition-all whitespace-nowrap ${
                   activeTab === lang.code
-                    ? 'bg-gradient-to-r from-blue-600 to-violet-600 text-white shadow-md'
-                    : 'bg-white border-2 border-gray-200 text-gray-600 hover:border-violet-300'
+                    ? 'bg-brand text-white shadow-md'
+                    : 'bg-white border-2 border-gray-200 text-gray-600 hover:border-brand-light'
                 }`}
               >
                 <span>{lang.flag}</span>
@@ -842,8 +842,8 @@ export default function ExamplesPage() {
               onClick={() => setActiveTab('scan')}
               className={`flex items-center gap-2 px-5 py-2.5 rounded-full font-semibold text-sm transition-all whitespace-nowrap ${
                 activeTab === 'scan'
-                  ? 'bg-gradient-to-r from-blue-600 to-violet-600 text-white shadow-md'
-                  : 'bg-white border-2 border-gray-200 text-gray-600 hover:border-violet-300'
+                  ? 'bg-brand text-white shadow-md'
+                  : 'bg-white border-2 border-gray-200 text-gray-600 hover:border-brand-light'
               }`}
             >
               <span>🔍</span>
@@ -855,8 +855,8 @@ export default function ExamplesPage() {
               onClick={() => setActiveTab('notes')}
               className={`flex items-center gap-2 px-5 py-2.5 rounded-full font-semibold text-sm transition-all whitespace-nowrap ${
                 activeTab === 'notes'
-                  ? 'bg-gradient-to-r from-blue-600 to-violet-600 text-white shadow-md'
-                  : 'bg-white border-2 border-gray-200 text-gray-600 hover:border-violet-300'
+                  ? 'bg-brand text-white shadow-md'
+                  : 'bg-white border-2 border-gray-200 text-gray-600 hover:border-brand-light'
               }`}
             >
               <span>📋</span>
@@ -868,8 +868,8 @@ export default function ExamplesPage() {
               onClick={() => setActiveTab('launch')}
               className={`flex items-center gap-2 px-5 py-2.5 rounded-full font-semibold text-sm transition-all whitespace-nowrap ${
                 activeTab === 'launch'
-                  ? 'bg-gradient-to-r from-blue-600 to-violet-600 text-white shadow-md'
-                  : 'bg-white border-2 border-gray-200 text-gray-600 hover:border-violet-300'
+                  ? 'bg-brand text-white shadow-md'
+                  : 'bg-white border-2 border-gray-200 text-gray-600 hover:border-brand-light'
               }`}
             >
               <span>🚀</span>
@@ -897,7 +897,7 @@ export default function ExamplesPage() {
             {/* Source info */}
             <div className="flex items-center justify-between mb-6">
               <div className="flex items-center gap-3">
-                <div className="w-10 h-12 bg-gradient-to-br from-blue-500 to-violet-600 rounded-lg flex items-center justify-center shadow">
+                <div className="w-10 h-12 bg-gradient-to-br from-brand to-brand-dark rounded-lg flex items-center justify-center shadow">
                   <span className="text-white text-xl">📘</span>
                 </div>
                 <div>
@@ -919,8 +919,8 @@ export default function ExamplesPage() {
             {/* Side-by-side columns */}
             <div className="grid lg:grid-cols-2 gap-6 mb-8">
               {/* Original */}
-              <div className="bg-white rounded-3xl shadow-xl border border-blue-100 overflow-hidden">
-                <div className="px-6 py-4 bg-gradient-to-r from-blue-50 to-slate-50 border-b border-blue-100 flex items-center gap-3">
+              <div className="bg-white rounded-3xl shadow-xl border border-[#EBE6F4] overflow-hidden">
+                <div className="px-6 py-4 bg-gradient-to-r from-amber-50 to-cream border-b border-amber-100 flex items-center gap-3">
                   <span className="text-lg">🇬🇧</span>
                   <div>
                     <p className="font-bold text-gray-900 text-sm">Original English</p>
@@ -935,8 +935,8 @@ export default function ExamplesPage() {
               </div>
 
               {/* Translation — translate="no" prevents Chrome/Safari auto-translate */}
-              <div className="bg-white rounded-3xl shadow-xl border border-violet-100 overflow-hidden" translate="no">
-                <div className="px-6 py-4 bg-gradient-to-r from-violet-50 to-blue-50 border-b border-violet-100 flex items-center justify-between">
+              <div className="bg-white rounded-3xl shadow-xl border border-[#EBE6F4] overflow-hidden" translate="no">
+                <div className="px-6 py-4 bg-gradient-to-r from-[#F3F0F8] to-cream border-b border-[#EBE6F4] flex items-center justify-between">
                   <div className="flex items-center gap-3">
                     <span className="text-lg">{currentLang.flag}</span>
                     <div>
@@ -979,9 +979,9 @@ export default function ExamplesPage() {
             </div>
 
             {/* Editorial Notes */}
-            <div className="bg-gradient-to-br from-violet-50 to-blue-50 rounded-3xl p-8 border border-violet-200 mb-16">
+            <div className="bg-gradient-to-br from-[#F3F0F8] to-cream rounded-3xl p-8 border border-[#EBE6F4] mb-16">
               <div className="flex items-center gap-3 mb-5">
-                <div className="w-10 h-10 bg-gradient-to-br from-violet-500 to-blue-600 rounded-xl flex items-center justify-center text-white font-bold text-lg shadow">
+                <div className="w-10 h-10 bg-gradient-to-br from-brand to-brand-dark rounded-xl flex items-center justify-center text-white font-bold text-lg shadow">
                   2
                 </div>
                 <div>
@@ -992,7 +992,7 @@ export default function ExamplesPage() {
               <ul className="space-y-3">
                 {currentTranslation.editorialNotes.map((note, i) => (
                   <li key={i} className="flex items-start gap-3 text-gray-700">
-                    <span className="mt-0.5 flex-shrink-0 w-5 h-5 bg-violet-600 text-white rounded-full text-xs flex items-center justify-center font-bold">
+                    <span className="mt-0.5 flex-shrink-0 w-5 h-5 bg-brand text-white rounded-full text-xs flex items-center justify-center font-bold">
                       {i + 1}
                     </span>
                     <span className="text-[15px] leading-6">{note}</span>
@@ -1002,7 +1002,7 @@ export default function ExamplesPage() {
             </div>
 
             {/* Legend */}
-            <div className="bg-white rounded-2xl border border-gray-200 p-6 mb-16 max-w-2xl mx-auto">
+            <div className="bg-white rounded-2xl border border-[#EBE6F4] p-6 mb-16 max-w-2xl mx-auto">
               <h4 className="font-bold text-gray-900 text-center mb-4" style={serifFont}>How to Read the Highlights</h4>
               <div className="grid sm:grid-cols-2 gap-4 text-sm text-gray-600">
                 <div className="flex items-start gap-3">
@@ -1024,7 +1024,7 @@ export default function ExamplesPage() {
                   <button
                     key={lang.code}
                     onClick={() => setActiveTab(lang.code)}
-                    className="flex items-center gap-2 px-4 py-2 bg-white border-2 border-gray-200 rounded-full text-sm font-medium text-gray-700 hover:border-violet-400 transition-all"
+                    className="flex items-center gap-2 px-4 py-2 bg-white border-2 border-gray-200 rounded-full text-sm font-medium text-gray-700 hover:border-brand-light transition-all"
                   >
                     {lang.flag} {lang.name}
                   </button>
@@ -1037,7 +1037,7 @@ export default function ExamplesPage() {
       </section>
 
       {/* CTA */}
-      <section className="py-24 bg-gradient-to-r from-blue-600 to-violet-600 relative overflow-hidden">
+      <section className="py-24 bg-brand relative overflow-hidden">
         <div className="absolute inset-0 opacity-10">
           <div className="absolute top-10 left-20 w-64 h-64 bg-white rounded-full blur-3xl" />
           <div className="absolute bottom-10 right-20 w-80 h-80 bg-white rounded-full blur-3xl" />
@@ -1052,13 +1052,13 @@ export default function ExamplesPage() {
           </p>
           <Link
             href="/"
-            className="inline-flex items-center gap-3 px-10 py-5 bg-white text-violet-700 rounded-2xl font-bold text-xl shadow-2xl hover:shadow-3xl hover:-translate-y-1 transition-all"
+            className="inline-flex items-center gap-3 px-10 py-5 bg-white text-brand-dark rounded-2xl font-bold text-xl shadow-2xl hover:shadow-3xl hover:-translate-y-1 transition-all"
           >
             <span>Translate Your Book</span>
             <span>→</span>
           </Link>
           <div className="flex items-center justify-center gap-8 mt-12 text-white/70 text-sm flex-wrap">
-            <span>✓ EPUB, PDF, DOCX, TXT</span>
+            <span>✓ EPUB, DOCX, TXT</span>
             <span>✓ Formatting preserved</span>
             <span>✓ 4 languages available</span>
             <span>✓ Bundle & save up to 37%</span>
