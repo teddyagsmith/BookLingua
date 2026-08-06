@@ -27,6 +27,9 @@ export default function PublishersPage() {
           <Logo size="lg" />
         </Link>
         <div className="flex items-center gap-6">
+          <Link href="/blog" className="text-gray-600 hover:text-violet-700 font-medium transition-colors">
+            Guides
+          </Link>
           <Link href="/examples" className="text-gray-600 hover:text-violet-700 font-medium transition-colors">
             Examples
           </Link>

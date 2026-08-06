@@ -766,6 +766,9 @@ export default function ExamplesPage() {
           <Logo size="lg" />
         </Link>
         <div className="flex items-center gap-3 sm:gap-6">
+          <Link href="/blog" className="text-gray-600 hover:text-brand-dark font-medium transition-colors hidden sm:block">
+            Guides
+          </Link>
           <Link href="/publishers" className="text-gray-600 hover:text-brand-dark font-medium transition-colors hidden sm:block">
             Publishers
           </Link>

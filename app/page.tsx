@@ -618,6 +618,9 @@ export default function Home() {
               <Logo size="lg" />
             </div>
             <div className="flex items-center gap-3 sm:gap-6">
+              <a href="/blog" className="text-gray-600 hover:text-brand-dark font-medium transition-colors hidden sm:block">
+                Guides
+              </a>
               <a href="/examples" className="text-gray-600 hover:text-brand-dark font-medium transition-colors hidden sm:block">
                 Examples
               </a>
