@@ -474,6 +474,10 @@ async function main() {
 
     // Convert Word docs to Google Docs first
     if (file.mimeType === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document') {
+      if (dryRun) {
+        console.log(`Word doc detected: "${file.name}" — would be converted to Google Doc in real run`)
+        continue
+      }
       console.log(`Word doc detected: "${file.name}" — converting to Google Doc`)
       docId = await convertWordToGoogleDoc(drive, file.id, file.name)
       docName = `${file.name} (converted)`
