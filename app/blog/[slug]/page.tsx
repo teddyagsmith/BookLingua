@@ -5,6 +5,7 @@ import { notFound } from 'next/navigation'
 import { MDXRemote } from 'next-mdx-remote/rsc'
 import { getPostBySlug, getAllSlugs } from '@/lib/posts'
 import { mdxComponents } from '@/components/mdx-components'
+import NewsletterPopup from '@/components/NewsletterPopup'
 
 const siteUrl = 'https://booklingua.io'
 
@@ -198,6 +199,12 @@ export default function BlogPostPage({ params }: BlogPostPageProps) {
         <div className="prose prose-lg max-w-none mx-auto px-4 sm:px-6 lg:px-8 prose-headings:font-serif">
           <MDXRemote source={post.content} components={mdxComponents} />
         </div>
+
+        <NewsletterPopup
+          source={`blog-${post.slug}`}
+          title="Want more guides like this?"
+          description="Get practical translation and book-launch tips from BookLingua. One email when it matters."
+        />
       </article>
 
       {/* CTA */}
