@@ -20,6 +20,7 @@ import * as path from 'path'
 
 // ── Config ────────────────────────────────────────────────────────────────────
 
+const PARENT_FOLDER_NAME  = 'BookLingua'
 const READY_FOLDER_NAME   = 'Ready to Publish'
 const DONE_FOLDER_NAME    = 'Published'
 const OUT_DIR             = 'content/blog'        // where .mdx files go
@@ -74,10 +75,15 @@ async function getClients() {
 
 async function findFolderByName(
   drive: drive_v3.Drive,
-  name: string
+  name: string,
+  parentId?: string
 ): Promise<string | null> {
+  let q = `name = '${name}' and mimeType = 'application/vnd.google-apps.folder' and trashed = false`
+  if (parentId) {
+    q += ` and '${parentId}' in parents`
+  }
   const res = await drive.files.list({
-    q: `name = '${name}' and mimeType = 'application/vnd.google-apps.folder' and trashed = false`,
+    q,
     fields: 'files(id, name)',
   })
   return res.data.files?.[0]?.id ?? null
@@ -88,7 +94,7 @@ async function getOrCreateFolder(
   name: string,
   parentId?: string
 ): Promise<string> {
-  const existing = await findFolderByName(drive, name)
+  const existing = await findFolderByName(drive, name, parentId)
   if (existing) return existing
 
   const res = await drive.files.create({
@@ -292,9 +298,10 @@ async function main() {
 
   const { drive, docs } = await getClients()
 
-  // Find or create the folders
-  const readyFolderId   = await getOrCreateFolder(drive, READY_FOLDER_NAME)
-  const publishedFolderId = await getOrCreateFolder(drive, DONE_FOLDER_NAME)
+  // Find or create the parent folder, then the working folders inside it
+  const parentFolderId = await getOrCreateFolder(drive, PARENT_FOLDER_NAME)
+  const readyFolderId   = await getOrCreateFolder(drive, READY_FOLDER_NAME, parentFolderId)
+  const publishedFolderId = await getOrCreateFolder(drive, DONE_FOLDER_NAME, parentFolderId)
 
   // Get all docs in Ready to Publish
   const pending = await getDocsInFolder(drive, readyFolderId)
