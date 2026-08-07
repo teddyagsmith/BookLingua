@@ -29,7 +29,7 @@ export default function NewsletterPopup({
       const docHeight = document.documentElement.scrollHeight - window.innerHeight
       const scrollPercent = docHeight > 0 ? scrollTop / docHeight : 0
 
-      if (scrollPercent >= 0.5) {
+      if (scrollPercent >= 0.25) {
         setIsOpen(true)
         window.removeEventListener('scroll', handleScroll)
       }
