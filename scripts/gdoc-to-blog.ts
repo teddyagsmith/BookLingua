@@ -27,13 +27,44 @@ const DEFAULT_AUTHOR      = 'BookLingua'
 
 // ── Auth ──────────────────────────────────────────────────────────────────────
 
-async function getClients() {
-  const auth = new google.auth.GoogleAuth({
-    scopes: [
-      'https://www.googleapis.com/auth/documents.readonly',
-      'https://www.googleapis.com/auth/drive',
-    ],
+function getGillyAuth(): any {
+  const tokenPath = path.resolve('/Users/gilbert/.openclaw/workspace/gilly_token.json')
+  if (!fs.existsSync(tokenPath)) {
+    console.log(`[gdoc-to-blog] No gilly_token.json found at ${tokenPath}; falling back to GOOGLE_APPLICATION_CREDENTIALS / gcloud default credentials.`)
+    return null
+  }
+
+  const token = JSON.parse(fs.readFileSync(tokenPath, 'utf-8'))
+  if (!token.refresh_token) {
+    console.log('[gdoc-to-blog] gilly_token.json has no refresh_token; falling back.')
+    return null
+  }
+
+  const oauth2Client = new google.auth.OAuth2(
+    token.client_id,
+    token.client_secret
+  )
+
+  oauth2Client.setCredentials({
+    refresh_token: token.refresh_token,
   })
+
+  console.log('[gdoc-to-blog] Authenticating as gilly@myromancereads.com')
+  return oauth2Client
+}
+
+async function getClients() {
+  let auth: any = getGillyAuth()
+
+  if (!auth) {
+    auth = new google.auth.GoogleAuth({
+      scopes: [
+        'https://www.googleapis.com/auth/documents.readonly',
+        'https://www.googleapis.com/auth/drive',
+      ],
+    })
+  }
+
   const drive = google.drive({ version: 'v3', auth })
   const docs  = google.docs({ version: 'v1', auth })
   return { drive, docs }
