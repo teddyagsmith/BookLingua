@@ -120,13 +120,33 @@ async function getOrCreateFolder(
 async function getDocsInFolder(
   drive: drive_v3.Drive,
   folderId: string
-): Promise<Array<{ id: string; name: string }>> {
+): Promise<Array<{ id: string; name: string; mimeType: string }>> {
   const res = await drive.files.list({
-    q: `'${folderId}' in parents and mimeType = 'application/vnd.google-apps.document' and trashed = false`,
-    fields: 'files(id, name)',
+    q: `'${folderId}' in parents and (mimeType = 'application/vnd.google-apps.document' or mimeType = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document') and trashed = false`,
+    fields: 'files(id, name, mimeType)',
     orderBy: 'createdTime asc',
   })
-  return (res.data.files ?? []).map(f => ({ id: f.id!, name: f.name! }))
+  return (res.data.files ?? []).map(f => ({
+    id: f.id!,
+    name: f.name!,
+    mimeType: f.mimeType!,
+  }))
+}
+
+async function convertWordToGoogleDoc(
+  drive: drive_v3.Drive,
+  fileId: string,
+  name: string
+): Promise<string> {
+  const res = await drive.files.copy({
+    fileId,
+    requestBody: {
+      name: `${name} (converted)`,
+      mimeType: 'application/vnd.google-apps.document',
+    },
+  })
+  console.log(`  Converted Word doc to Google Doc: ${res.data.id}`)
+  return res.data.id!
 }
 
 async function moveFile(
@@ -449,18 +469,34 @@ async function main() {
   console.log()
 
   for (const file of pending) {
-    const slug = forceSlug ?? titleToSlug(file.name)
-    console.log(`Processing: "${file.name}" → slug: "${slug}"`)
+    let docId = file.id
+    let docName = file.name
+
+    // Convert Word docs to Google Docs first
+    if (file.mimeType === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document') {
+      console.log(`Word doc detected: "${file.name}" — converting to Google Doc`)
+      docId = await convertWordToGoogleDoc(drive, file.id, file.name)
+      docName = `${file.name} (converted)`
+    }
+
+    const slug = forceSlug ?? titleToSlug(docName.replace(' (converted)', '').replace(/\.docx$/i, ''))
+    console.log(`Processing: "${docName}" → slug: "${slug}"`)
 
     try {
-      await convertDocToMdx(docs, drive, auth, file.id, slug, dryRun)
+      await convertDocToMdx(docs, drive, auth, docId, slug, dryRun)
 
       if (!dryRun) {
-        await moveFile(drive, file.id, readyFolderId, publishedFolderId)
-        console.log(`Moved to "${DONE_FOLDER_NAME}" folder`)
+        await moveFile(drive, docId, readyFolderId, publishedFolderId)
+        console.log(`Moved converted doc to "${DONE_FOLDER_NAME}" folder`)
+
+        // Also move the original Word doc to Published
+        if (file.mimeType === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document') {
+          await moveFile(drive, file.id, readyFolderId, publishedFolderId)
+          console.log(`Moved original Word doc to "${DONE_FOLDER_NAME}" folder`)
+        }
       }
     } catch (err) {
-      console.error(`Failed to process "${file.name}":`, err)
+      console.error(`Failed to process "${docName}":`, err)
     }
 
     console.log()
