@@ -412,7 +412,7 @@ async function convertDocToMdx(
   let calloutLabel = 'BookLingua example'
 
   // Collect all paragraphs first so we can peek ahead for H3-in-list detection
-  const paragraphs = body
+  const paragraphs = (body as docs_v1.Schema$StructuralElement[])
     .map(el => el.paragraph)
     .filter((p): p is docs_v1.Schema$Paragraph => !!p)
 
