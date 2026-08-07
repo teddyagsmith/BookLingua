@@ -39,7 +39,7 @@ module.exports = {
             h2: {
               fontFamily:    '"EB Garamond", Georgia, serif',
               fontWeight:    '500',
-              fontSize:      '1.5rem',
+              fontSize:      '1.65rem',
               lineHeight:    '1.3',
               marginTop:     '2.5rem',
               marginBottom:  '0.5rem',
@@ -49,7 +49,7 @@ module.exports = {
             h3: {
               fontFamily:   'Inter, system-ui, sans-serif',
               fontWeight:   '600',
-              fontSize:     '1.1rem',
+              fontSize:     '1.35rem',
               color:        '#7B6CA8',
               marginTop:    '1.75rem',
               marginBottom: '0.4rem',
@@ -57,7 +57,7 @@ module.exports = {
             h4: {
               fontFamily: 'Inter, system-ui, sans-serif',
               fontWeight: '600',
-              fontSize:   '1rem',
+              fontSize:   '1.15rem',
               color:      '#3A3A3A',
               marginTop:  '1.25rem',
             },
@@ -65,6 +65,10 @@ module.exports = {
               lineHeight:    '1.75',
               marginBottom:  '1rem',
               color:         '#3A3A3A',
+            },
+            li: {
+              marginBottom:  '0.35rem',
+              lineHeight:    '1.6',
             },
             blockquote: {
               borderLeftColor:  '#7B6CA8',

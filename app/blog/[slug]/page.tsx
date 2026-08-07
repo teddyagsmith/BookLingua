@@ -6,6 +6,7 @@ import { MDXRemote } from 'next-mdx-remote/rsc'
 import { getPostBySlug, getAllSlugs } from '@/lib/posts'
 import { mdxComponents } from '@/components/mdx-components'
 import NewsletterPopup from '@/components/NewsletterPopup'
+import rehypeSlug from 'rehype-slug'
 
 const siteUrl = 'https://booklingua.io'
 
@@ -197,7 +198,15 @@ export default function BlogPostPage({ params }: BlogPostPageProps) {
         )}
 
         <div className="prose prose-lg max-w-none mx-auto px-4 sm:px-6 lg:px-8 prose-headings:font-serif">
-          <MDXRemote source={post.content} components={mdxComponents} />
+          <MDXRemote
+            source={post.content}
+            components={mdxComponents}
+            options={{
+              mdxOptions: {
+                rehypePlugins: [rehypeSlug],
+              },
+            }}
+          />
         </div>
 
         <NewsletterPopup

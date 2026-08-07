@@ -12,6 +12,8 @@
  *   - blockquote indentation
  *   - inline images (exported to public/images/blog/<slug>/)
  *   - YouTube links → <YouTube id="..." /> component
+ *   - red-text "BookLingua example" callouts → <Callout> component
+ *   - auto-generated table of contents
  *
  * Usage:
  *   npx ts-node -P tsconfig.scripts.json scripts/gdoc-to-blog.ts
@@ -133,6 +135,20 @@ async function getDocsInFolder(
   }))
 }
 
+async function moveFile(
+  drive: drive_v3.Drive,
+  fileId: string,
+  fromFolderId: string,
+  toFolderId: string
+): Promise<void> {
+  await drive.files.update({
+    fileId,
+    addParents: toFolderId,
+    removeParents: fromFolderId,
+    fields: 'id, parents',
+  })
+}
+
 async function convertWordToGoogleDoc(
   drive: drive_v3.Drive,
   fileId: string,
@@ -149,20 +165,6 @@ async function convertWordToGoogleDoc(
   return res.data.id!
 }
 
-async function moveFile(
-  drive: drive_v3.Drive,
-  fileId: string,
-  fromFolderId: string,
-  toFolderId: string
-): Promise<void> {
-  await drive.files.update({
-    fileId,
-    addParents: toFolderId,
-    removeParents: fromFolderId,
-    fields: 'id, parents',
-  })
-}
-
 // ── Slug helpers ──────────────────────────────────────────────────────────────
 
 function titleToSlug(title: string): string {
@@ -174,12 +176,22 @@ function titleToSlug(title: string): string {
     .replace(/-+/g, '-')
 }
 
+function textToAnchor(text: string): string {
+  return text
+    .toLowerCase()
+    .replace(/[^a-z0-9\s-]/g, '')
+    .trim()
+    .replace(/\s+/g, '-')
+    .replace(/-+/g, '-')
+}
+
 // ── YouTube helpers ──────────────────────────────────────────────────────────
 
 function extractYouTubeId(url: string): string | null {
   const patterns = [
-    /(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/|youtube\.com\/v\/)([a-zA-Z0-9_-]{11})/,
+    /(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/|youtube\.com\/v\/|youtube\.com\/shorts\/)([a-zA-Z0-9_-]{11})/,
     /youtube\.com\/watch\?.*[?&]v=([a-zA-Z0-9_-]{11})/,
+    /youtube\.com\/watch\?v=([a-zA-Z0-9_-]{11})/,
   ]
   for (const p of patterns) {
     const m = url.match(p)
@@ -189,8 +201,11 @@ function extractYouTubeId(url: string): string | null {
 }
 
 function convertYouTubeLinks(md: string): string {
-  // Convert standalone YouTube URLs (paragraphs that contain only a YouTube link)
   return md.replace(/^(\s*)\[([^\]]*)\]\((https?:\/\/[^)]+)\)(\s*)$/gm, (match, before, text, url, after) => {
+    const id = extractYouTubeId(url)
+    if (!id) return match
+    return `${before}<YouTube id="${id}" />${after}`
+  }).replace(/^(\s*)(https?:\/\/(?:www\.)?(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/shorts\/)[^\s]+)(\s*)$/gm, (match, before, url, after) => {
     const id = extractYouTubeId(url)
     if (!id) return match
     return `${before}<YouTube id="${id}" />${after}`
@@ -200,8 +215,6 @@ function convertYouTubeLinks(md: string): string {
 // ── Image helpers ────────────────────────────────────────────────────────────
 
 async function downloadImage(url: string, auth: any): Promise<Buffer> {
-  // For contentUri signed URLs, the access token is baked into the URL.
-  // If it ever needs an Authorization header, we add it here.
   const headers: any = {}
   if (auth?.credentials?.access_token) {
     const token = await auth.getAccessToken()
@@ -229,7 +242,7 @@ async function exportImages(
   auth: any
 ): Promise<Map<string, string>> {
   const inlineObjects = doc.inlineObjects ?? {}
-  const imageMap = new Map<string, string>() // inlineObjectId -> public image path
+  const imageMap = new Map<string, string>()
 
   if (Object.keys(inlineObjects).length === 0) return imageMap
 
@@ -250,8 +263,7 @@ async function exportImages(
       continue
     }
 
-    const mimeType = imageProps.contentUri ? undefined : 'image/png'
-    const ext = imageExtFromMime(mimeType)
+    const ext = 'png'
     const filename = `image-${String(index).padStart(2, '0')}.${ext}`
     const publicPath = `/images/blog/${slug}/${filename}`
     const outPath = path.join(outDir, filename)
@@ -276,33 +288,66 @@ async function exportImages(
   return imageMap
 }
 
+// ── Style helpers ────────────────────────────────────────────────────────────
+
+function isRedText(textStyle: docs_v1.Schema$TextStyle): boolean {
+  const color = textStyle?.foregroundColor?.color?.rgbColor
+  if (!color) return false
+  const r = color.red ?? 0
+  const g = color.green ?? 0
+  const b = color.blue ?? 0
+  return r >= 0.9 && g <= 0.2 && b <= 0.2
+}
+
+function stripMarkdownBold(text: string): string {
+  return text.replace(/\*\*/g, '').trim()
+}
+
 // ── Doc content converter ─────────────────────────────────────────────────────
 
 function runsToMarkdown(
   elements: docs_v1.Schema$ParagraphElement[],
   imageMap: Map<string, string>,
-  altText: string = 'Image'
+  opts: { altText?: string; allowBold?: boolean } = {}
 ): string {
+  const { altText = 'Image', allowBold = true } = opts
   return elements.map(el => {
-    // Inline image
     if (el.inlineObjectElement) {
       const objectId = el.inlineObjectElement.inlineObjectId
       const src = objectId ? imageMap.get(objectId) : null
-      if (src) return `![${altText}](${src})`
+      if (src) return `![${stripMarkdownBold(altText)}](${src})`
       return ''
     }
 
     const content = el.textRun?.content ?? ''
     const style   = el.textRun?.textStyle ?? {}
     const link    = style.link?.url
+    const red     = isRedText(style)
     let out = content.replace(/\n$/, '')
     if (!out) return ''
-    if (style.bold && style.italic) out = `***${out}***`
-    else if (style.bold)            out = `**${out}**`
-    else if (style.italic)          out = `*${out}*`
+
+    if (allowBold) {
+      if (style.bold && style.italic) out = `***${out}***`
+      else if (style.bold)            out = `**${out}**`
+      else if (style.italic)          out = `*${out}*`
+    }
     if (link)                       out = `[${out}](${link})`
+    if (red)                        out = `<span data-callout="true">${out}</span>`
     return out
   }).join('')
+}
+
+function isHeadingishBullet(text: string): boolean {
+  const t = text.trim()
+  if (!t.startsWith('**') || !t.endsWith('**')) return false
+  const inner = t.slice(2, -2).trim()
+  const words = inner.split(/\s+/).filter(Boolean)
+  return inner.length > 0 && words.length >= 1 && words.length <= 3 && !inner.includes('.')
+}
+
+function isAllBold(text: string): boolean {
+  const t = text.trim()
+  return t.startsWith('**') && t.endsWith('**') && !t.slice(2, -2).includes('**')
 }
 
 function listItemToMarkdown(para: docs_v1.Schema$Paragraph, imageMap: Map<string, string>): string {
@@ -342,7 +387,6 @@ async function convertDocToMdx(
   const doc = res.data
   const body = doc.body?.content ?? []
 
-  // Export images first so we can reference them in the MDX
   const imageMap = await exportImages(doc, slug, dryRun, auth)
 
   // Extract the first TITLE-style paragraph as the article title
@@ -351,44 +395,138 @@ async function convertDocToMdx(
     if (!el.paragraph) continue
     const style = el.paragraph.paragraphStyle?.namedStyleType
     if (style === 'TITLE' || style === 'HEADING_1') {
-      const t = runsToMarkdown(el.paragraph.elements ?? [], imageMap)
+      const t = runsToMarkdown(el.paragraph.elements ?? [], imageMap, { allowBold: false })
       if (t.trim()) {
-        articleTitle = t
+        articleTitle = stripMarkdownBold(t)
         break
       }
     }
   }
 
   const lines: string[] = []
+  const toc: Array<{ level: number; text: string; anchor: string }> = []
   let inBlockquote = false
+  let lastWasList = false
+  let insideCallout = false
+  let calloutBuffer: string[] = []
+  let calloutLabel = 'BookLingua example'
 
-  for (const el of body) {
-    if (!el.paragraph) continue
-    const para = el.paragraph
+  // Collect all paragraphs first so we can peek ahead for H3-in-list detection
+  const paragraphs = body
+    .map(el => el.paragraph)
+    .filter((p): p is docs_v1.Schema$Paragraph => !!p)
 
-    // List items
-    if (para.bullet) {
-      if (inBlockquote) { inBlockquote = false; lines.push('') }
-      lines.push(listItemToMarkdown(para, imageMap))
-      continue
-    }
-
+  for (let i = 0; i < paragraphs.length; i++) {
+    const para = paragraphs[i]
     const style = para.paragraphStyle?.namedStyleType ?? 'NORMAL_TEXT'
-    const raw   = runsToMarkdown(para.elements ?? [], imageMap, articleTitle)
+    const isHeadingStyle = style.startsWith('HEADING_') || style === 'TITLE'
+    const isBullet = !!para.bullet
+    const raw   = runsToMarkdown(para.elements ?? [], imageMap, { altText: articleTitle, allowBold: true })
 
-    // Empty paragraph — close blockquote if open, add blank line
     if (!raw.trim()) {
-      if (inBlockquote) inBlockquote = false
+      if (inBlockquote) { inBlockquote = false; lines.push('') }
+      if (insideCallout) {
+        if (calloutBuffer.length > 0) {
+          lines.push(`<Callout label="${calloutLabel}">`)
+          lines.push(...calloutBuffer.map(stripMarkdownBold))
+          lines.push('</Callout>')
+          calloutBuffer = []
+        }
+        insideCallout = false
+      }
+      lastWasList = false
       lines.push('')
       continue
     }
 
-    // Heading
-    if (style.startsWith('HEADING_') || style === 'TITLE') {
-      if (inBlockquote) { inBlockquote = false; lines.push('') }
-      const md = paragraphToMarkdown(para, imageMap)
-      if (md) lines.push(md, '')
+    // Detect red-text callout paragraphs (must be entirely red)
+    const elements = para.elements ?? []
+    const allRuns = elements.filter(e => e.textRun)
+    const allRed = allRuns.length > 0 && allRuns.every(e => isRedText(e.textRun?.textStyle ?? {}))
+    const startsExample = raw.toLowerCase().includes('booklingua example')
+
+    if (allRed || (insideCallout && startsExample)) {
+      if (!insideCallout) {
+        insideCallout = true
+        calloutBuffer = []
+      }
+      calloutBuffer.push(raw)
+      lastWasList = false
       continue
+    } else if (insideCallout) {
+      if (calloutBuffer.length > 0) {
+        lines.push(`<Callout label="${calloutLabel}">`)
+        lines.push(...calloutBuffer)
+        lines.push('</Callout>')
+        calloutBuffer = []
+      }
+      insideCallout = false
+    }
+
+    // Heading styles — handle before bullets in case a heading style is also
+    // marked as part of a list structure by Docs/Word conversion.
+    if (isHeadingStyle) {
+      if (inBlockquote) { inBlockquote = false; lines.push('') }
+      if (lastWasList) { lines.push(''); lastWasList = false }
+      let md: string | null = null
+      let tocLevel = 2
+      let tocText = ''
+
+      switch (style) {
+        case 'TITLE':
+          break
+        case 'HEADING_1':
+          md = `## ${stripMarkdownBold(raw)}`
+          tocLevel = 2
+          tocText = stripMarkdownBold(raw)
+          break
+        case 'HEADING_2':
+          md = `### ${stripMarkdownBold(raw)}`
+          tocLevel = 3
+          tocText = stripMarkdownBold(raw)
+          break
+        case 'HEADING_3':
+          md = `#### ${stripMarkdownBold(raw)}`
+          tocLevel = 4
+          tocText = stripMarkdownBold(raw)
+          break
+        case 'HEADING_4':
+          md = `##### ${stripMarkdownBold(raw)}`
+          tocLevel = 5
+          tocText = stripMarkdownBold(raw)
+          break
+      }
+
+      if (md && tocText) {
+        lines.push(md, '')
+        toc.push({ level: tocLevel, text: tocText, anchor: textToAnchor(tocText) })
+      }
+      continue
+    }
+
+    // Bullet list items
+    if (isBullet) {
+      if (inBlockquote) { inBlockquote = false; lines.push('') }
+
+      // Heuristic: bullet items that are short, bold, and look like headings
+      const isPseudoHeading = isHeadingishBullet(raw) && !paragraphs[i + 1]?.bullet
+      if (isPseudoHeading) {
+        if (lastWasList) { lines.push(''); lastWasList = false }
+        const headingText = stripMarkdownBold(raw)
+        lines.push(`### ${headingText}`, '')
+        toc.push({ level: 3, text: headingText, anchor: textToAnchor(headingText) })
+        continue
+      }
+
+      lines.push(listItemToMarkdown(para, imageMap))
+      lastWasList = true
+      continue
+    }
+
+    // Non-bullet paragraph after list: close list with blank line
+    if (lastWasList) {
+      lines.push('')
+      lastWasList = false
     }
 
     // Blockquote paragraphs (indented in Google Docs)
@@ -399,13 +537,25 @@ async function convertDocToMdx(
       continue
     }
 
-    // Close blockquote if we were in one and this is a normal para
-    if (inBlockquote) {
-      inBlockquote = false
-      lines.push('')
-    }
-
+    if (inBlockquote) { inBlockquote = false; lines.push('') }
     lines.push(raw, '')
+  }
+
+  // Flush any trailing callout
+  if (insideCallout && calloutBuffer.length > 0) {
+    lines.push(`<Callout label="${calloutLabel}">`)
+    lines.push(...calloutBuffer.map(stripMarkdownBold))
+    lines.push('</Callout>')
+  }
+
+  // Build TOC insert
+  let tocInsert = ''
+  if (toc.length > 0) {
+    const tocLines = ['## Table of Contents', '', ...toc.map(h => {
+      const indent = '  '.repeat(Math.max(0, h.level - 2))
+      return `${indent}- [${h.text}](#${h.anchor})`
+    }), '']
+    tocInsert = tocLines.join('\n') + '\n'
   }
 
   // Build frontmatter
@@ -422,11 +572,9 @@ async function convertDocToMdx(
   ].join('\n')
 
   let mdxBody = lines.join('\n').replace(/\n{3,}/g, '\n\n').trim()
-
-  // Convert standalone YouTube links to YouTube component
   mdxBody = convertYouTubeLinks(mdxBody)
 
-  const mdx = frontmatter + '\n\n' + mdxBody + '\n'
+  const mdx = frontmatter + '\n\n' + tocInsert + mdxBody + '\n'
 
   if (dryRun) {
     console.log('\n── PREVIEW ──────────────────────────────────────\n')
@@ -451,12 +599,10 @@ async function main() {
 
   const { drive, docs, auth } = await getClients()
 
-  // Find or create the parent folder, then the working folders inside it
   const parentFolderId = await getOrCreateFolder(drive, PARENT_FOLDER_NAME)
   const readyFolderId   = await getOrCreateFolder(drive, READY_FOLDER_NAME, parentFolderId)
   const publishedFolderId = await getOrCreateFolder(drive, DONE_FOLDER_NAME, parentFolderId)
 
-  // Get all docs in Ready to Publish
   const pending = await getDocsInFolder(drive, readyFolderId)
 
   if (pending.length === 0) {
@@ -472,7 +618,6 @@ async function main() {
     let docId = file.id
     let docName = file.name
 
-    // Convert Word docs to Google Docs first
     if (file.mimeType === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document') {
       if (dryRun) {
         console.log(`Word doc detected: "${file.name}" — would be converted to Google Doc in real run`)
@@ -493,7 +638,6 @@ async function main() {
         await moveFile(drive, docId, readyFolderId, publishedFolderId)
         console.log(`Moved converted doc to "${DONE_FOLDER_NAME}" folder`)
 
-        // Also move the original Word doc to Published
         if (file.mimeType === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document') {
           await moveFile(drive, file.id, readyFolderId, publishedFolderId)
           console.log(`Moved original Word doc to "${DONE_FOLDER_NAME}" folder`)
