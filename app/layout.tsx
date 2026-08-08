@@ -45,6 +45,18 @@ export default function RootLayout({
           data-domain=".booklingua.io"
           data-cookie-duration="30"
         />
+        <Script
+          src="https://www.googletagmanager.com/gtag/js?id=G-WCQNKFL9ZH"
+          strategy="afterInteractive"
+        />
+        <Script id="google-analytics" strategy="afterInteractive">
+          {`
+            window.dataLayer = window.dataLayer || [];
+            function gtag(){dataLayer.push(arguments);}
+            gtag('js', new Date());
+            gtag('config', 'G-WCQNKFL9ZH');
+          `}
+        </Script>
       </head>
       <body>{children}<Analytics /></body>
     </html>
