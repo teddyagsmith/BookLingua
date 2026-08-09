@@ -4,6 +4,19 @@ import { useState, useCallback, useRef, useEffect } from 'react'
 import Image from 'next/image'
 import EmailSignupPopup from '@/components/EmailSignupPopup'
 
+// GA4 event helper for CTA buttons
+function trackStartTranslation(location: string) {
+  if (typeof window !== 'undefined') {
+    const gtag = (window as any).gtag
+    if (gtag) {
+      gtag('event', 'start_translation_click', {
+        event_category: 'cta',
+        event_label: location,
+      })
+    }
+  }
+}
+
 // Updated pricing tiers
 const WORD_TIERS = {
   small: { maxWords: 40000, label: 'Up to 40k words', basePrice: 99 },
@@ -665,7 +678,7 @@ export default function Home() {
 
                 <div className="flex flex-wrap gap-4 items-center">
                   <button
-                    onClick={() => setCurrentView('upload')}
+                    onClick={() => { trackStartTranslation('hero'); setCurrentView('upload') }}
                     className="px-8 py-4 bg-brand text-white rounded-2xl font-bold text-lg shadow-xl hover:shadow-2xl transition-all hover:-translate-y-1"
                   >
                     Upload Your Book →
@@ -966,7 +979,7 @@ export default function Home() {
 
             <div className="text-center mt-12">
               <button
-                onClick={() => setCurrentView('upload')}
+                onClick={() => { trackStartTranslation('pricing'); setCurrentView('upload') }}
                 className="px-10 py-4 bg-brand text-white rounded-2xl font-bold text-lg shadow-xl hover:shadow-2xl transition-all"
               >
                 Upload Your Book to See Your Price →
