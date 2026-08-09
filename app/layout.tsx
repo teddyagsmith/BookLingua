@@ -4,12 +4,12 @@ import { Analytics } from '@vercel/analytics/next'
 import Script from 'next/script'
 
 export const metadata: Metadata = {
-  title: 'BookLingua - Professional Book Translation for Authors',
-  description: 'AI-powered book translation with editorial review. From $99 per language. Translate your book into Spanish, French, German, Portuguese and more — in hours, not months.',
+  title: 'AI Book Translation Service — Translate & Publish in 6 Languages',
+  description: 'AI book translation service with human editorial review and proofreading reports. Translate novels, non-fiction and series into Spanish, German, French, Italian, Portuguese, Polish and Japanese.',
   metadataBase: new URL('https://booklingua.io'),
   openGraph: {
-    title: 'BookLingua - Professional Book Translation for Authors',
-    description: 'AI-powered book translation with editorial review. From $99 per language. Translate your book into Spanish, French, German, Portuguese and more — in hours, not months.',
+    title: 'AI Book Translation Service — Translate & Publish in 6 Languages',
+    description: 'AI book translation service with human editorial review and proofreading reports. Translate novels, non-fiction and series into Spanish, German, French, Italian, Portuguese, Polish and Japanese.',
     url: 'https://booklingua.io',
     siteName: 'BookLingua',
     images: [
@@ -24,8 +24,8 @@ export const metadata: Metadata = {
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'BookLingua - Professional Book Translation for Authors',
-    description: 'AI-powered book translation with editorial review. From $99 per language.',
+    title: 'AI Book Translation Service — Translate & Publish in 6 Languages',
+    description: 'AI book translation service with human editorial review and proofreading reports.',
     images: ['/og-image.png'],
   },
 }

@@ -1023,6 +1023,65 @@ export default function Home() {
               ))}
             </div>
           </div>
+          <script
+            type="application/ld+json"
+            dangerouslySetInnerHTML={{
+              __html: JSON.stringify({
+                '@context': 'https://schema.org',
+                '@type': 'FAQPage',
+                mainEntity: [
+                  {
+                    '@type': 'Question',
+                    name: 'Is this better than Google Translate?',
+                    acceptedAnswer: {
+                      '@type': 'Answer',
+                      text: "Yes - significantly. BookLingua uses a proprietary two-pass system: the first pass produces a faithful translation; the second is an editorial review that refines idioms, adapts cultural context, and ensures your book reads naturally to native speakers. Every change is highlighted so you stay in control.",
+                    },
+                  },
+                  {
+                    '@type': 'Question',
+                    name: 'What file formats do you support?',
+                    acceptedAnswer: {
+                      '@type': 'Answer',
+                      text: 'EPUB, DOCX, and TXT. We recommend DOCX for best results - it gives the most accurate word count and preserves formatting perfectly. PDF is not supported as formatting is lost during conversion.',
+                    },
+                  },
+                  {
+                    '@type': 'Question',
+                    name: 'How long does translation take?',
+                    acceptedAnswer: {
+                      '@type': 'Answer',
+                      text: "Most books complete within 2-6 hours depending on length. You'll receive an email with your download link as soon as it's ready.",
+                    },
+                  },
+                  {
+                    '@type': 'Question',
+                    name: 'Can I see examples before I buy?',
+                    acceptedAnswer: {
+                      '@type': 'Answer',
+                      text: 'Absolutely - visit our Examples page to see real side-by-side translations with editorial highlights.',
+                    },
+                  },
+                  {
+                    '@type': 'Question',
+                    name: "What if I'm not happy with the translation?",
+                    acceptedAnswer: {
+                      '@type': 'Answer',
+                      text: 'Email us within 7 days and we’ll work with you to make it right.',
+                    },
+                  },
+                  {
+                    '@type': 'Question',
+                    name: 'Do you offer pricing for publishers with larger catalogues?',
+                    acceptedAnswer: {
+                      '@type': 'Answer',
+                      text: 'Yes - if you have 10 or more books, we offer custom bulk pricing and a hands-off pipeline.',
+                    },
+                  },
+                ],
+              }),
+            }}
+          />
         </section>
 
         {/* Footer */}
@@ -1080,7 +1139,7 @@ export default function Home() {
         {checkoutStep === 1 && (
           <>
             <div className="text-center mb-8">
-              <h1 className="text-4xl font-bold text-gray-900 mb-4" style={serifFont}>Upload Your Book</h1>
+              <h2 className="text-4xl font-bold text-gray-900 mb-4" style={serifFont}>Upload Your Book</h2>
               <p className="text-gray-600 text-lg">EPUB, DOCX, or TXT - formatting preserved</p>
             </div>
 
@@ -1396,7 +1455,7 @@ export default function Home() {
         {checkoutStep === 2 && (
           <>
             <div className="text-center mb-8">
-              <h1 className="text-4xl font-bold text-gray-900 mb-4" style={serifFont}>Select Languages</h1>
+              <h2 className="text-4xl font-bold text-gray-900 mb-4" style={serifFont}>Select Languages</h2>
               <p className="text-gray-600 text-lg">Choose one or bundle multiple for bigger savings</p>
             </div>
 
@@ -1501,7 +1560,7 @@ export default function Home() {
         {checkoutStep === 3 && (
           <>
             <div className="text-center mb-8">
-              <h1 className="text-4xl font-bold text-gray-900 mb-4" style={serifFont}>Review Translation Preferences</h1>
+              <h2 className="text-4xl font-bold text-gray-900 mb-4" style={serifFont}>Review Translation Preferences</h2>
               <p className="text-gray-600 text-lg">We scanned your manuscript for terms that need your input</p>
             </div>
 
@@ -1652,7 +1711,7 @@ export default function Home() {
         {checkoutStep === 4 && (
           <>
             <div className="text-center mb-8">
-              <h1 className="text-4xl font-bold text-gray-900 mb-4" style={serifFont}>Complete Your Order</h1>
+              <h2 className="text-4xl font-bold text-gray-900 mb-4" style={serifFont}>Complete Your Order</h2>
               <p className="text-gray-600 text-lg">Review your order and add optional extras</p>
             </div>
 
