@@ -1010,6 +1010,34 @@ export default function Home() {
                   a: 'Yes - if you have 10 or more books, we offer custom bulk pricing and a hands-off pipeline.',
                   link: { href: '/publishers', label: 'Learn more →' },
                 },
+                {
+                  q: 'How much does AI book translation cost?',
+                  a: 'Our pricing is based on word count: $99 for up to 40k words, $149 for up to 80k words, and $199 for up to 150k words — per language. If you translate into multiple languages, bundle discounts apply automatically, up to 40% off when you translate into all 6 core languages.',
+                },
+                {
+                  q: 'Is AI book translation good enough to publish?',
+                  a: 'It can be — with the right process. BookLingua runs a cultural scan, a two-pass editorial review, consistency checks, and optional native-language proofreading so the final manuscript is ready for publication.',
+                },
+                {
+                  q: 'What languages can I translate my book into?',
+                  a: 'We currently support Spanish (Spain), Spanish (Latin America), French, German, Italian, Portuguese (Portugal), Portuguese (Brazil), Polish, and Japanese.',
+                },
+                {
+                  q: 'Can AI translate fiction and keep my author voice?',
+                  a: 'Yes. We use genre-specific prompts and a translation brief to preserve your tone, style, character voices, and narrative pacing. The editorial review then refines idioms, dialogue, and cultural references so the book reads naturally.',
+                },
+                {
+                  q: 'Will my manuscript formatting be preserved?',
+                  a: 'DOCX gives the best formatting preservation. EPUB comes back ebook-ready. TXT is supported for plain text. PDF is not supported because formatting is lost during conversion.',
+                },
+                {
+                  q: 'Do you include human proofreading?',
+                  a: 'Every order includes a human editorial review with a proofreading report. You receive a Review DOCX showing every change highlighted in yellow, plus a final clean file ready to publish.',
+                },
+                {
+                  q: 'Can I translate my whole book series?',
+                  a: 'Yes. We build a shared glossary and style guide so character names, invented terms, place names, and voice stay consistent across every book in the series.',
+                },
               ].map((item, i) => (
                 <div key={i} className="bg-gradient-to-br from-cream to-[#F3F0F8] rounded-2xl p-6 border border-[#EBE6F4]">
                   <h3 className="text-lg font-bold text-gray-900 mb-3" style={serifFont}>{item.q}</h3>
@@ -1076,6 +1104,62 @@ export default function Home() {
                     acceptedAnswer: {
                       '@type': 'Answer',
                       text: 'Yes - if you have 10 or more books, we offer custom bulk pricing and a hands-off pipeline.',
+                    },
+                  },
+                  {
+                    '@type': 'Question',
+                    name: 'How much does AI book translation cost?',
+                    acceptedAnswer: {
+                      '@type': 'Answer',
+                      text: 'Our pricing is based on word count: $99 for up to 40k words, $149 for up to 80k words, and $199 for up to 150k words — per language. Bundle discounts apply automatically, up to 40% off for all 6 languages.',
+                    },
+                  },
+                  {
+                    '@type': 'Question',
+                    name: 'Is AI book translation good enough to publish?',
+                    acceptedAnswer: {
+                      '@type': 'Answer',
+                      text: 'It can be — with the right process. BookLingua runs a cultural scan, a two-pass editorial review, consistency checks, and optional native-language proofreading so the final manuscript is ready for publication.',
+                    },
+                  },
+                  {
+                    '@type': 'Question',
+                    name: 'What languages can I translate my book into?',
+                    acceptedAnswer: {
+                      '@type': 'Answer',
+                      text: 'We currently support Spanish (Spain), Spanish (Latin America), French, German, Italian, Portuguese (Portugal), Portuguese (Brazil), Polish, and Japanese.',
+                    },
+                  },
+                  {
+                    '@type': 'Question',
+                    name: 'Can AI translate fiction and keep my author voice?',
+                    acceptedAnswer: {
+                      '@type': 'Answer',
+                      text: 'Yes. We use genre-specific prompts and a translation brief to preserve your tone, style, character voices, and narrative pacing. The editorial review then refines idioms, dialogue, and cultural references.',
+                    },
+                  },
+                  {
+                    '@type': 'Question',
+                    name: 'Will my manuscript formatting be preserved?',
+                    acceptedAnswer: {
+                      '@type': 'Answer',
+                      text: 'DOCX gives the best formatting preservation. EPUB comes back ebook-ready. TXT is supported for plain text. PDF is not supported because formatting is lost during conversion.',
+                    },
+                  },
+                  {
+                    '@type': 'Question',
+                    name: 'Do you include human proofreading?',
+                    acceptedAnswer: {
+                      '@type': 'Answer',
+                      text: 'Every order includes a human editorial review with a proofreading report. You receive a Review DOCX showing every change highlighted in yellow, plus a final clean file ready to publish.',
+                    },
+                  },
+                  {
+                    '@type': 'Question',
+                    name: 'Can I translate my whole book series?',
+                    acceptedAnswer: {
+                      '@type': 'Answer',
+                      text: 'Yes. We build a shared glossary and style guide so character names, invented terms, place names, and voice stay consistent across every book in the series.',
                     },
                   },
                 ],
