@@ -636,7 +636,7 @@ export default function Home() {
             </div>
           </nav>
 
-          <div className="relative z-10 max-w-7xl mx-auto px-8 pt-20 pb-32">
+          <div className="relative z-10 max-w-7xl mx-auto px-8 pt-12 pb-20">
             <div className="grid lg:grid-cols-2 gap-16 items-center">
               <div>
                 <div className="inline-flex items-center gap-2 px-4 py-2 bg-white/80 rounded-full text-sm font-medium text-brand-dark mb-8">
