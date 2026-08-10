@@ -1,11 +1,88 @@
 import { NextRequest, NextResponse } from 'next/server'
 import Stripe from 'stripe'
+import { getSupabaseAdmin } from '@/lib/supabase'
+import { inngest } from '@/lib/inngest'
+import { Resend } from 'resend'
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
   apiVersion: '2023-10-16',
 })
 
-import { getSupabaseAdmin } from '@/lib/supabase'
+let _resend: Resend | null = null
+function getResend() {
+  if (!_resend) {
+    _resend = new Resend(process.env.RESEND_API_KEY!)
+  }
+  return _resend
+}
+
+async function sendOrderConfirmationAndNotifyAdmin(order: any, sessionMetadata: { bookTitle: string; wordCount: string | number; fileFormat: string; languages: string[]; selectedGenre: string; upsells: string[]; specialInstructions?: string | null; amountPaid: number; authorName: string; customerEmail: string; heatLevel?: string | null; bookSetting?: string | null }) {
+  const {
+    bookTitle,
+    wordCount,
+    fileFormat,
+    languages,
+    selectedGenre,
+    upsells,
+    specialInstructions,
+    amountPaid,
+    authorName,
+    customerEmail,
+  } = sessionMetadata
+
+  // Customer confirmation
+  await getResend().emails.send({
+    from: 'BookLingua <orders@booklingua.io>',
+    to: customerEmail,
+    subject: `Order Confirmed: ${bookTitle} Translation`,
+    html: `
+      <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto;">
+        <h1 style="color: #7c3aed;">Thank you for your order! 📚</h1>
+        <p>Hi ${authorName},</p>
+        <p>We've received your order and are starting the translation process for <strong>${bookTitle}</strong>.</p>
+        <div style="background: #f5f3ff; padding: 20px; border-radius: 12px; margin: 20px 0;">
+          <h3 style="margin-top: 0;">Order Details</h3>
+          <p><strong>Book:</strong> ${bookTitle}</p>
+          <p><strong>Word Count:</strong> ${parseInt(wordCount as unknown as string, 10).toLocaleString()}</p>
+          <p><strong>Format:</strong> ${fileFormat.toUpperCase()}</p>
+          <p><strong>Languages:</strong> ${languages.join(', ').toUpperCase()}</p>
+          <p><strong>Order ID:</strong> ${order.id}</p>
+        </div>
+        <h3>What happens next?</h3>
+        <ol>
+          <li><strong>Translation (1-2 hours):</strong> Our AI translates your manuscript while preserving formatting</li>
+          <li><strong>Editorial Review (30-60 mins):</strong> Premium AI reviews for cultural accuracy and natural phrasing</li>
+          <li><strong>Delivery:</strong> You'll receive an email with download links</li>
+        </ol>
+        <p>We'll email you when your translations are ready!</p>
+        <p>Best,<br>The BookLingua Team</p>
+      </div>
+    `,
+  })
+
+  // Admin notification
+  await getResend().emails.send({
+    from: 'BookLingua <orders@booklingua.io>',
+    to: process.env.ADMIN_EMAIL!,
+    subject: `🎉 New Order: ${bookTitle} - $${amountPaid.toFixed(2)}`,
+    html: `
+      <h2>New Translation Order!</h2>
+      <p><strong>Order ID:</strong> ${order.id}</p>
+      <p><strong>Customer:</strong> ${authorName} (${customerEmail})</p>
+      <p><strong>Book:</strong> ${bookTitle}</p>
+      <p><strong>Words:</strong> ${parseInt(wordCount as unknown as string, 10).toLocaleString()}</p>
+      <p><strong>Format:</strong> ${fileFormat}</p>
+      <p><strong>Languages:</strong> ${languages.join(', ')}</p>
+      <p><strong>Genre:</strong> ${selectedGenre}</p>
+      <p><strong>Upsells:</strong> ${upsells.length > 0 ? upsells.join(', ') : 'None'}</p>
+      <p><strong>Special Instructions:</strong> ${specialInstructions || 'None'}</p>
+      <p><strong>Total:</strong> $${amountPaid.toFixed(2)}</p>
+      <hr>
+      <p>Translation will start automatically.</p>
+    `,
+  })
+}
+
 
 // Voucher codes - add/remove codes here
 const VOUCHER_CODES: Record<string, { discount: number; type: 'percent' | 'fixed'; description: string; maxUses?: number; expiresAt?: string; oncePerEmail?: boolean }> = {
@@ -228,6 +305,34 @@ export async function POST(request: NextRequest) {
           await getSupabaseAdmin().from('temp_uploads').delete().eq('session_id', sessionId)
         }
       }
+
+      // Send customer confirmation and admin notification for free orders
+      await sendOrderConfirmationAndNotifyAdmin(order, {
+        bookTitle,
+        wordCount,
+        fileFormat,
+        languages: selectedLanguages,
+        selectedGenre: selectedGenre || '',
+        upsells: selectedUpsells || [],
+        specialInstructions: specialInstructions || null,
+        amountPaid: 0,
+        authorName,
+        customerEmail: email.toLowerCase().trim(),
+        heatLevel: heatLevel || null,
+        bookSetting: bookSetting || null,
+      })
+
+      // Trigger automatic translation
+      await inngest.send({
+        name: 'book/translate.requested',
+        data: {
+          orderId: order.id,
+          heatLevel: heatLevel || null,
+          bookSetting: bookSetting || null,
+        },
+      })
+
+      console.log(`Free order ${order.id} created and translation triggered`)
 
       return NextResponse.json({
         url: `${process.env.NEXT_PUBLIC_APP_URL}/success?session_id=FREE&order_id=${order.id}`,
