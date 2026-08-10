@@ -175,8 +175,6 @@ export async function POST(request: NextRequest) {
         languages: selectedLanguages,
         genre: selectedGenre || null,
         upsells: selectedUpsells || [],
-        heat_level: heatLevel || null,
-        book_setting: bookSetting || null,
         special_instructions: specialInstructions || null,
         amount_paid: 0,
         status: 'pending',
@@ -190,7 +188,7 @@ export async function POST(request: NextRequest) {
 
       if (orderError) {
         console.error('Free order insert error:', orderError)
-        return NextResponse.json({ error: 'Failed to create order', details: orderError }, { status: 500 })
+        return NextResponse.json({ error: 'Failed to create order' }, { status: 500 })
       }
 
       // Link temp upload file
