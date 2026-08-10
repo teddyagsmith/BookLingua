@@ -123,6 +123,9 @@ export function stripAllMarkers(text: string): string {
     // Paragraph numbering
     .replace(/^P\d+\s*[:\-]\s*/gm, '')
     .replace(/^\[P\d+\]\s*/gm, '')
+    // Inline translation notes that reference pipeline segments
+    .replace(/^\s*\*\*SEGMENT_\d+[^*]*\*\*\s*[—\-–:]\s*.+$/gim, '')
+    .replace(/^\s*\*\*Hors segments[^*]*\*\*.*$/gim, '')
     // General
     .replace(/===\w[\w_]*===\n?/g, '')
     .trim()
