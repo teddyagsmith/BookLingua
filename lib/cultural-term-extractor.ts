@@ -55,32 +55,43 @@ export interface GlossaryEntry {
 
 // ─── Extraction prompt ───────────────────────────────────────────────────────
 
-const EXTRACTION_PROMPT = `You are a literary translation consultant.
+const EXTRACTION_PROMPT = `You are preparing a terminology glossary for a book translation.
 
-Analyse the following book excerpt and identify culturally specific terms that
-a translator would need author guidance on. These are terms where the "right"
-translation decision depends on the author's intent, not just linguistic knowledge.
+Analyse the following book excerpt and identify words and phrases that genuinely need special handling — things a translator must make a conscious decision about. ONLY flag a term if it meets at least one of these criteria:
 
-Focus on:
-- LOCAL FOOD AND DRINK: regional dishes, drinks, snacks with no direct equivalent
-- PLACE NAMES: local streets, landmarks, venues that carry cultural weight
-- DIALECT AND SLANG: words or phrases specific to a regional dialect
-- CULTURAL REFERENCES: institutions, events, social movements, sports teams
-- IDIOMS: expressions that don't translate literally
-- TITLES AND ADDRESS FORMS: regional ways of addressing people
+1. INVENTED PROPER NOUN — a character name, place name, organisation, or term the author created that does not exist in standard dictionaries (e.g. "Katniss", "Hogwarts", "the Binding", "Glimmerwood")
+2. SERIES TERMINOLOGY — a word or phrase used in a specific, defined way throughout this book or series that differs from its everyday meaning (e.g. "the Fade" meaning a specific magical state, not fading light)
+3. DELIBERATE UNTRANSLATABLE — a word the author clearly intends to keep in the source language in the translation (e.g. a French phrase in an English novel, a brand name used as a noun)
+4. AMBIGUOUS PROPER NOUN — a common word that is ALSO used as a character name or place name in this specific book, where a translator might genuinely be unsure which meaning applies (e.g. if a character is named "Boots" and the book also mentions footwear)
 
-Do NOT flag:
-- Standard English words that translate straightforwardly
-- Major internationally recognised place names (London, New York, Paris)
-- Common idioms that have well-known equivalents in most languages
-- Author names, publisher names, or copyright text
+DO NOT flag any of the following — these are never special terms:
+- Common English verbs, even short ones: sat, set, put, run, fell, rose
+- Words that look like acronyms but are used as ordinary words in context: if "sat" appears in "she sat on the bench", it is a verb, not the SAT exam
+- Standard structural words: Chapter, Part, Section, Introduction, Conclusion, Prologue, Epilogue, Foreword, Afterword, Acknowledgements
+- Common everyday nouns in standard use: boots, chair, window, door, clock
+- Common adjectives and adverbs in standard use
+- Words that are only capitalised because they begin a sentence
+- Standard titles used in normal ways: Doctor, Professor, Captain, Lord (flag these ONLY if the book uses them as a character's actual name rather than their title, e.g. a character who is only ever called "Doctor")
 
-For each term, provide a short example sentence from the text (under 120 chars)
-showing how it's used, and a default suggestion for what a translator would do
-if the author gives no instruction.
+CONTEXT CHECK — before flagging any word, read the full sentence it appears in. Ask: is this word being used in a completely standard, everyday way? If yes, do not flag it.
 
-Limit to the 20 most translation-significant terms. If there are fewer, return fewer.
-If there are none, return an empty array.
+Examples of what NOT to flag:
+- "She sat quietly on the bench" → sat is a verb, skip it
+- "He laced up his boots" → boots is a common noun, skip it
+- "See Chapter 3 for details" → Chapter is structural, skip it
+- "The SAT results arrived" → SAT is a standard exam name, skip it (unless this book has invented something called SAT)
+
+Examples of what TO flag:
+- "She entered the Fade" → Fade appears to be a special term in this world
+- "Kael watched from the Thornwood" → Thornwood is likely an invented place
+- "He spoke to the Binding" → Binding used as a proper noun concept
+
+For each flagged term, provide:
+- category: one of food_drink, place_name, dialect_slang, cultural_reference, proper_noun, idiom, title_honorific
+- example: a short sentence from the text (under 120 chars) showing how it's used
+- suggestion: what we'd do by default — e.g. 'keep in English', 'translate to [equivalent]', 'use local equivalent'
+
+Limit to the 20 most translation-significant terms. If there are fewer, return fewer. If there are none, return an empty array.
 
 Source language: {sourceLanguage}
 Target languages: {targetLanguages}
@@ -152,11 +163,34 @@ export async function extractCulturalTerms(
       replacement: undefined,
     }))
 
-    const summary = terms.length === 0
-      ? 'No culturally specific terms found — translation can proceed without author input.'
-      : `Found ${terms.length} term${terms.length !== 1 ? 's' : ''} that need your input before translation starts.`
+    // Case-insensitive deduplication: merge entries like "sat", "Sat", "SAT".
+    // Prefer the capitalised/proper-noun form when the same word appears both
+    // as a common word and as a proper noun in different places.
+    const deduped: CulturalTerm[] = []
+    const seen = new Map<string, CulturalTerm>()
+    for (const term of terms) {
+      const key = term.term.toLowerCase()
+      const existing = seen.get(key)
+      if (!existing) {
+        seen.set(key, term)
+      } else {
+        const existingIsProper = /^[A-Z]/.test(existing.term)
+        const newIsProper = /^[A-Z]/.test(term.term)
+        if (newIsProper && !existingIsProper) {
+          seen.set(key, {
+            ...term,
+            example: `${term.example} (also seen as '${existing.term}' in common usage)`,
+          })
+        }
+      }
+    }
+    deduped.push(...Array.from(seen.values()))
 
-    return { terms, hasTerms: terms.length > 0, summary }
+    const summary = deduped.length === 0
+      ? 'No culturally specific terms found — translation can proceed without author input.'
+      : `Found ${deduped.length} term${deduped.length !== 1 ? 's' : ''} that need your input before translation starts.`
+
+    return { terms: deduped, hasTerms: deduped.length > 0, summary }
 
   } catch (e) {
     console.warn('[CulturalTerms] Extraction failed (non-fatal):', e)
