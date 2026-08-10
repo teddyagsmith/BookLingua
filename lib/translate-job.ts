@@ -4,7 +4,6 @@ import { getSupabaseAdmin } from '@/lib/supabase'
 import { buildDownloadUrl, buildFeedbackUrl } from '@/lib/download-token'
 import { generateLaunchStrategy } from '@/lib/launch-strategy'
 import { Resend } from 'resend'
-import { PIPELINE_VERSION } from './pipeline-version'
 import type { Segment } from '@/lib/extract-segments'
 import crypto from 'crypto'
 import { extractStyleProfile, storeStyleProfile, loadStylePrompt } from './style-extractor'
@@ -193,27 +192,18 @@ export const translateBook = inngest.createFunction(
 
     // ── Step 2: Extract segment metadata (non-fatal) ──
     await step.run('extract-segment-metadata', async () => {
-      // Check existing segments and their pipeline version
+      // Check existing segments and reuse if available
       const { data: existing } = await getSupabaseAdmin()
         .from('files')
-        .select('id, pipeline_version')
+        .select('id')
         .eq('order_id', orderId)
         .eq('type', 'segments')
         .maybeSingle()
 
-      // If segments exist and version matches, skip re-extraction
-      if (existing && existing.pipeline_version === PIPELINE_VERSION) {
-        console.log(`[Pipeline] Reusing cached segments (version ${PIPELINE_VERSION})`)
-        return
-      }
-
-      // If stale version, delete old segments before re-extracting
+      // If segments exist, skip re-extraction
       if (existing) {
-        console.log(`[Pipeline] Stale segment cache (was ${existing.pipeline_version}, current ${PIPELINE_VERSION}) — re-extracting`)
-        await getSupabaseAdmin().from('files')
-          .delete()
-          .eq('order_id', orderId)
-          .eq('type', 'segments')
+        console.log('[Pipeline] Reusing cached segments')
+        return
       }
 
       if (!originalBuffer) return
@@ -227,9 +217,8 @@ export const translateBook = inngest.createFunction(
             type: 'segments',
             language: 'en',
             content: JSON.stringify(segments.map(s => ({ id: s.id, type: s.type, level: s.level }))),
-            pipeline_version: PIPELINE_VERSION,
-          })
-          console.log(`[Pipeline] Stored ${segments.length} segment metadata (${quality.headingCount} headings) [${PIPELINE_VERSION}]`)
+          }, { onConflict: 'order_id,type,language' })
+          console.log(`[Pipeline] Stored ${segments.length} segment metadata (${quality.headingCount} headings)`)
         }
       } catch (e) {
         console.warn('[Pipeline] Segment extraction failed (non-fatal):', e)
@@ -596,20 +585,17 @@ ORIGINAL: [term] | KEPT AS: [term] | REASON: [why untranslated]
         await getSupabaseAdmin().from('files').insert({
           order_id: orderId, type: 'translated', language: langCode,
           content: editorialResult, original_content: translatedText,
-          pipeline_version: PIPELINE_VERSION,
         })
         if (translationNotesParsed) {
           await getSupabaseAdmin().from('files').insert({
             order_id: orderId, type: 'notes', language: langCode,
             content: translationNotesParsed,
-            pipeline_version: PIPELINE_VERSION,
           })
         }
         if (emailSummary) {
           await getSupabaseAdmin().from('files').insert({
             order_id: orderId, type: 'email_summary', language: langCode,
             content: emailSummary,
-            pipeline_version: PIPELINE_VERSION,
           })
         }
       })

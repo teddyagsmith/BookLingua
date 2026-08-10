@@ -107,7 +107,6 @@ export async function POST(request: NextRequest) {
           type: 'original',
           language: 'en',
           content: tempUpload.content,
-          pipeline_version: process.env.PIPELINE_VERSION || 'unknown',
         })
 
         // Carry over pre-payment glossary decisions and cultural terms if present
@@ -117,7 +116,6 @@ export async function POST(request: NextRequest) {
             type: 'glossary',
             language: 'en',
             content: JSON.stringify(tempUpload.glossary_decisions),
-            pipeline_version: process.env.PIPELINE_VERSION || 'unknown',
           })
         }
         if (tempUpload.cultural_terms) {
@@ -126,7 +124,6 @@ export async function POST(request: NextRequest) {
             type: 'cultural_terms',
             language: 'en',
             content: JSON.stringify(tempUpload.cultural_terms),
-            pipeline_version: process.env.PIPELINE_VERSION || 'unknown',
           })
         }
 

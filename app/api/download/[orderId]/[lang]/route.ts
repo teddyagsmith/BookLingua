@@ -657,7 +657,7 @@ export async function GET(
     if (!order) return NextResponse.json({ error: 'Order not found' }, { status: 404 })
     if (order.status !== 'completed' && order.status !== 'pending_review') return NextResponse.json({ error: 'Translation not yet complete' }, { status: 400 })
 
-    const { data: file } = await getSupabaseAdmin()
+    const { data: file, error: fileError } = await getSupabaseAdmin()
       .from('files')
       .select('content')
       .eq('order_id', orderId)
@@ -667,7 +667,24 @@ export async function GET(
       .limit(1)
       .maybeSingle()
 
-    if (!file) return NextResponse.json({ error: 'Translation not found' }, { status: 404 })
+    if (!file) {
+      // Diagnostic: count available files for this order so we can debug missing rows
+      const { data: availableFiles } = await getSupabaseAdmin()
+        .from('files')
+        .select('type, language')
+        .eq('order_id', orderId)
+      console.error(`[Download] Translated file not found for order ${orderId} lang ${lang}. Available files:`, availableFiles)
+      return NextResponse.json(
+        {
+          error: 'Translation not found',
+          orderId,
+          lang,
+          availableFiles: availableFiles || [],
+          dbError: fileError?.message || null,
+        },
+        { status: 404 }
+      )
+    }
 
     const langName    = LANG_NAMES[lang]    || lang
     const langDisplay = LANG_DISPLAY[lang]  || lang
