@@ -783,8 +783,10 @@ export async function GET(
       const { join } = await import('path')
 
       // ── Artifact gate: scan translated text before building ──────────────
-      const { detectArtifacts } = await import('@/lib/artifact-gate')
-      const artifactCheck = detectArtifacts(file.content)
+      // Final EPUB must be completely free of pipeline markers; strip everything first.
+      const { detectArtifacts, stripAllMarkers } = await import('@/lib/artifact-gate')
+      const cleanContent = stripAllMarkers(file.content)
+      const artifactCheck = detectArtifacts(cleanContent)
       if (!artifactCheck.clean) {
         console.error('[Artifact Gate] Violations in translated text:', artifactCheck.violations)
         return NextResponse.json({
@@ -798,7 +800,7 @@ export async function GET(
       const outputPath  = join(tmpDir, 'output.epub')
       const bcpLang = lang === 'es-latam' ? 'es' : lang
 
-      writeFileSync(contentPath, file.content)
+      writeFileSync(contentPath, cleanContent)
 
       // ── Try template-based builder first ─────────────────────────────────
       const { data: structureFile } = await getSupabaseAdmin()
