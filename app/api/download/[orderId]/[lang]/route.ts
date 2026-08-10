@@ -777,13 +777,7 @@ export async function GET(
 
     // ── Final version: clean, in effective format ──
     if (effectiveFormat === '.epub') {
-      const { execSync } = await import('child_process')
-      const { writeFileSync, mkdtempSync, readFileSync, rmSync } = await import('fs')
-      const { tmpdir } = await import('os')
-      const { join } = await import('path')
-
-      // ── Artifact gate: scan translated text before building ──────────────
-      // Final EPUB must be completely free of pipeline markers; strip everything first.
+      // Strip all pipeline markers for clean output, then run artifact gate
       const { detectArtifacts, stripAllMarkers } = await import('@/lib/artifact-gate')
       const cleanContent = stripAllMarkers(file.content)
       const artifactCheck = detectArtifacts(cleanContent)
@@ -795,80 +789,19 @@ export async function GET(
         }, { status: 500 })
       }
 
-      const tmpDir = mkdtempSync(join(tmpdir(), 'booklingua-epub-'))
-      const contentPath = join(tmpDir, 'content.txt')
-      const outputPath  = join(tmpDir, 'output.epub')
-      const bcpLang = lang === 'es-latam' ? 'es' : lang
-
-      writeFileSync(contentPath, cleanContent)
-
-      // ── Try template-based builder first ─────────────────────────────────
-      const { data: structureFile } = await getSupabaseAdmin()
-        .from('files')
-        .select('content')
-        .eq('order_id', orderId)
-        .eq('type', 'structure')
-        .eq('language', 'en')
-        .maybeSingle()
-
-      let scriptPath: string
-      let scriptArgs: string
-
-      if (structureFile?.content) {
-        // Template-based: structure comes from template, content from translation
-        const templatePath = join(tmpDir, 'template.json')
-        writeFileSync(templatePath, structureFile.content)
-        scriptPath = join(process.cwd(), 'scripts', 'build_epub_from_template.py')
-        scriptArgs =
-          `--template "${templatePath}" ` +
-          `--translated "${contentPath}" ` +
-          `--output "${outputPath}" ` +
-          `--title "${order.book_title.replace(/"/g, '\\"')}" ` +
-          `--author "Translated by BookLingua" ` +
-          `--lang "${bcpLang}"`
-        console.log('[BookLingua] Using template-based EPUB builder')
-      } else {
-        // Legacy: derive structure from translated text
-        scriptPath = join(process.cwd(), 'scripts', 'build_epub.py')
-        scriptArgs =
-          `--content "${contentPath}" ` +
-          `--output "${outputPath}" ` +
-          `--title "${order.book_title.replace(/"/g, '\\"')}" ` +
-          `--author "Translated by BookLingua" ` +
-          `--lang "${bcpLang}"`
-        console.log('[BookLingua] Using legacy EPUB builder (no template found)')
+      try {
+        const buffer = await buildFinalEpub(cleanContent, order.book_title, langDisplay, lang)
+        return new NextResponse(new Uint8Array(buffer), {
+          headers: {
+            'Content-Type': 'application/epub+zip',
+            'Content-Disposition': `attachment; filename="${safeTitle}_${langName}_Final.epub"`,
+            'Cache-Control': 'no-store, must-revalidate',
+          },
+        })
+      } catch (epubErr) {
+        console.error('[BookLingua] Node EPUB builder failed:', epubErr)
+        return NextResponse.json({ error: 'EPUB generation failed' }, { status: 500 })
       }
-
-      execSync(`python3 "${scriptPath}" ${scriptArgs}`, {
-        encoding: 'utf-8',
-        maxBuffer: 10 * 1024 * 1024,
-      })
-
-      const buffer = readFileSync(outputPath)
-
-      // Validate with epubcheck
-      const { validateEpub } = await import('@/lib/epub-validator')
-      const validation = validateEpub(buffer)
-      if (!validation.valid) {
-        console.error('[BookLingua] EPUB validation failed:', validation.output)
-        rmSync(tmpDir, { recursive: true, force: true })
-        return NextResponse.json({
-          error: 'EPUB validation failed',
-          details: validation.errors,
-          warnings: validation.warnings,
-        }, { status: 500 })
-      }
-      console.log('[BookLingua] EPUB validation passed: 0 errors, 0 warnings')
-
-      rmSync(tmpDir, { recursive: true, force: true })
-
-      return new NextResponse(new Uint8Array(buffer), {
-        headers: {
-          'Content-Type': 'application/epub+zip',
-          'Content-Disposition': `attachment; filename="${safeTitle}_${langName}_Final.epub"`,
-          'Cache-Control': 'no-store, must-revalidate',
-        },
-      })
     }
     if (fileFormat === '.txt') {
       const clean = stripHighlightMarkers(file.content)
