@@ -291,13 +291,36 @@ export async function POST(request: NextRequest) {
       // Run a lightweight segment assessment on the text. For DOCX the raw text is
       // already in temp_uploads.content; for TXT/EPUB we use the same text.
       const paragraphs = textToScan.split(/\n\n+/).map(p => p.trim()).filter(p => p.length > 0)
-      const segments = paragraphs.map((text, i) => ({
-        id: i,
-        type: /^\s*(Chapter|Chapitre|Capítulo|Kapitel|Capitolo|Part|Section)\s+\d|^\s*\d+\.\s+\w/.test(text) ? 'heading' as const : 'paragraph' as const,
-        level: 0,
-        text,
-        styleName: 'none',
-      }))
+      const segments = paragraphs.map((text, i) => {
+        // Markdown-style headings (#, ##, ###, etc.)
+        const markdownHeading = text.match(/^#{1,6}\s+(.+)$/)
+        if (markdownHeading) {
+          return {
+            id: i,
+            type: 'heading' as const,
+            level: text.match(/^#+/)![0].length,
+            text: markdownHeading[1],
+            styleName: 'none',
+          }
+        }
+        // Chapter-like heuristic headings
+        if (/^\s*(Chapter|Chapitre|Capítulo|Kapitel|Capitolo|Part|Section)\s+\d|^\s*\d+\.\s+\w/.test(text)) {
+          return {
+            id: i,
+            type: 'heading' as const,
+            level: 1,
+            text,
+            styleName: 'none',
+          }
+        }
+        return {
+          id: i,
+          type: 'paragraph' as const,
+          level: 0,
+          text,
+          styleName: 'none',
+        }
+      })
       quality = assessQuality(segments)
     } catch (e) {
       console.warn('[scan-text] Quality assessment failed:', e)

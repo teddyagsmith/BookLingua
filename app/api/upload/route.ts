@@ -107,14 +107,14 @@ function stripHTML(html: string): string {
     .replace(/<style\b[^>]*>[\s\S]*?<\/style>/gi, '')
     .replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, '')
 
-  // 2. Convert structural headings to markers
+  // 2. Convert structural headings to markdown headings (preserved after tag stripping)
   text = text
-    .replace(/<h1\b[^>]*>([\s\S]*?)<\/h1>/gi, '\n\n###H1:$1###\n\n')
-    .replace(/<h2\b[^>]*>([\s\S]*?)<\/h2>/gi, '\n\n###H2:$1###\n\n')
-    .replace(/<h3\b[^>]*>([\s\S]*?)<\/h3>/gi, '\n\n###H3:$1###\n\n')
-    .replace(/<h4\b[^>]*>([\s\S]*?)<\/h4>/gi, '\n\n###H4:$1###\n\n')
-    .replace(/<h5\b[^>]*>([\s\S]*?)<\/h5>/gi, '\n\n###H5:$1###\n\n')
-    .replace(/<h6\b[^>]*>([\s\S]*?)<\/h6>/gi, '\n\n###H6:$1###\n\n')
+    .replace(/<h1\b[^>]*>([\s\S]*?)<\/h1>/gi, '\n\n# $1\n\n')
+    .replace(/<h2\b[^>]*>([\s\S]*?)<\/h2>/gi, '\n\n## $1\n\n')
+    .replace(/<h3\b[^>]*>([\s\S]*?)<\/h3>/gi, '\n\n### $1\n\n')
+    .replace(/<h4\b[^>]*>([\s\S]*?)<\/h4>/gi, '\n\n#### $1\n\n')
+    .replace(/<h5\b[^>]*>([\s\S]*?)<\/h5>/gi, '\n\n##### $1\n\n')
+    .replace(/<h6\b[^>]*>([\s\S]*?)<\/h6>/gi, '\n\n###### $1\n\n')
 
   // 3. Convert paragraphs
   text = text.replace(/<p\b[^>]*>([\s\S]*?)<\/p>/gi, '$1\n\n')
