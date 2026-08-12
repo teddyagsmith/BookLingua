@@ -36,6 +36,27 @@ Work is being performed on an isolated branch based directly on the live product
 ## Migrations created but not applied
 
 1. `20260812_pipeline_hardening_source.sql`
+2. `20260812_pipeline_hardening_state.sql`
+
+### A3–A5 — Status correctness, terminal failure handling and normalized state schema
+
+- Status: COMPLETE
+- Files changed:
+  - `lib/order-status.ts`
+  - `lib/pipeline-events.ts`
+  - `lib/translate-job.ts`
+  - `app/admin/page.tsx`
+  - `supabase/migrations/20260812_pipeline_hardening_state.sql`
+  - `supabase/migrations/README_PIPELINE_HARDENING.md`
+  - `tests/order-status.test.ts`
+- Implementation: Central status type includes `qa_blocked`, `gate_failed` and `ready_for_review`; admin renders those states. Moving to `pending_review` clears rather than sets `completed_at`. Inngest now has an explicit three-retry policy and terminal `onFailure` handler that stores a concise redacted failure, timestamp, stage and an admin-alert-required pipeline event. Normalized tables were added for pipeline events, validation reports, artifacts and package manifests.
+- Tests:
+  - `npx tsx --test tests/source-manifest.test.ts tests/order-status.test.ts` — 4 passed, 0 failed
+  - `npx tsc --noEmit` — passed
+  - `npm run build` — passed (existing Next.js config warning)
+  - `git diff --check` — passed
+- Risks: Failure persistence depends on the unapplied state migration. The handler deliberately records an alert requirement but does not send real email; canonical manifest-based alert rendering is B7.
+- Teddy review: Confirm desired naming transition between current `pending_review` and future `ready_for_review` before enabling the hardened package path.
 
 ## Safety confirmation
 

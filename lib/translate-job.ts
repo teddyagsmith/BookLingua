@@ -8,6 +8,7 @@ import type { Segment } from '@/lib/extract-segments'
 import crypto from 'crypto'
 import { extractStyleProfile, storeStyleProfile, loadStylePrompt } from './style-extractor'
 import { extractCulturalTerms, storeCulturalTerms, loadGlossaryPrompt } from './cultural-term-extractor'
+import { recordTerminalFailure } from './pipeline-events'
 
 const anthropic = new Anthropic({
   apiKey: process.env.ANTHROPIC_API_KEY,
@@ -187,7 +188,24 @@ function parse4PartResponse(text: string): {
 }
 
 export const translateBook = inngest.createFunction(
-  { id: 'translate-book' },
+  {
+    id: 'translate-book',
+    retries: 3,
+    onFailure: async ({ event, error }) => {
+      const originalEvent = event.data.event
+      const orderId = originalEvent.data.orderId as string | undefined
+      if (!orderId) {
+        console.error('[BookLingua] Terminal failure without orderId:', error)
+        return
+      }
+      await recordTerminalFailure({
+        supabase: getSupabaseAdmin(),
+        orderId,
+        stage: 'translation_job',
+        error,
+      })
+    },
+  },
   [{ event: 'book.translate' }, { event: 'book/translate.requested' }],
   async ({ event, step }) => {
     // Handle both event formats
@@ -756,7 +774,7 @@ doc.save('${rawDocxPath}')
 
     await getSupabaseAdmin().from('orders').update({
       status: 'pending_review',
-      completed_at: new Date().toISOString(),
+      completed_at: null,
       api_cost: parseFloat(actualCost.toFixed(4)),
       margin_pct: parseFloat(actualMargin),
     }).eq('id', orderId)

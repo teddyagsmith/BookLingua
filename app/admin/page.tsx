@@ -1,6 +1,7 @@
 'use client'
 
 import React, { useState, useEffect, useCallback } from 'react'
+import type { OrderStatus } from '@/lib/order-status'
 
 type Order = {
   id: string
@@ -12,7 +13,7 @@ type Order = {
   amount_paid: number
   api_cost: number | null
   margin_pct: number | null
-  status: 'pending' | 'processing' | 'completed' | 'failed' | 'pending_review' | 'needs_review'
+  status: OrderStatus
   created_at: string
   completed_at: string | null
   upsells: string[] | null
@@ -50,6 +51,9 @@ const STATUS_COLORS: Record<string, string> = {
   pending: 'bg-yellow-100 text-yellow-800',
   pending_review: 'bg-orange-100 text-orange-800',
   needs_review: 'bg-red-100 text-red-900',
+  qa_blocked: 'bg-red-200 text-red-950',
+  gate_failed: 'bg-red-200 text-red-950',
+  ready_for_review: 'bg-emerald-100 text-emerald-900',
 }
 
 const LANG_NAMES: Record<string, string> = {
