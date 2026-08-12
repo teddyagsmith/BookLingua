@@ -35,7 +35,7 @@ test('known-good EPUB and DOCX preserve Chapter 10/11 sequence', async () => {
   for (const [kind, buffer] of [['epub', syntheticEpub(fixture)], ['docx', await syntheticDocx(fixture)]] as const) {
     const result = validateExpectedChapterSequence(validateArtifact(buffer, kind), ['10', '11'])
     assert.equal(result.passed, true, JSON.stringify(result.errors))
-    if (kind === 'epub') assert.deepEqual(result.metrics.navigationHeadings, ['Contents'])
+    if (kind === 'epub') assert.deepEqual(result.metrics.navigationHeadings, ['Chapter 10', 'Chapter 11'])
   }
 })
 
@@ -53,6 +53,49 @@ test('empty chapter and Roman/Arabic duplicate identity fail', () => {
     { heading: 'Chapter I', body: 'One.' }, { heading: 'Chapter 1', body: 'Duplicate one.' },
   ]), 'epub')
   assert.ok(duplicate.errors.some(issue => issue.code === 'DUPLICATE_CHAPTER_NUMBER'))
+})
+
+test('nested namespaced EPUB resolves attribute-independent manifest and validates nav parity', () => {
+  const zip: any = new AdmZip()
+  zip.addFile('mimetype', Buffer.from('application/epub+zip'))
+  zip.addFile('META-INF/container.xml', Buffer.from(`<c:container xmlns:c="urn:oasis:names:tc:opendocument:xmlns:container"><c:rootfiles><c:rootfile full-path="OPS/package/book.opf" media-type="application/oebps-package+xml"/></c:rootfiles></c:container>`))
+  zip.addFile('OPS/package/book.opf', Buffer.from(`<opf:package xmlns:opf="http://www.idpf.org/2007/opf"><opf:manifest><opf:item href="../Text/chapter.xhtml" id="chapter" media-type="application/xhtml+xml"/><opf:item properties="nav" media-type="application/xhtml+xml" id="nav" href="../Nav/nav.xhtml"/></opf:manifest><opf:spine><opf:itemref idref="chapter"/></opf:spine></opf:package>`))
+  zip.addFile('OPS/Text/chapter.xhtml', Buffer.from(`<x:html xmlns:x="http://www.w3.org/1999/xhtml"><x:body><x:h1>Chapter XI</x:h1><x:p>Body.</x:p></x:body></x:html>`))
+  zip.addFile('OPS/Nav/nav.xhtml', Buffer.from(`<html><body><nav><a href="../Text/chapter.xhtml">Chapter 11</a></nav></body></html>`))
+  const result = validateExpectedChapterSequence(validateArtifact(zip.toBuffer(), 'epub'), ['11'])
+  assert.equal(result.passed, true, JSON.stringify(result.errors))
+})
+
+test('EPUB navigation mismatch and malformed spine fail', () => {
+  const zip: any = new AdmZip()
+  zip.addFile('mimetype', Buffer.from('application/epub+zip'))
+  zip.addFile('META-INF/container.xml', Buffer.from(`<container><rootfile full-path="OEBPS/content.opf"/></container>`))
+  zip.addFile('OEBPS/content.opf', Buffer.from(`<package><manifest><item id="c" href="c.xhtml" media-type="application/xhtml+xml"/><item id="n" href="nav.xhtml" media-type="application/xhtml+xml" properties="nav"/></manifest><spine><itemref idref="c"/><itemref idref="missing"/></spine></package>`))
+  zip.addFile('OEBPS/c.xhtml', Buffer.from(`<html><body><h1>Chapter 1</h1><p>Body.</p></body></html>`))
+  zip.addFile('OEBPS/nav.xhtml', Buffer.from(`<html><body><a>Chapter 2</a></body></html>`))
+  const codes = validateArtifact(zip.toBuffer(), 'epub').errors.map(e => e.code)
+  assert.ok(codes.includes('EPUB_SPINE_ITEM'))
+  assert.ok(codes.includes('EPUB_NAV_MISMATCH'))
+})
+
+test('DOCX reconstructs markers and markdown split across runs and validates relationships', () => {
+  const zip: any = new AdmZip()
+  zip.addFile('[Content_Types].xml', Buffer.from(`<Types><Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/></Types>`))
+  zip.addFile('_rels/.rels', Buffer.from(`<Relationships><Relationship Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/></Relationships>`))
+  zip.addFile('word/_rels/document.xml.rels', Buffer.from('<Relationships/>'))
+  zip.addFile('word/document.xml', Buffer.from(`<w:document xmlns:w="urn:w"><w:body><w:p><w:pPr><w:pStyle w:val="Heading1"/></w:pPr><w:r><w:t>Chapter 1</w:t></w:r></w:p><w:p><w:r><w:t>===SEG</w:t></w:r><w:r><w:t>MENT===</w:t></w:r></w:p><w:p><w:r><w:t>#</w:t></w:r><w:r><w:t> Visible markdown</w:t></w:r></w:p></w:body></w:document>`))
+  const codes = validateArtifact(zip.toBuffer(), 'docx').errors.map(e => e.code)
+  assert.ok(codes.includes('LEAKED_MARKER'))
+  assert.ok(codes.includes('VISIBLE_MARKDOWN'))
+})
+
+test('DOCX missing declared document relationship fails', () => {
+  const zip: any = new AdmZip()
+  zip.addFile('[Content_Types].xml', Buffer.from(`<Types><Override PartName="/word/document.xml"/></Types>`))
+  zip.addFile('_rels/.rels', Buffer.from('<Relationships/>'))
+  zip.addFile('word/_rels/document.xml.rels', Buffer.from('<Relationships/>'))
+  zip.addFile('word/document.xml', Buffer.from('<w:document><w:body/></w:document>'))
+  assert.ok(validateArtifact(zip.toBuffer(), 'docx').errors.some(e => e.code === 'DOCX_RELATIONSHIPS'))
 })
 
 test('missing and duplicate chapter numbers hard-fail', () => {
