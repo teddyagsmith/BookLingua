@@ -96,7 +96,7 @@ Work is being performed on an isolated branch based directly on the live product
   - `npx tsc --noEmit` — passed
   - `npm run build` — passed (existing Next.js config warning)
   - `git diff --check` — passed
-- Risks: Existing scanner decisions have heterogeneous choice names and may lack source context; the v1 mapper preserves what exists but cannot invent missing context. The UI still needs explicit blocking handling of a save failure before this is production-ready.
+- Risks: Existing scanner decisions have heterogeneous choice names and may lack source context; the v1 mapper preserves what exists but cannot invent missing context. The UI now blocks progression on save failure, but checkout/session expiry behavior still needs an end-to-end browser test.
 - Teddy review: Confirm whether an empty author decision set should count as an approved empty brief (current behavior) or require an explicit “no special decisions” acknowledgement.
 
 ### D1–D6 — Disabled semantic-v2 groundwork and chapter map
@@ -167,6 +167,112 @@ Work is being performed on an isolated branch based directly on the live product
   - `git diff --check` — passed
 - Risks: `lib/launch-strategy.ts` still has limited legacy market configuration and is not invoked by the production job. It would be unsafe to claim automated Launch Pack delivery yet.
 - NEEDS_REVIEW: Choose the canonical market mapping and whether to port the richer manual Launch Pack generator before wiring generation. No new marketing content was invented.
+
+## Commit list
+
+1. `838a6554` — preserve source binaries and manifests
+2. `168103fe` — record pipeline failures and statuses
+3. `4c3e0f7c` — add artifact regression infrastructure
+4. `170cc5b6` — persist per-language translation briefs
+5. `86307e09` — add disabled semantic-v2 contracts
+6. `9fef8bf9` — add hardened package contracts
+7. `3692ae58` — version customer package assets
+
+All commits are on `booklingua/pipeline-hardening-v2`, based directly on live production commit `040dfa034b836af9fe6a935163d3570793bd0c7a`. The Hollow King rebuild commit is not an ancestor of this branch.
+
+## Tasks completed
+
+- A1–A6: completed as compatible application/migration/test groundwork.
+- B1, B2, B4–B9: reusable components completed; stored-artifact download compatibility added.
+- C1–C3: completed for new source-manifest/hardened orders with legacy fallback.
+- D1–D6: completed as disabled semantic-v2 groundwork only.
+- E1–E3: schemas, validation and completeness rules completed; Launch Pack generation remains unwired.
+
+## Tasks blocked or intentionally not completed
+
+### B3 — Full prebuild integration into the translation job
+
+- Status: NEEDS_REVIEW, not implemented.
+- Reason: The current live translation still produces flattened text, while trustworthy prebuilt EPUB/DOCX artifacts require the semantic eligibility threshold and builder parity to be agreed first. Wiring partial prebuild now would risk presenting heuristic artifacts as hardened output.
+- Safe progress completed: immutable artifact storage, binary validators, package manifest/gate, stored-download lookup, Pass 1/Review builders and tests.
+
+### B4 — EPUB TOC/heading parity beyond deterministic chapter sequence
+
+- Status: PARTIAL / NEEDS_REVIEW.
+- Current validator checks actual ZIP readability, content files, headings/chapter sequence, duplication, markers, markdown and emptiness. Full nav/NCX-to-spine-to-heading parity is not yet implemented.
+
+### E1 — Production Launch Pack generation
+
+- Status: NEEDS_REVIEW, not wired.
+- Reason: The tracked generator and richer manual generator diverge, and the tracked market map does not cover all current locale variants. Schema/entitlement validation is ready; choosing/porting the canonical generator requires product review.
+
+### Real admin alert dispatch
+
+- Status: PREPARED, not sent/wired.
+- Terminal failures persist an `adminAlertRequired` event. Canonical PASS/FAIL email rendering exists. No real email dispatch was added because the work block prohibited sending email and manifest-based job integration remains under review.
+
+## NEEDS_REVIEW decisions
+
+1. Parser-confidence threshold for automatic semantic-v2 eligibility.
+2. Whether an explicitly approved empty translation brief is sufficient.
+3. Canonical Launch Pack implementation and complete locale/market mapping.
+4. Final status naming: retain `pending_review` externally or transition hardened packages to `ready_for_review`.
+5. Artifact-validator thresholds, especially substantial duplication and heading rules.
+6. EPUB nav/NCX parity requirements and treatment of EPUBs without a valid navigation document.
+7. Whether TXT packages require both final DOCX and source-like TXT output.
+
+## Feature flags and version boundaries
+
+- Source manifest schema: `1.0`.
+- Translation brief schema: `1.0`.
+- Artifact validator: `1.0`.
+- Package manifest: `1.0`.
+- Review contract: `1.0`.
+- Email templates: `1.0`.
+- Translation notes: `1.0`.
+- Launch Pack: `1.0`.
+- Semantic document/node batches: `2.0`.
+- `SEMANTIC_V2_ENABLED` is true only for `PIPELINE_VERSION=semantic-v2`; no production job enters that path in this branch.
+- Translation cache migration defaults existing/current rows to `legacy-v1`; semantic-v2 uses a schema and structure fingerprint. No cache was invalidated.
+- Orders without a source manifest remain legacy-compatible.
+
+## Known risks
+
+1. New application writes require all four migrations to exist first.
+2. Supabase `uploads` and `book-files` privacy, retention and download policies require environment verification.
+3. Upload/session/checkout behavior needs a non-production browser test after migrations.
+4. DOCX semantic confidence inherits the existing style/heuristic extractor.
+5. Hardened package components are intentionally not yet an end-to-end Inngest path.
+6. The legacy approval QA path remains broken as documented in the audit; this branch does not pretend the new package gate has replaced it.
+7. `npm install` reports existing dependency vulnerabilities; no broad dependency upgrade was attempted because it is outside this work block and could be breaking.
+8. Next.js 14.2 still warns that `serverExternalPackages` is unrecognized in `next.config.js`.
+
+## Recommended review and deployment sequence
+
+1. Review commits independently in the order listed above.
+2. Run CI and repeat tests in a clean Node 20 checkout without production environment values.
+3. Review SQL, then apply migrations in order to a staging Supabase project only.
+4. Verify private storage buckets/policies and exercise synthetic EPUB/DOCX/TXT upload → checkout linking in staging.
+5. Review translation-brief UI and prompt snapshots; confirm both passes use the same fingerprint.
+6. Review semantic parser confidence on synthetic and licensed internal fixtures; choose the eligibility threshold.
+7. Implement/approve B3 in a new commit: semantic builders, actual-byte validation, manifest persistence and atomic gate.
+8. Add full EPUB navigation parity tests before enabling the hard package gate.
+9. Choose and wire the canonical Launch Pack generator behind the hardened path.
+10. Perform a staging-only end-to-end order with email transport mocked/sandboxed.
+11. Only after Teddy review: apply production migrations, deploy the compatible groundwork with semantic-v2 still disabled, and monitor.
+12. Enable hardened/semantic-v2 only for explicitly versioned new orders after artifact parity passes; never mix legacy and v2 chunks.
+
+## Final validation results
+
+- `npm test` — PASS: 20 tests, 0 failures.
+- `npx tsc --noEmit` — PASS.
+- `npm run build` — PASS: compiled, type/lint checks passed, 32/32 static pages generated.
+- `git diff --check` — PASS.
+- Full branch diff from production `git diff 040dfa...HEAD --check` — PASS.
+- Existing warnings only:
+  - Next.js 14.2 does not recognize `serverExternalPackages` in `next.config.js`.
+  - Browserslist data is six months old.
+- No customer fixture/content was used; all regression inputs are synthetic.
 
 ## Safety confirmation
 
