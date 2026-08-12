@@ -38,6 +38,7 @@ Work is being performed on an isolated branch based directly on the live product
 1. `20260812_pipeline_hardening_source.sql`
 2. `20260812_pipeline_hardening_state.sql`
 3. `20260812_pipeline_hardening_briefs.sql`
+4. `20260812_pipeline_hardening_cache.sql`
 
 ### A3–A5 — Status correctness, terminal failure handling and normalized state schema
 
@@ -97,6 +98,29 @@ Work is being performed on an isolated branch based directly on the live product
   - `git diff --check` — passed
 - Risks: Existing scanner decisions have heterogeneous choice names and may lack source context; the v1 mapper preserves what exists but cannot invent missing context. The UI still needs explicit blocking handling of a save failure before this is production-ready.
 - Teddy review: Confirm whether an empty author decision set should count as an approved empty brief (current behavior) or require an explicit “no special decisions” acknowledgement.
+
+### D1–D6 — Disabled semantic-v2 groundwork and chapter map
+
+- Status: COMPLETE as isolated groundwork; NOT wired into live execution
+- Files changed:
+  - `lib/semantic-document.ts`
+  - `lib/semantic-parser.ts`
+  - `lib/node-translation-contract.ts`
+  - `lib/chapter-map.ts`
+  - `supabase/migrations/20260812_pipeline_hardening_cache.sql`
+  - `tests/semantic-v2.test.ts`
+- Implementation: Versioned semantic nodes carry stable ID, chapter ID, heading level, immutable source chapter number, source/translated text, order and source location. Synthetic EPUB spine, DOCX segment and TXT parsers produce ordered nodes. Pass 1/Pass 2 node output must return the exact unique ID set in order before text can merge. Cache identity distinguishes `legacy-v1` from `semantic-v2` with schema/structure fingerprints. Chapter maps render CSV and DOCX from semantic IDs.
+- Version boundary: Semantic v2 is disabled unless `PIPELINE_VERSION=semantic-v2`; no production job reads this flag or enters the node path yet.
+- Tests:
+  - `npm test` — 13 passed, 0 failed
+  - Synthetic EPUB/DOCX/TXT stable IDs and Chapter 10/11 identity passed.
+  - Missing, duplicate and reordered model node IDs fail.
+  - Semantic chapter-map CSV/DOCX generation passed.
+  - `npx tsc --noEmit` — passed
+  - `npm run build` — passed (existing Next.js config warning)
+  - `git diff --check` — passed
+- Risks: EPUB parser deliberately requires a valid OPF spine and does not silently alphabetize. DOCX confidence inherits current segment heuristics. Model-call wiring, retry behavior and semantic builders remain future reviewed work.
+- Teddy review: Decide the confidence threshold for automatic semantic-v2 eligibility; low-confidence files should block or require explicit review rather than fall back silently.
 
 ## Safety confirmation
 
