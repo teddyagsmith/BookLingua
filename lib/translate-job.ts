@@ -9,6 +9,7 @@ import crypto from 'crypto'
 import { extractStyleProfile, storeStyleProfile, loadStylePrompt } from './style-extractor'
 import { extractCulturalTerms, storeCulturalTerms, loadGlossaryPrompt } from './cultural-term-extractor'
 import { recordTerminalFailure } from './pipeline-events'
+import { loadTranslationBrief, renderTranslationBriefPrompt } from './translation-brief'
 
 const anthropic = new Anthropic({
   apiKey: process.env.ANTHROPIC_API_KEY,
@@ -409,6 +410,13 @@ export const translateBook = inngest.createFunction(
       const genreGuidance = GENRE_GUIDANCE[order.genre || 'general'] || GENRE_GUIDANCE['general']
       const stylePrompt = await loadStylePrompt(orderId, getSupabaseAdmin())
       const glossaryPrompt = await loadGlossaryPrompt(orderId, getSupabaseAdmin())
+      const { data: sourceManifestFile } = await getSupabaseAdmin().from('files')
+        .select('id').eq('order_id', orderId).eq('type', 'source_manifest').maybeSingle()
+      const translationBrief = await loadTranslationBrief(getSupabaseAdmin(), orderId, langCode)
+      if (sourceManifestFile && !translationBrief) {
+        throw new Error(`Required translation brief missing for hardened order language ${langCode}`)
+      }
+      const briefPrompt = translationBrief ? renderTranslationBriefPrompt(translationBrief) : glossaryPrompt
 
       // Pass 1: Translation
       const chunks = chunkText(fileContent, MAX_CHUNK_WORDS)
@@ -449,7 +457,7 @@ GENRE & STYLE:
 ${genreGuidance}
 
 ${stylePrompt}
-${glossaryPrompt}`,
+${briefPrompt}`,
             messages: [{
               role: 'user',
               content: `Translate the following excerpt into ${langName}. This is part ${i + 1} of ${chunks.length} — maintain consistent style.
@@ -522,7 +530,9 @@ ${langSettings}
 GENRE & STYLE:
 ${genreGuidance}
 
-${stylePrompt}`,
+${stylePrompt}
+
+${briefPrompt}`,
             messages: [{
               role: 'user',
               content: `TASK: Review and improve this translation${chunkLabel}.

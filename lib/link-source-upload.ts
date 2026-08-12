@@ -1,4 +1,5 @@
 import { SupabaseClient } from '@supabase/supabase-js'
+import { storeTranslationBriefs } from './translation-brief'
 
 interface TempUploadSource {
   content: string
@@ -8,12 +9,15 @@ interface TempUploadSource {
   source_sha256?: string | null
   source_size_bytes?: number | null
   source_manifest?: unknown
+  glossary_decisions?: unknown
+  glossary_saved_at?: string | null
 }
 
 export async function linkSourceUploadToOrder(
   supabase: SupabaseClient,
   orderId: string,
   tempUpload: TempUploadSource,
+  languages: string[],
 ): Promise<void> {
   const metadata = {
     filename: tempUpload.file_name || null,
@@ -40,5 +44,20 @@ export async function linkSourceUploadToOrder(
       content: JSON.stringify(tempUpload.source_manifest),
     })
     if (manifestError) throw new Error(`Failed to link source manifest: ${manifestError.message}`)
+
+    const manifest = tempUpload.source_manifest as { sourceHash?: string }
+    const decisions = Array.isArray(tempUpload.glossary_decisions)
+      ? tempUpload.glossary_decisions
+      : typeof tempUpload.glossary_decisions === 'string'
+        ? JSON.parse(tempUpload.glossary_decisions)
+        : []
+    await storeTranslationBriefs({
+      supabase,
+      orderId,
+      languages,
+      sourceManifestFingerprint: manifest.sourceHash || 'unknown',
+      approvedAt: tempUpload.glossary_saved_at || new Date().toISOString(),
+      decisions,
+    })
   }
 }

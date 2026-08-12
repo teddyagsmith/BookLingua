@@ -37,6 +37,7 @@ Work is being performed on an isolated branch based directly on the live product
 
 1. `20260812_pipeline_hardening_source.sql`
 2. `20260812_pipeline_hardening_state.sql`
+3. `20260812_pipeline_hardening_briefs.sql`
 
 ### A3–A5 — Status correctness, terminal failure handling and normalized state schema
 
@@ -75,6 +76,27 @@ Work is being performed on an isolated branch based directly on the live product
   - `git diff --check` — passed
 - Risks: EPUB TOC-to-heading validation and expected-chapter linkage require package/source manifests in later B work. DOCX heading detection currently uses Word heading styles, deliberately avoiding speculative visual inference.
 - Teddy review: None required for the test-discovery boundary; validator thresholds should be reviewed before enabling a hard live gate.
+
+### C1–C3 — Durable per-language translation brief
+
+- Status: COMPLETE for new hardened orders
+- Files changed:
+  - `lib/translation-brief.ts`
+  - `lib/link-source-upload.ts`
+  - `app/api/save-glossary/route.ts`
+  - `app/api/checkout/route.ts`
+  - `app/api/webhook/route.ts`
+  - `lib/translate-job.ts`
+  - `supabase/migrations/20260812_pipeline_hardening_briefs.sql`
+  - `tests/translation-brief.test.ts`
+- Implementation: Author decisions are mapped to an immutable v1 brief for every selected target language, tied to the source SHA-256 and approval timestamp. New source-manifest orders fail closed if a language brief is missing. The exact same rendered brief and fingerprint are explicitly included in both Pass 1 and Pass 2. Legacy orders without a source manifest retain the current glossary fallback.
+- Tests:
+  - `npm test` — 10 passed, 0 failed
+  - `npx tsc --noEmit` — passed
+  - `npm run build` — passed (existing Next.js config warning)
+  - `git diff --check` — passed
+- Risks: Existing scanner decisions have heterogeneous choice names and may lack source context; the v1 mapper preserves what exists but cannot invent missing context. The UI still needs explicit blocking handling of a save failure before this is production-ready.
+- Teddy review: Confirm whether an empty author decision set should count as an approved empty brief (current behavior) or require an explicit “no special decisions” acknowledgement.
 
 ## Safety confirmation
 

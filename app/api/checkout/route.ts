@@ -278,7 +278,7 @@ export async function POST(request: NextRequest) {
           .single()
 
         if (tempUpload) {
-          await linkSourceUploadToOrder(getSupabaseAdmin(), order.id, tempUpload)
+          await linkSourceUploadToOrder(getSupabaseAdmin(), order.id, tempUpload, selectedLanguages)
 
           // Carry over pre-payment glossary decisions and cultural terms if present
           if (tempUpload.glossary_decisions) {
