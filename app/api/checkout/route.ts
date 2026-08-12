@@ -228,6 +228,11 @@ export async function POST(request: NextRequest) {
 
     const authoritativeWordCount = authoritativeUpload ? Number(authoritativeUpload.word_count) : Number(wordCount)
     const authoritativeFileFormat = authoritativeUpload ? String(authoritativeUpload.file_format) : String(fileFormat)
+    if (!Array.isArray(selectedLanguages) || selectedLanguages.length === 0
+      || selectedLanguages.some(language => typeof language !== 'string' || !/^[a-z]{2}(?:-[a-z]{2,5})?$/i.test(language))
+      || new Set(selectedLanguages).size !== selectedLanguages.length) {
+      return NextResponse.json({ error: 'Invalid target languages' }, { status: 400 })
+    }
 
     // ✅ SECURITY: Recalculate price server-side — ignore any client-submitted totalAmount
     // Also validate tier against word count — correct it if client sent wrong tier

@@ -103,6 +103,7 @@ test('migrations encode atomic all-language gate, immutable briefs, versioned ca
   assert.match(cache, /translation_chunks_versioned_identity_key/)
   assert.match(source, /booklingua-private-sources/)
   assert.match(source, /public\)\s*values[\s\S]*false/i)
+  assert.match(source, /translation_requested_at/)
 })
 
 test('hardened behavior defaults disabled and admin supports both review states', () => {

@@ -11,7 +11,10 @@ alter table temp_uploads
 alter table orders
   add column if not exists source_linked_at timestamptz,
   add column if not exists source_upload_id uuid unique,
-  add column if not exists webhook_completed_at timestamptz;
+  add column if not exists webhook_completed_at timestamptz,
+  add column if not exists confirmation_sent_at timestamptz,
+  add column if not exists admin_notification_sent_at timestamptz,
+  add column if not exists translation_requested_at timestamptz;
 
 comment on column temp_uploads.source_storage_path is
   'Private Supabase Storage path for the exact uploaded source binary.';

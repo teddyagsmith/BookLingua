@@ -135,11 +135,14 @@ export async function POST(request: NextRequest) {
         if (!HARDENED_V1_ENABLED) await getSupabaseAdmin().from('temp_uploads').delete().eq('session_id', sessionId)
       } else {
         console.error(`No temp upload found for sessionId: ${sessionId}`)
+        if (HARDENED_V1_ENABLED) throw new Error('Hardened source upload is unavailable for linkage')
       }
     }
 
-    // 3. Send confirmation email to customer
-    await getResend().emails.send({
+    // 3. Send confirmation email to customer. Hardened retries resume from the
+    // first unrecorded external stage instead of repeating every side effect.
+    if (!HARDENED_V1_ENABLED || !order.confirmation_sent_at) {
+      await getResend().emails.send({
       from: 'BookLingua <orders@booklingua.io>',
       to: customerEmail,
       subject: `Order Confirmed: ${bookTitle} Translation`,
@@ -172,10 +175,16 @@ export async function POST(request: NextRequest) {
           <p>Best,<br>The BookLingua Team</p>
         </div>
       `,
-    })
+      })
+      if (HARDENED_V1_ENABLED) {
+        const { error } = await getSupabaseAdmin().from('orders').update({ confirmation_sent_at: new Date().toISOString() }).eq('id', order.id)
+        if (error) throw new Error(`Confirmation stage persistence failed: ${error.message}`)
+      }
+    }
 
     // 4. Send notification to admin
-    await getResend().emails.send({
+    if (!HARDENED_V1_ENABLED || !order.admin_notification_sent_at) {
+      await getResend().emails.send({
       from: 'BookLingua <orders@booklingua.io>',
       to: process.env.ADMIN_EMAIL!,
       subject: `🎉 New Order: ${bookTitle} - $${(session.amount_total! / 100).toFixed(2)}`,
@@ -194,17 +203,29 @@ export async function POST(request: NextRequest) {
         <hr>
         <p>Translation will start automatically.</p>
       `,
-    })
+      })
+      if (HARDENED_V1_ENABLED) {
+        const { error } = await getSupabaseAdmin().from('orders').update({ admin_notification_sent_at: new Date().toISOString() }).eq('id', order.id)
+        if (error) throw new Error(`Admin notification stage persistence failed: ${error.message}`)
+      }
+    }
 
     // 5. Trigger automatic translation via Inngest
-    await inngest.send({
-      name: 'book/translate.requested',
-      data: {
-        orderId: order.id,
-        heatLevel: heatLevel || null,
-        bookSetting: book_setting || null,
-      },
-    })
+    if (!HARDENED_V1_ENABLED || !order.translation_requested_at) {
+      await inngest.send({
+        id: `book-translate-${order.id}`,
+        name: 'book/translate.requested',
+        data: {
+          orderId: order.id,
+          heatLevel: heatLevel || null,
+          bookSetting: book_setting || null,
+        },
+      })
+      if (HARDENED_V1_ENABLED) {
+        const { error } = await getSupabaseAdmin().from('orders').update({ translation_requested_at: new Date().toISOString() }).eq('id', order.id)
+        if (error) throw new Error(`Translation request stage persistence failed: ${error.message}`)
+      }
+    }
 
     if (HARDENED_V1_ENABLED) {
       const { error: completedError } = await getSupabaseAdmin().from('orders')
