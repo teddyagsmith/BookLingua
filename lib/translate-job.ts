@@ -101,7 +101,7 @@ function stripMarkers(text: string): string {
     // Strip any leftover ===...=== delimiters (catch-all)
     .replace(/===[A-Z_\d]+===\n?/g, '')
     // Strip markdown heading syntax (when source was txt→epub)
-    .replace(/^#{1,6}\s+/gm, '')
+    .replace(/^#{1,6}\s*/gm, '')
     // Strip horizontal rules
     .replace(/^---\s*$/gm, '')
     // Normalize excessive whitespace
@@ -137,7 +137,9 @@ function validateCleanOutput(text: string, context: string): { clean: boolean; i
   
   const clean = issues.length === 0
   if (!clean) {
-    console.error(`[Validation] ${context} FAILED:`, issues.join('; '))
+    const msg = `[Validation] ${context} FAILED: ${issues.join('; ')}`
+    console.error(msg)
+    throw new Error(msg)
   }
   return { clean, issues }
 }
