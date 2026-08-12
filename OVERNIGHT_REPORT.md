@@ -122,6 +122,29 @@ Work is being performed on an isolated branch based directly on the live product
 - Risks: EPUB parser deliberately requires a valid OPF spine and does not silently alphabetize. DOCX confidence inherits current segment heuristics. Model-call wiring, retry behavior and semantic builders remain future reviewed work.
 - Teddy review: Decide the confidence threshold for automatic semantic-v2 eligibility; low-confidence files should block or require explicit review rather than fall back silently.
 
+### B1–B2, B4–B8 foundations — Deterministic package contracts and emails
+
+- Status: COMPLETE as reusable hardened-path components; B3 job integration remains NEEDS_REVIEW
+- Files changed:
+  - `lib/package-manifest.ts`
+  - `lib/artifact-store.ts`
+  - `lib/package-gate.ts`
+  - `lib/email-templates.ts`
+  - `lib/review-contract.ts`
+  - `app/api/download/[orderId]/[lang]/route.ts`
+  - `tests/package-manifest.test.ts`
+- Implementation: Package completeness is entitlement-aware and cannot pass without every required validated artifact. Immutable storage paths include artifact hashes. Gate resolution persists the manifest and resolves to `ready_for_review` or `gate_failed`. Canonical review email says PASS or FAIL with exact reasons; customer email refuses failed/incomplete packages. Pass 1 and Review DOCX are separate builders. Review meaning is fixed: yellow strikethrough is Pass 1, following yellow is Pass 2. Hardened downloads prefer stored validated bytes; legacy orders retain dynamic generation.
+- Tests:
+  - `npm test` — 17 passed, 0 failed
+  - Package missing chapter map and purchased Launch Pack fail completeness.
+  - Review PASS/FAIL rendering and customer fail-closed behavior passed.
+  - Separate Pass 1/Review DOCX generation passed.
+  - `npx tsc --noEmit` — passed
+  - `npm run build` — passed (existing Next.js config warning)
+  - `git diff --check` — passed
+- Risks: Existing order approval remains the legacy path. The hardened package builder is not yet invoked from `translate-job.ts`; activating it before semantic structure/builder parity is reviewed would be unsafe.
+- Teddy review: B3 prebuild integration should be enabled only after choosing the semantic eligibility threshold and validating builders against a synthetic end-to-end book fixture.
+
 ## Safety confirmation
 
 - Nothing deployed.

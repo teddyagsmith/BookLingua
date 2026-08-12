@@ -641,7 +641,7 @@ export async function GET(
 ) {
   const { orderId, lang } = params
   const token = request.nextUrl.searchParams.get('token')
-  const type = (request.nextUrl.searchParams.get('type') || 'review') as 'review' | 'final'
+  const type = (request.nextUrl.searchParams.get('type') || 'review') as 'review' | 'final' | 'pass1'
 
   if (!token || !verifyDownloadToken(orderId, lang, token)) {
     return NextResponse.json({ error: 'Invalid or missing download token' }, { status: 403 })
@@ -655,7 +655,40 @@ export async function GET(
       .single()
 
     if (!order) return NextResponse.json({ error: 'Order not found' }, { status: 404 })
-    if (order.status !== 'completed' && order.status !== 'pending_review') return NextResponse.json({ error: 'Translation not yet complete' }, { status: 400 })
+    if (!['completed', 'pending_review', 'ready_for_review'].includes(order.status)) return NextResponse.json({ error: 'Translation not yet complete' }, { status: 400 })
+
+    const fileFormat  = (order.file_format || '.docx').toLowerCase()
+    const upsells     = (order.upsells || []) as string[]
+    const hasDualFormat = upsells.includes('dual-format')
+    const requestedFormat = (request.nextUrl.searchParams.get('format') || fileFormat).toLowerCase()
+    const effectiveFormat = (hasDualFormat && (requestedFormat === '.epub' || requestedFormat === '.docx'))
+      ? requestedFormat
+      : fileFormat
+
+    // Hardened packages serve the exact immutable bytes that passed validation.
+    // If no artifact table/row exists, legacy orders continue through the dynamic builder below.
+    const artifactType = type === 'pass1' ? 'pass1_docx'
+      : type === 'review' ? 'review_docx'
+        : effectiveFormat === '.epub' ? 'final_epub' : 'final_docx'
+    const { data: storedArtifact } = await getSupabaseAdmin().from('artifacts')
+      .select('storage_bucket, storage_path, filename')
+      .eq('order_id', orderId).eq('language', lang).eq('artifact_type', artifactType)
+      .order('created_at', { ascending: false }).limit(1).maybeSingle()
+    if (storedArtifact) {
+      const { data: storedBytes, error: storedError } = await getSupabaseAdmin().storage
+        .from(storedArtifact.storage_bucket).download(storedArtifact.storage_path)
+      if (storedError || !storedBytes) return NextResponse.json({ error: 'Validated artifact unavailable' }, { status: 503 })
+      const buffer = Buffer.from(await storedBytes.arrayBuffer())
+      const contentType = storedArtifact.filename.endsWith('.epub')
+        ? 'application/epub+zip'
+        : 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+      return new NextResponse(buffer, { headers: {
+        'Content-Type': contentType,
+        'Content-Disposition': `attachment; filename="${storedArtifact.filename.replace(/"/g, '')}"`,
+        'X-BookLingua-Artifact': 'stored-validated',
+      } })
+    }
+    if (type === 'pass1') return NextResponse.json({ error: 'Pass 1 artifact unavailable for this legacy order' }, { status: 404 })
 
     const { data: file, error: fileError } = await getSupabaseAdmin()
       .from('files')
@@ -689,16 +722,6 @@ export async function GET(
     const langName    = LANG_NAMES[lang]    || lang
     const langDisplay = LANG_DISPLAY[lang]  || lang
     const safeTitle   = order.book_title.replace(/[^a-z0-9\s]/gi, '').trim()
-    const fileFormat  = (order.file_format || '.docx').toLowerCase()
-    const upsells     = (order.upsells || []) as string[]
-    const hasDualFormat = upsells.includes('dual-format')
-
-    // Allow format override via query param (for dual-format orders)
-    const requestedFormat = (request.nextUrl.searchParams.get('format') || fileFormat).toLowerCase()
-    const effectiveFormat = (hasDualFormat && (requestedFormat === '.epub' || requestedFormat === '.docx'))
-      ? requestedFormat
-      : fileFormat
-
     // ── Load segment metadata (if available) for type-safe building ──
     // Segment metadata tells us exactly which paragraphs are headings vs body text.
     // When present, we use segment-aware builders (no isHeading() regex guessing).
