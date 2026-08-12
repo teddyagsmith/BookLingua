@@ -249,6 +249,8 @@ export default function Home() {
   const sessionIdRef = useRef<string>('')
   const uploadTokenRef = useRef<string>('')
   const briefApprovedRef = useRef(false)
+  const scanCompletedRef = useRef(false)
+  const hardenedUploadRef = useRef(false)
   const [uploadComplete, setUploadComplete] = useState(false)
   const [uploadError, setUploadError] = useState('')
   const [scanFindings, setScanFindings] = useState<any[]>([])
@@ -461,6 +463,8 @@ export default function Home() {
         sessionIdRef.current = result.sessionId
         uploadTokenRef.current = result.uploadToken
         briefApprovedRef.current = false
+        scanCompletedRef.current = false
+        hardenedUploadRef.current = result.pipelineVersion === 'hardened-v1'
         // Use server-calculated word count for all formats (backend extraction is more accurate)
         if (result.wordCount) {
           setWordCount(result.wordCount)
@@ -494,6 +498,7 @@ export default function Home() {
 
       if (!response.ok) throw new Error('Scan failed')
       const { findings, quality } = await response.json()
+      scanCompletedRef.current = true
       setScanQuality(quality)
 
       if (findings.length > 0 || (quality && quality.issues && quality.issues.length > 0)) {
@@ -507,7 +512,12 @@ export default function Home() {
       }
     } catch (err) {
       console.error('Scan error:', err)
-      setCheckoutStep(4)
+      scanCompletedRef.current = false
+      if (hardenedUploadRef.current) {
+        alert('The pre-translation check could not be completed. Please try again before continuing.')
+      } else {
+        setCheckoutStep(4)
+      }
     }
     setScanLoading(false)
   }
@@ -573,6 +583,11 @@ export default function Home() {
     setIsProcessing(true)
 
     try {
+      if (hardenedUploadRef.current && !scanCompletedRef.current) {
+        alert('Please complete the pre-translation check before continuing.')
+        setIsProcessing(false)
+        return
+      }
       if (!briefApprovedRef.current && !(await applyScanResponses())) {
         setIsProcessing(false)
         return
@@ -1325,7 +1340,7 @@ export default function Home() {
                         </div>
                       </div>
                       <button
-                onClick={() => { setUploadedFile(null); setWordCount(0); setSelectedTier(null); setUploadComplete(false); setUploadError(''); sessionIdRef.current = ''; uploadTokenRef.current = ''; briefApprovedRef.current = false }}
+                onClick={() => { setUploadedFile(null); setWordCount(0); setSelectedTier(null); setUploadComplete(false); setUploadError(''); sessionIdRef.current = ''; uploadTokenRef.current = ''; briefApprovedRef.current = false; scanCompletedRef.current = false; hardenedUploadRef.current = false }}
                         className="text-gray-400 hover:text-red-500 transition"
                       >
                         ✕

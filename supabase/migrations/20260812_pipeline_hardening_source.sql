@@ -8,7 +8,10 @@ alter table temp_uploads
   add column if not exists source_size_bytes bigint,
   add column if not exists source_manifest jsonb;
 
-alter table orders add column if not exists source_linked_at timestamptz;
+alter table orders
+  add column if not exists source_linked_at timestamptz,
+  add column if not exists source_upload_id uuid unique,
+  add column if not exists webhook_completed_at timestamptz;
 
 comment on column temp_uploads.source_storage_path is
   'Private Supabase Storage path for the exact uploaded source binary.';
@@ -18,9 +21,11 @@ values ('booklingua-private-sources', 'booklingua-private-sources', false),
        ('booklingua-private-artifacts', 'booklingua-private-artifacts', false)
 on conflict (id) do update set public = false;
 
+drop policy if exists "Service role manages hardened source objects" on storage.objects;
 create policy "Service role manages hardened source objects" on storage.objects
   for all to service_role using (bucket_id = 'booklingua-private-sources')
   with check (bucket_id = 'booklingua-private-sources');
+drop policy if exists "Service role manages hardened artifact objects" on storage.objects;
 create policy "Service role manages hardened artifact objects" on storage.objects
   for all to service_role using (bucket_id = 'booklingua-private-artifacts')
   with check (bucket_id = 'booklingua-private-artifacts');

@@ -9,7 +9,7 @@ import crypto from 'crypto'
 import { extractStyleProfile, storeStyleProfile, loadStylePrompt } from './style-extractor'
 import { extractCulturalTerms, storeCulturalTerms, loadGlossaryPrompt } from './cultural-term-extractor'
 import { recordTerminalFailure } from './pipeline-events'
-import { assertTranslationBriefForSource, loadTranslationBrief, renderTranslationBriefPrompt } from './translation-brief'
+import { assertTranslationBriefForSource, loadTranslationBrief, renderTranslationBriefPrompt, translationBriefFingerprint } from './translation-brief'
 import { HARDENED_V1_ENABLED } from './pipeline-capabilities'
 
 const anthropic = new Anthropic({
@@ -426,6 +426,7 @@ export const translateBook = inngest.createFunction(
         assertTranslationBriefForSource(translationBrief, langCode, sourceHash)
       }
       const briefPrompt = translationBrief ? renderTranslationBriefPrompt(translationBrief) : glossaryPrompt
+      const cacheFingerprint = translationBrief ? `brief:${translationBriefFingerprint(translationBrief)}` : 'legacy'
 
       // Pass 1: Translation
       const chunks = chunkText(fileContent, MAX_CHUNK_WORDS)
@@ -436,7 +437,7 @@ export const translateBook = inngest.createFunction(
         const chunkResult = await step.run(`translate-${langCode}-chunk-${i}`, async () => {
           let cacheQuery = getSupabaseAdmin().from('translation_chunks').select('content, input_tokens, output_tokens')
             .eq('order_id', orderId).eq('lang_code', langCode).eq('chunk_index', i).eq('pass', 'sonnet')
-          if (HARDENED_V1_ENABLED) cacheQuery = cacheQuery.eq('pipeline_version', 'legacy-v1').eq('schema_version', '1.0').eq('structure_fingerprint', 'legacy')
+          if (HARDENED_V1_ENABLED) cacheQuery = cacheQuery.eq('pipeline_version', 'legacy-v1').eq('schema_version', '1.0').eq('structure_fingerprint', cacheFingerprint)
           const { data: cached } = await cacheQuery.maybeSingle()
           if (cached?.content) {
             return { text: cached.content, input: cached.input_tokens || 0, output: cached.output_tokens || 0 }
@@ -478,7 +479,7 @@ ${chunk}`,
           const cacheRow = {
             order_id: orderId, lang_code: langCode, chunk_index: i, pass: 'sonnet',
             content: text, input_tokens: response.usage.input_tokens, output_tokens: response.usage.output_tokens,
-            ...(HARDENED_V1_ENABLED ? { pipeline_version: 'legacy-v1', schema_version: '1.0', structure_fingerprint: 'legacy' } : {}),
+            ...(HARDENED_V1_ENABLED ? { pipeline_version: 'legacy-v1', schema_version: '1.0', structure_fingerprint: cacheFingerprint } : {}),
           }
           await getSupabaseAdmin().from('translation_chunks').upsert(cacheRow, { onConflict: HARDENED_V1_ENABLED ? 'order_id,lang_code,chunk_index,pass,pipeline_version,schema_version,structure_fingerprint' : 'order_id,lang_code,chunk_index,pass' })
 
@@ -522,7 +523,7 @@ ${chunk}`,
         const editorialResult = await step.run(`editorial-${langCode}-chunk-${i}`, async () => {
           let cacheQuery = getSupabaseAdmin().from('translation_chunks').select('content, input_tokens, output_tokens')
             .eq('order_id', orderId).eq('lang_code', langCode).eq('chunk_index', i).eq('pass', 'opus')
-          if (HARDENED_V1_ENABLED) cacheQuery = cacheQuery.eq('pipeline_version', 'legacy-v1').eq('schema_version', '1.0').eq('structure_fingerprint', 'legacy')
+          if (HARDENED_V1_ENABLED) cacheQuery = cacheQuery.eq('pipeline_version', 'legacy-v1').eq('schema_version', '1.0').eq('structure_fingerprint', cacheFingerprint)
           const { data: cached } = await cacheQuery.maybeSingle()
           if (cached?.content) return { text: cached.content, input: cached.input_tokens || 0, output: cached.output_tokens || 0 }
 
@@ -603,7 +604,7 @@ ORIGINAL: [term] | KEPT AS: [term] | REASON: [why untranslated]
           const cacheRow = {
             order_id: orderId, lang_code: langCode, chunk_index: i, pass: 'opus',
             content: text, input_tokens: response.usage.input_tokens, output_tokens: response.usage.output_tokens,
-            ...(HARDENED_V1_ENABLED ? { pipeline_version: 'legacy-v1', schema_version: '1.0', structure_fingerprint: 'legacy' } : {}),
+            ...(HARDENED_V1_ENABLED ? { pipeline_version: 'legacy-v1', schema_version: '1.0', structure_fingerprint: cacheFingerprint } : {}),
           }
           await getSupabaseAdmin().from('translation_chunks').upsert(cacheRow, { onConflict: HARDENED_V1_ENABLED ? 'order_id,lang_code,chunk_index,pass,pipeline_version,schema_version,structure_fingerprint' : 'order_id,lang_code,chunk_index,pass' })
 

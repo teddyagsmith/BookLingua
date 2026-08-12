@@ -4,6 +4,8 @@ import { getSupabaseAdmin } from '@/lib/supabase'
 import { inngest } from '@/lib/inngest'
 import { linkSourceUploadToOrder } from '@/lib/link-source-upload'
 import { verifyUploadIdentity } from '@/lib/upload-identity'
+import { HARDENED_V1_ENABLED } from '@/lib/pipeline-capabilities'
+import { assertHardenedUploadReady } from '@/lib/hardened-upload'
 import { Resend } from 'resend'
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
@@ -208,13 +210,28 @@ export async function POST(request: NextRequest) {
       bookSetting,
       affiliateCode,
     } = body
-    if (!verifyUploadIdentity(sessionId, uploadToken)) {
+    if (HARDENED_V1_ENABLED && !verifyUploadIdentity(sessionId, uploadToken)) {
       return NextResponse.json({ error: 'Invalid or expired upload session' }, { status: 403 })
     }
 
+    let authoritativeUpload: any = null
+    if (HARDENED_V1_ENABLED) {
+      const { data, error } = await getSupabaseAdmin().from('temp_uploads')
+        .select('session_id, file_format, word_count, source_storage_path, source_storage_bucket, source_sha256, source_size_bytes, source_manifest, glossary_saved_at')
+        .eq('session_id', sessionId).maybeSingle()
+      try { if (error) throw error; assertHardenedUploadReady(data, sessionId) }
+      catch {
+        return NextResponse.json({ error: 'The uploaded source or translation brief is incomplete. Please upload again.' }, { status: 409 })
+      }
+      authoritativeUpload = data
+    }
+
+    const authoritativeWordCount = authoritativeUpload ? Number(authoritativeUpload.word_count) : Number(wordCount)
+    const authoritativeFileFormat = authoritativeUpload ? String(authoritativeUpload.file_format) : String(fileFormat)
+
     // ✅ SECURITY: Recalculate price server-side — ignore any client-submitted totalAmount
     // Also validate tier against word count — correct it if client sent wrong tier
-    const validatedTier = determineTierFromWordCount(wordCount)
+    const validatedTier = determineTierFromWordCount(authoritativeWordCount)
     if (tier !== validatedTier) {
       console.warn(`Tier mismatch: client sent ${tier} for ${wordCount} words, corrected to ${validatedTier}`)
     }
@@ -252,9 +269,9 @@ export async function POST(request: NextRequest) {
         email: email.toLowerCase().trim(),
         author_name: authorName,
         book_title: bookTitle,
-        word_count: parseInt(wordCount as unknown as string, 10),
+        word_count: authoritativeWordCount,
         tier: validatedTier,
-        file_format: fileFormat,
+        file_format: authoritativeFileFormat,
         languages: selectedLanguages,
         genre: selectedGenre || null,
         upsells: selectedUpsells || [],
@@ -283,10 +300,15 @@ export async function POST(request: NextRequest) {
           .single()
 
         if (tempUpload) {
-          await linkSourceUploadToOrder(getSupabaseAdmin(), order.id, tempUpload, selectedLanguages)
+          try {
+            await linkSourceUploadToOrder(getSupabaseAdmin(), order.id, tempUpload, selectedLanguages)
+          } catch (linkError) {
+            if (HARDENED_V1_ENABLED) await getSupabaseAdmin().from('orders').delete().eq('id', order.id).eq('status', 'pending')
+            throw linkError
+          }
 
           // Carry over pre-payment glossary decisions and cultural terms if present
-          if (tempUpload.glossary_decisions) {
+          if (!HARDENED_V1_ENABLED && tempUpload.glossary_decisions) {
             await getSupabaseAdmin().from('files').insert({
               order_id: order.id,
               type: 'glossary',
@@ -294,7 +316,7 @@ export async function POST(request: NextRequest) {
               content: JSON.stringify(tempUpload.glossary_decisions),
             })
           }
-          if (tempUpload.cultural_terms) {
+          if (!HARDENED_V1_ENABLED && tempUpload.cultural_terms) {
             await getSupabaseAdmin().from('files').insert({
               order_id: order.id,
               type: 'cultural_terms',
@@ -303,15 +325,15 @@ export async function POST(request: NextRequest) {
             })
           }
 
-          await getSupabaseAdmin().from('temp_uploads').delete().eq('session_id', sessionId)
+          if (!HARDENED_V1_ENABLED) await getSupabaseAdmin().from('temp_uploads').delete().eq('session_id', sessionId)
         }
       }
 
       // Send customer confirmation and admin notification for free orders
       await sendOrderConfirmationAndNotifyAdmin(order, {
         bookTitle,
-        wordCount,
-        fileFormat,
+        wordCount: authoritativeWordCount,
+        fileFormat: authoritativeFileFormat,
         languages: selectedLanguages,
         selectedGenre: selectedGenre || '',
         upsells: selectedUpsells || [],
@@ -348,7 +370,7 @@ export async function POST(request: NextRequest) {
           currency: 'usd',
           product_data: {
             name: `Book Translation: ${bookTitle}`,
-            description: `${wordCount.toLocaleString()} words (${validatedTier}) → ${selectedLanguages.join(', ').toUpperCase()} • ${fileFormat.toUpperCase()} format preserved${appliedVoucher ? ` • Voucher: ${appliedVoucher}` : ''}`,
+            description: `${authoritativeWordCount.toLocaleString()} words (${validatedTier}) → ${selectedLanguages.join(', ').toUpperCase()} • ${authoritativeFileFormat.toUpperCase()} format preserved${appliedVoucher ? ` • Voucher: ${appliedVoucher}` : ''}`,
           },
           unit_amount: Math.round(finalAmount * 100), // Convert to cents
         },
@@ -367,9 +389,9 @@ export async function POST(request: NextRequest) {
       metadata: {
         authorName,
         bookTitle,
-        wordCount: wordCount.toString(),
+        wordCount: authoritativeWordCount.toString(),
         tier: validatedTier,
-        fileFormat,
+        fileFormat: authoritativeFileFormat,
         selectedLanguages: JSON.stringify(selectedLanguages),
         selectedGenre,
         heatLevel: heatLevel || '',

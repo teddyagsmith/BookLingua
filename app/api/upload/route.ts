@@ -16,6 +16,7 @@ import { buildSourceManifest, SourceFormat } from '@/lib/source-manifest'
 import { HARDENED_SOURCE_BUCKET, SOURCE_UPLOAD_BUCKET, sourceStoragePath } from '@/lib/source-binary'
 import { issueUploadIdentity } from '@/lib/upload-identity'
 import { HARDENED_V1_ENABLED } from '@/lib/pipeline-capabilities'
+import { assertSupportedSourcePackage } from '@/lib/source-upload-validation'
 
 // ---------------------------------------------------------------------------
 // EPUB text extraction
@@ -174,6 +175,7 @@ export async function POST(request: NextRequest) {
     if (!binary.length || binary.length > 50 * 1024 * 1024) {
       return NextResponse.json({ error: 'File must be between 1 byte and 50 MB' }, { status: 400 })
     }
+    if (HARDENED_V1_ENABLED) assertSupportedSourcePackage(sourceFormat, binary)
     const storagePath = sourceStoragePath(sessionId, fileExtension)
     let textContent = ''
     let wordCount = 0
@@ -259,6 +261,7 @@ export async function POST(request: NextRequest) {
       sourceManifest,
       sessionId,
       uploadToken,
+      pipelineVersion: HARDENED_V1_ENABLED ? 'hardened-v1' : 'legacy-v1',
     })
 
   } catch (error) {

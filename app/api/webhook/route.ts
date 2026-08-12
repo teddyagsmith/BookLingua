@@ -46,7 +46,7 @@ export async function POST(request: NextRequest) {
       .eq('stripe_session_id', session.id)
       .maybeSingle()
 
-    if (existingOrder && (!HARDENED_V1_ENABLED || (existingOrder as any).source_linked_at)) {
+    if (existingOrder && (!HARDENED_V1_ENABLED || (existingOrder as any).webhook_completed_at)) {
       console.log(`Webhook already processed for session ${session.id}, order ${existingOrder.id}. Skipping.`)
       return NextResponse.json({ received: true, duplicate: true })
     }
@@ -66,7 +66,7 @@ export async function POST(request: NextRequest) {
       uploadToken,
       book_setting,
     } = session.metadata!
-    if (!verifyUploadIdentity(sessionId, uploadToken)) {
+    if (HARDENED_V1_ENABLED && !verifyUploadIdentity(sessionId, uploadToken)) {
       return NextResponse.json({ error: 'Invalid upload identity' }, { status: 400 })
     }
 
@@ -103,7 +103,7 @@ export async function POST(request: NextRequest) {
     }
 
     // 2. Link uploaded file from temp_uploads to the order's files table
-    if (sessionId) {
+    if (sessionId && (!HARDENED_V1_ENABLED || !order.source_linked_at)) {
       const { data: tempUpload } = await getSupabaseAdmin()
         .from('temp_uploads')
         .select('*')
@@ -114,7 +114,7 @@ export async function POST(request: NextRequest) {
         await linkSourceUploadToOrder(getSupabaseAdmin(), order.id, tempUpload, languages)
 
         // Carry over pre-payment glossary decisions and cultural terms if present
-        if (tempUpload.glossary_decisions) {
+        if (!HARDENED_V1_ENABLED && tempUpload.glossary_decisions) {
           await getSupabaseAdmin().from('files').insert({
             order_id: order.id,
             type: 'glossary',
@@ -122,7 +122,7 @@ export async function POST(request: NextRequest) {
             content: JSON.stringify(tempUpload.glossary_decisions),
           })
         }
-        if (tempUpload.cultural_terms) {
+        if (!HARDENED_V1_ENABLED && tempUpload.cultural_terms) {
           await getSupabaseAdmin().from('files').insert({
             order_id: order.id,
             type: 'cultural_terms',
@@ -132,7 +132,7 @@ export async function POST(request: NextRequest) {
         }
 
         // Clean up temp upload
-        await getSupabaseAdmin().from('temp_uploads').delete().eq('session_id', sessionId)
+        if (!HARDENED_V1_ENABLED) await getSupabaseAdmin().from('temp_uploads').delete().eq('session_id', sessionId)
       } else {
         console.error(`No temp upload found for sessionId: ${sessionId}`)
       }
@@ -205,6 +205,12 @@ export async function POST(request: NextRequest) {
         bookSetting: book_setting || null,
       },
     })
+
+    if (HARDENED_V1_ENABLED) {
+      const { error: completedError } = await getSupabaseAdmin().from('orders')
+        .update({ webhook_completed_at: new Date().toISOString() }).eq('id', order.id)
+      if (completedError) throw new Error(`Webhook completion state failed: ${completedError.message}`)
+    }
 
     console.log(`Order ${order.id} created and translation triggered`)
   }

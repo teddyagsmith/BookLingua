@@ -11,7 +11,7 @@ export async function POST(request: NextRequest) {
     if (!sessionId || !Array.isArray(decisions)) {
       return NextResponse.json({ error: 'sessionId and decisions array required' }, { status: 400 })
     }
-    if (!verifyUploadIdentity(sessionId, uploadToken)) return NextResponse.json({ error: 'Invalid upload identity' }, { status: 403 })
+    if (HARDENED_V1_ENABLED && !verifyUploadIdentity(sessionId, uploadToken)) return NextResponse.json({ error: 'Invalid upload identity' }, { status: 403 })
 
     const update = HARDENED_V1_ENABLED ? {
       glossary_decisions: decisions,

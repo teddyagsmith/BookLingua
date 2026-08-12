@@ -12,6 +12,9 @@ create index if not exists translation_chunks_versioned_lookup_idx
 -- Replace the legacy conflict identity so legacy and semantic rows can coexist.
 alter table translation_chunks
   drop constraint if exists translation_chunks_order_id_lang_code_chunk_index_pass_key;
+drop index if exists translation_chunks_order_id_lang_code_chunk_index_pass_key;
+alter table translation_chunks
+  drop constraint if exists translation_chunks_versioned_identity_key;
 alter table translation_chunks
   add constraint translation_chunks_versioned_identity_key unique(
     order_id, lang_code, chunk_index, pass,
