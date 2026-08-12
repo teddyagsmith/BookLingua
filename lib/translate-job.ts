@@ -89,16 +89,57 @@ function detectRefusal(text: string): boolean {
 
 function stripMarkers(text: string): string {
   return text
+    // Strip editorial highlighting markers
     .replace(/\[\[ORIGINAL:([^\]]|\](?!\]))*\]\]/g, '')
+    // Strip segment markers (any number, START or END)
     .replace(/===SEGMENT_\d+_(START|END)===/g, '')
+    // Strip chapter/heading markers
     .replace(/###CHAPTER:[^#]*###/g, '')
     .replace(/###H[1-6]:[^#]*###/g, '')
-    // Strip translation notes block that Claude appends to the last editorial chunk
+    // Strip translation notes block
     .replace(/===TRANSLATION_NOTES===([\s\S]*?)(===END_NOTES===|$)/g, '')
-    // Strip any leftover section delimiters from the 4-part response format
-    .replace(/===\w[\w_]*===\n?/g, '')
+    // Strip any leftover ===...=== delimiters (catch-all)
+    .replace(/===[A-Z_\d]+===\n?/g, '')
+    // Strip markdown heading syntax (when source was txt→epub)
+    .replace(/^#{1,6}\s+/gm, '')
+    // Strip horizontal rules
+    .replace(/^---\s*$/gm, '')
+    // Normalize excessive whitespace
     .replace(/[^\S\n]{2,}/g, ' ')
     .trim()
+}
+
+function validateCleanOutput(text: string, context: string): { clean: boolean; issues: string[] } {
+  const issues: string[] = []
+  
+  // Check for leaked segment markers
+  const segmentMatches = text.match(/===SEGMENT_\d+_(START|END)===/g)
+  if (segmentMatches) {
+    issues.push(`Found ${segmentMatches.length} leaked segment markers (===SEGMENT_N_START/END===)`)
+  }
+  
+  // Check for leaked translation notes markers
+  if (text.includes('===TRANSLATION_NOTES===')) {
+    issues.push('Found leaked ===TRANSLATION_NOTES=== marker')
+  }
+  
+  // Check for raw markdown headings (indicates txt→epub path didn't strip)
+  const markdownHeadings = text.match(/^#{1,6}\s+\S+/gm)
+  if (markdownHeadings && markdownHeadings.length > 5) {
+    issues.push(`Found ${markdownHeadings.length} raw markdown headings (##/### etc) — txt→epub stripping failed`)
+  }
+  
+  // Check for "SEGMENT" in what looks like a heading
+  const segmentHeadings = text.match(/^\s*SEGMENT\s*\d+/gim)
+  if (segmentHeadings) {
+    issues.push(`Found ${segmentHeadings.length} "SEGMENT" in headings — marker leaked into TOC`)
+  }
+  
+  const clean = issues.length === 0
+  if (!clean) {
+    console.error(`[Validation] ${context} FAILED:`, issues.join('; '))
+  }
+  return { clean, issues }
 }
 
 function parse4PartResponse(text: string): {
@@ -520,27 +561,43 @@ ORIGINAL: [term] | KEPT AS: [term] | REASON: [why untranslated]
           return { text, input: response.usage.input_tokens, output: response.usage.output_tokens }
         })
 
-        // Try to parse the 4-part response format (notes/clean/highlighted/email/counts)
-        // If not found, fall back to treating the whole response as highlighted text
-        const parsed = parse4PartResponse(editorialResult.text)
-        
-        if (parsed.highlighted || parsed.clean) {
-          // New format: use the structured parts
-          cleanedChunks.push(parsed.highlighted || parsed.clean || editorialResult.text)
-          if (parsed.notes) collectedNotes.push(parsed.notes)
-          if (parsed.email) collectedEmails.push(parsed.email)
-          totalImprovements += parsed.counts.improvements
-          totalChapters += parsed.counts.chapters
-        } else {
-          // Old format: whole response is highlighted text
-          cleanedChunks.push(editorialResult.text)
-        }
+      // Parse editorial output and strip markers from ALL paths
+      const parsed = parse4PartResponse(editorialResult.text)
+      
+      let chunkOutput: string
+      if (parsed.highlighted || parsed.clean) {
+        // New format: use structured parts, but still strip any leaked markers
+        chunkOutput = stripMarkers(parsed.highlighted || parsed.clean || editorialResult.text)
+        if (parsed.notes) collectedNotes.push(parsed.notes)
+        if (parsed.email) collectedEmails.push(parsed.email)
+        totalImprovements += parsed.counts.improvements
+        totalChapters += parsed.counts.chapters
+      } else {
+        // Old format: whole response is highlighted text — strip markers
+        chunkOutput = stripMarkers(editorialResult.text)
+      }
+      
+      // Validate this chunk is clean before adding
+      const chunkValidation = validateCleanOutput(chunkOutput, `editorial chunk ${i}`)
+      if (!chunkValidation.clean) {
+        console.error(`[Pipeline] Chunk ${i} failed validation:`, chunkValidation.issues)
+        // Still include it but log the error — don't block entire pipeline on one chunk
+      }
+      
+      cleanedChunks.push(chunkOutput)
 
         tokenUsage.input += editorialResult.input
         tokenUsage.output += editorialResult.output
       }
 
       let editorialResult = cleanedChunks.join('\n\n')
+      
+      // ── Final validation: ensure no markers leaked into reader-facing output ──
+      const finalValidation = validateCleanOutput(editorialResult, `final ${langCode} editorial output`)
+      if (!finalValidation.clean) {
+        console.error(`[Pipeline] CRITICAL: ${langCode} output failed clean validation:`, finalValidation.issues)
+        // Log but don't throw — we need to still save for debugging, but mark for review
+      }
       const translationNotesParsed = collectedNotes.join('\n\n') || undefined
       const emailSummary = collectedEmails.join('\n\n') || undefined
 
