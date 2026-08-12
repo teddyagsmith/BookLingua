@@ -7,7 +7,12 @@ import { validateArtifact, validateExpectedChapterSequence } from '../lib/artifa
 function syntheticEpub(chapters: Array<{ heading: string; body: string }>): Buffer {
   const zip: any = new AdmZip()
   zip.addFile('mimetype', Buffer.from('application/epub+zip'))
-  zip.addFile('META-INF/container.xml', Buffer.from('<container/>'))
+  zip.addFile('META-INF/container.xml', Buffer.from(`<container><rootfiles><rootfile media-type="application/oebps-package+xml" full-path="OEBPS/content.opf"/></rootfiles></container>`))
+  const manifest = chapters.map((_, index) => `<item media-type="application/xhtml+xml" href="chapter-${index + 1}.xhtml" id="c${index + 1}"/>`).join('')
+  const spine = chapters.map((_, index) => `<itemref linear="yes" idref="c${index + 1}"/>`).join('')
+  zip.addFile('OEBPS/content.opf', Buffer.from(`<package><manifest>${manifest}<item id="nav" properties="nav" href="nav.xhtml" media-type="application/xhtml+xml"/><item href="toc.ncx" media-type="application/x-dtbncx+xml" id="ncx"/></manifest><spine toc="ncx">${spine}</spine></package>`))
+  zip.addFile('OEBPS/nav.xhtml', Buffer.from(`<html><body><nav><h1>Contents</h1>${chapters.map(c => `<a>${c.heading}</a>`).join('')}</nav></body></html>`))
+  zip.addFile('OEBPS/toc.ncx', Buffer.from('<ncx><navMap/></ncx>'))
   chapters.forEach((chapter, index) => {
     zip.addFile(`OEBPS/chapter-${index + 1}.xhtml`, Buffer.from(`<html><body><h1>${chapter.heading}</h1><p>${chapter.body}</p></body></html>`))
   })
@@ -30,7 +35,24 @@ test('known-good EPUB and DOCX preserve Chapter 10/11 sequence', async () => {
   for (const [kind, buffer] of [['epub', syntheticEpub(fixture)], ['docx', await syntheticDocx(fixture)]] as const) {
     const result = validateExpectedChapterSequence(validateArtifact(buffer, kind), ['10', '11'])
     assert.equal(result.passed, true, JSON.stringify(result.errors))
+    if (kind === 'epub') assert.deepEqual(result.metrics.navigationHeadings, ['Contents'])
   }
+})
+
+test('EPUB navigation headings are not counted as content chapters', () => {
+  const result = validateExpectedChapterSequence(validateArtifact(syntheticEpub([
+    { heading: 'Chapter 1', body: 'Body one.' }, { heading: 'Chapter 2', body: 'Body two.' },
+  ]), 'epub'), ['1', '2'])
+  assert.equal(result.passed, true, JSON.stringify(result.errors))
+})
+
+test('empty chapter and Roman/Arabic duplicate identity fail', () => {
+  const empty = validateArtifact(syntheticEpub([{ heading: 'Chapter I', body: '' }]), 'epub')
+  assert.ok(empty.errors.some(issue => issue.code === 'EMPTY_CHAPTER'))
+  const duplicate = validateArtifact(syntheticEpub([
+    { heading: 'Chapter I', body: 'One.' }, { heading: 'Chapter 1', body: 'Duplicate one.' },
+  ]), 'epub')
+  assert.ok(duplicate.errors.some(issue => issue.code === 'DUPLICATE_CHAPTER_NUMBER'))
 })
 
 test('missing and duplicate chapter numbers hard-fail', () => {
@@ -50,7 +72,7 @@ test('missing and duplicate chapter numbers hard-fail', () => {
 test('leaked markers, markdown and substantial duplicate content hard-fail', () => {
   const repeated = 'This is deliberately long synthetic prose used to verify substantial duplicate detection without using any customer manuscript content. '.repeat(2)
   const result = validateArtifact(syntheticEpub([
-    { heading: 'Chapter 1', body: `===SEGMENT===\n# Visible markdown\n${repeated}` },
+    { heading: 'Chapter 1', body: `===SEGMENT===\n# Visible markdown</p><p>${repeated}` },
     { heading: 'Chapter 2', body: repeated },
   ]), 'epub')
   const codes = result.errors.map(issue => issue.code)
