@@ -12,6 +12,8 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getSupabaseAdmin } from '@/lib/supabase'
 import mammoth from 'mammoth'
 import AdmZip from 'adm-zip'
+import { buildSourceManifest, SourceFormat } from '@/lib/source-manifest'
+import { SOURCE_UPLOAD_BUCKET, sourceStoragePath } from '@/lib/source-binary'
 
 // ---------------------------------------------------------------------------
 // EPUB text extraction
@@ -162,36 +164,27 @@ export async function POST(request: NextRequest) {
     }
 
     const fileExtension = file.name.split('.').pop()?.toLowerCase()
+    if (!fileExtension || !['txt', 'docx', 'epub'].includes(fileExtension)) {
+      return NextResponse.json({ error: 'Unsupported file type' }, { status: 400 })
+    }
+    const sourceFormat = fileExtension as SourceFormat
+    const binary = Buffer.from(await file.arrayBuffer())
+    const storagePath = sourceStoragePath(sessionId, fileExtension)
     let textContent = ''
     let wordCount = 0
 
     if (fileExtension === 'txt') {
-      textContent = await file.text()
+      textContent = binary.toString('utf8')
       wordCount = countWords(textContent)
 
     } else if (fileExtension === 'docx') {
-      const arrayBuffer = await file.arrayBuffer()
-      const result = await mammoth.extractRawText({ buffer: Buffer.from(arrayBuffer) as any })
+      const result = await mammoth.extractRawText({ buffer: binary as any })
       textContent = result.value
       wordCount = countWords(textContent)
 
     } else if (fileExtension === 'epub') {
-      const arrayBuffer = await file.arrayBuffer()
-      const buffer = Buffer.from(arrayBuffer)
-
-      // Store raw file in Supabase Storage for the translation pipeline
-      const { error: uploadError } = await getSupabaseAdmin().storage
-        .from('uploads')
-        .upload(`${sessionId}/original.epub`, buffer, {
-          contentType: 'application/epub+zip',
-          upsert: true,
-        })
-      if (uploadError) {
-        console.error('EPUB storage error:', uploadError)
-      }
-
       // Extract real text and count words
-      textContent = extractEpubText(buffer)
+      textContent = extractEpubText(binary)
       wordCount = textContent ? countWords(textContent) : Math.round(file.size / 6)
 
       // If extraction produced nothing useful, fall back to size estimate
@@ -200,26 +193,25 @@ export async function POST(request: NextRequest) {
         textContent = `[EPUB file uploaded - ${file.name}]`
       }
 
-    } else if (fileExtension === 'pdf') {
-      const arrayBuffer = await file.arrayBuffer()
-      const buffer = Buffer.from(arrayBuffer)
-
-      const { error: uploadError } = await getSupabaseAdmin().storage
-        .from('uploads')
-        .upload(`${sessionId}/original.pdf`, buffer, {
-          contentType: 'application/pdf',
-          upsert: true,
-        })
-      if (uploadError) {
-        console.error('PDF storage error:', uploadError)
-      }
-
-      wordCount = Math.round(file.size / 6)
-      textContent = `[PDF file uploaded - ${file.name}]`
-
-    } else {
-      return NextResponse.json({ error: 'Unsupported file type' }, { status: 400 })
     }
+
+    const contentType = fileExtension === 'epub'
+      ? 'application/epub+zip'
+      : fileExtension === 'docx'
+        ? 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+        : 'text/plain'
+    const { error: uploadError } = await getSupabaseAdmin().storage
+      .from(SOURCE_UPLOAD_BUCKET)
+      .upload(storagePath, binary, { contentType, upsert: true })
+    if (uploadError) throw new Error(`Original binary storage failed: ${uploadError.message}`)
+
+    const sourceManifest = buildSourceManifest({
+      binary,
+      extractedText: textContent,
+      format: sourceFormat,
+      filename: file.name,
+      wordCount,
+    })
 
     // Store in temp_uploads for the checkout flow
     const { error: contentError } = await getSupabaseAdmin()
@@ -230,6 +222,10 @@ export async function POST(request: NextRequest) {
         file_format: `.${fileExtension}`,
         content: textContent,
         word_count: wordCount,
+        source_storage_path: storagePath,
+        source_sha256: sourceManifest.sourceHash,
+        source_size_bytes: binary.length,
+        source_manifest: sourceManifest,
         created_at: new Date().toISOString(),
       })
 
@@ -242,6 +238,8 @@ export async function POST(request: NextRequest) {
       wordCount,
       fileName: file.name,
       fileFormat: `.${fileExtension}`,
+      sourceHash: sourceManifest.sourceHash,
+      sourceManifest,
     })
 
   } catch (error) {

@@ -213,7 +213,7 @@ export const translateBook = inngest.createFunction(
 
     const { data: fileData } = await getSupabaseAdmin()
       .from('files')
-      .select('content, type')
+      .select('content, type, file_url')
       .eq('order_id', orderId)
       .eq('type', 'original')
       .single()
@@ -221,6 +221,10 @@ export const translateBook = inngest.createFunction(
 
     let fileContent: string
     let originalBuffer: Buffer | null = null
+    if (fileData.file_url) {
+      const { downloadOriginalBinary } = await import('./source-binary')
+      originalBuffer = await downloadOriginalBinary(getSupabaseAdmin(), fileData.file_url)
+    }
     if (fileData.content.startsWith('{')) {
       try {
         const parsed = JSON.parse(fileData.content)

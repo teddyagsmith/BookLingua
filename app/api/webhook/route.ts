@@ -3,6 +3,7 @@ import Stripe from 'stripe'
 import { Resend } from 'resend'
 import { getSupabaseAdmin } from '@/lib/supabase'
 import { inngest } from '@/lib/inngest'
+import { linkSourceUploadToOrder } from '@/lib/link-source-upload'
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
   apiVersion: '2023-10-16',
@@ -102,12 +103,7 @@ export async function POST(request: NextRequest) {
         .single()
 
       if (tempUpload) {
-        await getSupabaseAdmin().from('files').insert({
-          order_id: order.id,
-          type: 'original',
-          language: 'en',
-          content: tempUpload.content,
-        })
+        await linkSourceUploadToOrder(getSupabaseAdmin(), order.id, tempUpload)
 
         // Carry over pre-payment glossary decisions and cultural terms if present
         if (tempUpload.glossary_decisions) {
