@@ -73,24 +73,26 @@ export async function POST(
       finalUrl: buildDownloadUrl(orderId, lang, 'final'),
     }))
 
-    // ── MANDATORY QA GATE — block delivery if gate or compare fails ──
-    const tmpDir = `/tmp/booklingua-qa-${orderId}`
-    fs.mkdirSync(tmpDir, { recursive: true })
+    // Legacy pending_review orders retain the existing text gate. Hardened
+    // ready_for_review orders were revalidated from immutable package rows above.
+    if (order.status === 'pending_review') {
+      const tmpDir = `/tmp/booklingua-qa-${orderId}`
+      fs.mkdirSync(tmpDir, { recursive: true })
 
-    // Fetch original content
-    const { data: originalFile } = await getSupabaseAdmin()
+      // Fetch original content
+      const { data: originalFile } = await getSupabaseAdmin()
       .from('files')
       .select('content')
       .eq('order_id', orderId)
       .eq('type', 'original')
       .maybeSingle()
 
-    const originalPath = path.join(tmpDir, 'original.txt')
-    fs.writeFileSync(originalPath, originalFile?.content || '')
+      const originalPath = path.join(tmpDir, 'original.txt')
+      fs.writeFileSync(originalPath, originalFile?.content || '')
 
-    let qaErrors: string[] = []
+      let qaErrors: string[] = []
 
-    for (const lang of languages) {
+      for (const lang of languages) {
       const { data: translatedFile } = await getSupabaseAdmin()
         .from('files')
         .select('content')
@@ -113,12 +115,12 @@ export async function POST(
       if (!qa.passed) {
         qaErrors.push(...qa.errors)
       }
-    }
+      }
 
     // Clean up temp files
-    try { fs.rmSync(tmpDir, { recursive: true, force: true }) } catch {}
+      try { fs.rmSync(tmpDir, { recursive: true, force: true }) } catch {}
 
-    if (qaErrors.length > 0) {
+      if (qaErrors.length > 0) {
       await getSupabaseAdmin()
         .from('orders')
         .update({
@@ -132,6 +134,7 @@ export async function POST(
         { error: 'QA check failed', details: qaErrors },
         { status: 400 }
       )
+      }
     }
     // ── END MANDATORY QA GATE ──
 

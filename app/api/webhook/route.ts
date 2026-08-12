@@ -5,6 +5,7 @@ import { getSupabaseAdmin } from '@/lib/supabase'
 import { inngest } from '@/lib/inngest'
 import { linkSourceUploadToOrder } from '@/lib/link-source-upload'
 import { verifyUploadIdentity } from '@/lib/upload-identity'
+import { HARDENED_V1_ENABLED } from '@/lib/pipeline-capabilities'
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
   apiVersion: '2023-10-16',
@@ -41,11 +42,11 @@ export async function POST(request: NextRequest) {
     // Idempotency check: ignore duplicate webhook events for the same Stripe session
     const { data: existingOrder } = await getSupabaseAdmin()
       .from('orders')
-      .select('id')
+      .select('*')
       .eq('stripe_session_id', session.id)
       .maybeSingle()
 
-    if (existingOrder) {
+    if (existingOrder && (!HARDENED_V1_ENABLED || (existingOrder as any).source_linked_at)) {
       console.log(`Webhook already processed for session ${session.id}, order ${existingOrder.id}. Skipping.`)
       return NextResponse.json({ received: true, duplicate: true })
     }
@@ -74,9 +75,10 @@ export async function POST(request: NextRequest) {
     const upsells = JSON.parse(selectedUpsells || '[]')
 
     // 1. Create order in Supabase
-    const { data: order, error: orderError } = await getSupabaseAdmin()
-      .from('orders')
-      .insert({
+    let order: any = existingOrder
+    let orderError: any = null
+    if (!order) {
+      const result = await getSupabaseAdmin().from('orders').insert({
         stripe_session_id: session.id,
         email: customerEmail,
         author_name: authorName,
@@ -90,9 +92,10 @@ export async function POST(request: NextRequest) {
         special_instructions: specialInstructions || null,
         amount_paid: session.amount_total! / 100,
         status: 'pending',
-      })
-      .select()
-      .single()
+      }).select().single()
+      order = result.data
+      orderError = result.error
+    }
 
     if (orderError) {
       console.error('Failed to create order:', orderError)

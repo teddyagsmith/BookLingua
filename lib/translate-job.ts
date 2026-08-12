@@ -500,6 +500,10 @@ ${chunk}`,
         translationPreview = translatedText.split(/\s+/).slice(0, 250).join(' ') + '…'
       }
 
+      if (translationBrief && sourceManifestFile) {
+        assertTranslationBriefForSource(translationBrief, langCode, JSON.parse(sourceManifestFile.content).sourceHash)
+      }
+
       // Pass 2: Editorial Review (NEW STRUCTURED FORMAT)
       const editorialChunks = chunkText(translatedText, MAX_EDITORIAL_CHUNK_WORDS)
       const cleanedChunks: string[] = []

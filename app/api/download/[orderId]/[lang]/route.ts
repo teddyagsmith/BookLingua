@@ -673,7 +673,7 @@ export async function GET(
       : type === 'review' ? 'review_docx'
         : effectiveFormat === '.epub' ? 'final_epub' : 'final_docx'
     let storedArtifact: any = null
-    if (HARDENED_V1_ENABLED && ['ready_for_review', 'completed'].includes(order.status)) {
+    if (HARDENED_V1_ENABLED && (order.status === 'ready_for_review' || (order.status === 'completed' && Boolean(order.source_linked_at)))) {
       const { data: packageRow } = await getSupabaseAdmin().from('package_manifests')
         .select('build_id, manifest').eq('order_id', orderId).eq('language', lang).eq('status', 'pass')
         .order('created_at', { ascending: false }).limit(1).maybeSingle()
