@@ -5,11 +5,11 @@ import { renderCustomerDeliveryEmail, renderReviewEmail } from '../lib/email-tem
 import { buildPass1Docx, buildReviewContractDocx, REVIEW_LEGEND } from '../lib/review-contract'
 
 function artifact(type: PackageArtifact['type']): PackageArtifact {
-  return { type, required: true, filename: `${type}.bin`, storageBucket: 'book-files', storagePath: `path/${type}`, sha256: 'abc', sizeBytes: 10, validationStatus: 'pass' }
+  return { id: `id-${type}`, buildId: 'build-1', type, required: true, filename: `${type}.bin`, storageBucket: 'book-files', storagePath: `path/${type}`, sha256: 'abc', sizeBytes: 10, validationStatus: 'pass' }
 }
 
 function manifest(types: PackageArtifact['type'][]): PackageManifestV1 {
-  return { schemaVersion: '1.0', orderId: 'synthetic', language: 'fr', status: 'building', entitlements: { sourceFormat: 'epub', launchPack: false, dualFormat: false }, artifacts: types.map(artifact), errors: [], generatedAt: '2026-08-12T00:00:00Z' }
+  return { schemaVersion: '1.0', orderId: 'synthetic', language: 'fr', buildId: 'build-1', status: 'building', entitlements: { sourceFormat: 'epub', launchPack: false, dualFormat: false }, artifacts: types.map(artifact), errors: [], generatedAt: '2026-08-12T00:00:00Z' }
 }
 
 const requiredEpub = ['translation_brief', 'pass1_docx', 'review_docx', 'translation_notes', 'chapter_map_docx', 'chapter_map_csv', 'upload_guide', 'final_epub'] as PackageArtifact['type'][]
