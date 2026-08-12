@@ -12,8 +12,8 @@ import {
 } from 'docx'
 import { default as EPub } from 'epub-gen-memory'
 import JSZip from 'jszip'
-import { createHash } from 'crypto'
 import { HARDENED_V1_ENABLED } from '@/lib/pipeline-capabilities'
+import { selectManifestArtifact, verifyStoredArtifact } from '@/lib/hardened-artifact'
 
 const LANG_NAMES: Record<string, string> = {
   'es-es':    'Spanish_Spain',
@@ -677,22 +677,24 @@ export async function GET(
       const { data: packageRow } = await getSupabaseAdmin().from('package_manifests')
         .select('build_id, manifest').eq('order_id', orderId).eq('language', lang).eq('status', 'pass')
         .order('created_at', { ascending: false }).limit(1).maybeSingle()
-      const manifestArtifact = packageRow?.manifest?.artifacts?.find((item: any) => item.type === artifactType && item.buildId === packageRow.build_id)
-      if (!packageRow || !manifestArtifact) return NextResponse.json({ error: 'Validated package artifact unavailable' }, { status: 409 })
+      if (!packageRow?.manifest) return NextResponse.json({ error: 'Validated package artifact unavailable' }, { status: 409 })
+      let manifestArtifact
+      try { manifestArtifact = selectManifestArtifact(packageRow.manifest, artifactType) }
+      catch { return NextResponse.json({ error: 'Validated package artifact unavailable' }, { status: 409 }) }
       const { data } = await getSupabaseAdmin().from('artifacts')
         .select('id, order_id, language, build_id, artifact_type, storage_bucket, storage_path, filename, sha256, size_bytes, validation_status, validation_report_id, validation_reports(passed)')
         .eq('id', manifestArtifact.id).eq('order_id', orderId).eq('language', lang)
         .eq('build_id', packageRow.build_id).eq('artifact_type', artifactType).eq('validation_status', 'pass').maybeSingle()
-      const report = Array.isArray(data?.validation_reports) ? data?.validation_reports[0] : data?.validation_reports
-      if (!data || report?.passed !== true) return NextResponse.json({ error: 'Artifact validation is not authoritative' }, { status: 409 })
-      storedArtifact = data
+      if (!data) return NextResponse.json({ error: 'Artifact validation is not authoritative' }, { status: 409 })
+      storedArtifact = { ...data, manifestArtifact }
     }
     if (storedArtifact) {
       const { data: storedBytes, error: storedError } = await getSupabaseAdmin().storage
         .from(storedArtifact.storage_bucket).download(storedArtifact.storage_path)
       if (storedError || !storedBytes) return NextResponse.json({ error: 'Validated artifact unavailable' }, { status: 503 })
       const buffer = Buffer.from(await storedBytes.arrayBuffer())
-      if (buffer.length !== Number(storedArtifact.size_bytes) || createHash('sha256').update(buffer).digest('hex') !== storedArtifact.sha256) {
+      try { verifyStoredArtifact({ manifestArtifact: storedArtifact.manifestArtifact, record: storedArtifact, orderId, language: lang, buildId: storedArtifact.build_id, type: artifactType, bytes: buffer }) }
+      catch {
         return NextResponse.json({ error: 'Stored artifact integrity check failed' }, { status: 409 })
       }
       const contentType = storedArtifact.filename.endsWith('.epub')

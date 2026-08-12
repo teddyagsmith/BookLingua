@@ -8,15 +8,23 @@ export async function resolvePackageGate(
 ): Promise<PackageManifestV1> {
   const manifest = await assemblePackageManifest({ supabase, ...input })
   const evaluated = evaluatePackageManifest(manifest)
-  const { error: manifestError } = await supabase.from('package_manifests').upsert({
+  const row = {
     order_id: evaluated.orderId,
     language: evaluated.language,
     build_id: evaluated.buildId,
     schema_version: evaluated.schemaVersion,
     status: evaluated.status,
     manifest: evaluated,
-  }, { onConflict: 'order_id,language,build_id' })
-  if (manifestError) throw new Error(`Package manifest persistence failed: ${manifestError.message}`)
+  }
+  const { error: manifestError } = await supabase.from('package_manifests').insert(row)
+  if (manifestError) {
+    if (manifestError.code !== '23505') throw new Error(`Package manifest persistence failed: ${manifestError.message}`)
+    const { data: existing, error: existingError } = await supabase.from('package_manifests')
+      .select('status, manifest').eq('order_id', evaluated.orderId).eq('language', evaluated.language).eq('build_id', evaluated.buildId).single()
+    if (existingError || !existing || existing.status !== evaluated.status || JSON.stringify(existing.manifest) !== JSON.stringify(evaluated)) {
+      throw new Error('Package gate retry does not match immutable persisted manifest')
+    }
+  }
 
   const { data: orderStatus, error: orderError } = await supabase.rpc('resolve_order_package_gate', { p_order_id: evaluated.orderId })
   if (orderError) throw new Error(`Package gate status update failed: ${orderError.message}`)

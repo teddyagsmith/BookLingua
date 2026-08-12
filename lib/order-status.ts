@@ -8,6 +8,7 @@ export const ORDER_STATUSES = [
   'qa_blocked',
   'gate_failed',
   'ready_for_review',
+  'delivery_pending',
 ] as const
 
 export type OrderStatus = typeof ORDER_STATUSES[number]

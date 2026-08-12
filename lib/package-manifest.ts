@@ -46,6 +46,11 @@ export interface PackageManifestV1 {
   generatedAt: string
 }
 
+export function authoritativeValidationPassed(relation: unknown): boolean {
+  if (Array.isArray(relation)) return relation.length === 1 && relation[0]?.passed === true
+  return Boolean(relation && typeof relation === 'object' && (relation as { passed?: unknown }).passed === true)
+}
+
 export async function assemblePackageManifest(input: {
   supabase: any
   orderId: string
@@ -63,7 +68,7 @@ export async function assemblePackageManifest(input: {
     id: row.id, buildId: row.build_id, type: row.artifact_type, required: true,
     filename: row.filename, storageBucket: row.storage_bucket, storagePath: row.storage_path,
     sha256: row.sha256, sizeBytes: Number(row.size_bytes), schemaVersion: row.schema_version || undefined,
-    validationStatus: row.validation_status === 'pass' && row.validation_reports?.passed === true ? 'pass' : row.validation_status,
+    validationStatus: row.validation_status === 'pass' && authoritativeValidationPassed(row.validation_reports) ? 'pass' : 'fail',
     validationReportId: row.validation_report_id || undefined,
   }))
   const upsells = Array.isArray(order.upsells) ? order.upsells : JSON.parse(order.upsells || '[]')

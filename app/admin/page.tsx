@@ -54,6 +54,7 @@ const STATUS_COLORS: Record<string, string> = {
   qa_blocked: 'bg-red-200 text-red-950',
   gate_failed: 'bg-red-200 text-red-950',
   ready_for_review: 'bg-emerald-100 text-emerald-900',
+  delivery_pending: 'bg-blue-100 text-blue-900',
 }
 
 const LANG_NAMES: Record<string, string> = {

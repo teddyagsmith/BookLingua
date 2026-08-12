@@ -51,12 +51,12 @@ export async function POST(
     if (error || !order) {
       return NextResponse.json({ error: 'Order not found' }, { status: 404 })
     }
-    if (!['pending_review', 'ready_for_review'].includes(order.status)) {
+    if (!['pending_review', 'ready_for_review', 'delivery_pending'].includes(order.status)) {
       return NextResponse.json({ error: 'Order is not pending review' }, { status: 400 })
     }
 
     const languages = (order.languages as string[]) || []
-    if (order.status === 'ready_for_review') {
+    if (['ready_for_review', 'delivery_pending'].includes(order.status)) {
       if (!HARDENED_V1_ENABLED) return NextResponse.json({ error: 'Hardened package capability is disabled' }, { status: 409 })
       for (const language of languages) {
         const { data: row } = await getSupabaseAdmin().from('package_manifests')
@@ -66,6 +66,8 @@ export async function POST(
         const authoritative = await assemblePackageManifest({ supabase: getSupabaseAdmin(), orderId, language, buildId: row.build_id })
         if (evaluatePackageManifest(authoritative).status !== 'pass') return NextResponse.json({ error: `Package changed or is incomplete for ${language}` }, { status: 409 })
       }
+      const { error: deliveryError } = await getSupabaseAdmin().rpc('begin_hardened_delivery', { p_order_id: orderId })
+      if (deliveryError) return NextResponse.json({ error: 'Package state changed before approval' }, { status: 409 })
     }
     const downloadLinks = languages.map((lang: string) => ({
       language: LANGUAGE_NAMES[lang] || lang,
@@ -167,18 +169,24 @@ export async function POST(
     `
 
     // Send the exact same email to the customer
-    await getResend().emails.send({
+    const { error: sendError } = await getResend().emails.send({
       from: 'BookLingua <orders@booklingua.io>',
       to: order.email,
       subject: `Your translations are ready: ${order.book_title} 🎉`,
       html: customerEmailHtml,
     })
+    if (sendError) throw new Error('Customer delivery email failed')
 
     // Mark order as completed
-    await getSupabaseAdmin()
+    const expectedStatus = order.status === 'pending_review' ? 'pending_review' : 'delivery_pending'
+    const { data: completedOrder, error: completedError } = await getSupabaseAdmin()
       .from('orders')
       .update({ status: 'completed', completed_at: new Date().toISOString() })
       .eq('id', orderId)
+      .eq('status', expectedStatus)
+      .select('id')
+      .maybeSingle()
+    if (completedError || !completedOrder) throw new Error('Delivery completion state update failed')
 
     return NextResponse.json({ success: true, emailSent: true })
   } catch (err) {
