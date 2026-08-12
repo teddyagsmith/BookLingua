@@ -58,6 +58,24 @@ Work is being performed on an isolated branch based directly on the live product
 - Risks: Failure persistence depends on the unapplied state migration. The handler deliberately records an alert requirement but does not send real email; canonical manifest-based alert rendering is B7.
 - Teddy review: Confirm desired naming transition between current `pending_review` and future `ready_for_review` before enabling the hardened package path.
 
+### A6 + B4 foundation — Intentional test suite and binary artifact validators
+
+- Status: COMPLETE
+- Files changed:
+  - `package.json`
+  - `.github/workflows/ci.yml`
+  - `lib/artifact-validation-v2.ts`
+  - `tests/artifact-validation.test.ts`
+- Implementation: `npm test` now discovers only intentional TypeScript tests and does not execute root diagnostic scripts. CI runs tests, type checking and production build on non-main pushes/PRs. A structured validator opens actual EPUB/DOCX ZIP bytes and hard-fails corrupt/empty packages, leaked markers, visible markdown, missing/duplicate chapter sequences, duplicate headings and substantial duplicate content.
+- Tests:
+  - `npm test` — 8 passed, 0 failed
+  - Synthetic coverage includes good EPUB/DOCX, missing chapter, duplicate chapter number, marker leak, visible markdown, duplicate substantial content and corrupt/empty packages.
+  - `npx tsc --noEmit` — passed
+  - `npm run build` — passed (existing Next.js config warning)
+  - `git diff --check` — passed
+- Risks: EPUB TOC-to-heading validation and expected-chapter linkage require package/source manifests in later B work. DOCX heading detection currently uses Word heading styles, deliberately avoiding speculative visual inference.
+- Teddy review: None required for the test-discovery boundary; validator thresholds should be reviewed before enabling a hard live gate.
+
 ## Safety confirmation
 
 - Nothing deployed.

@@ -5,7 +5,10 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
-    "start": "next start"
+    "start": "next start",
+    "test": "tsx --test tests/*.test.ts",
+    "test:types": "tsc --noEmit",
+    "check": "npm test && npm run test:types && npm run build"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.24.0",
