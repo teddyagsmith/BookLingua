@@ -39,8 +39,8 @@ export async function GET(request: NextRequest) {
     const todayOrders = orders?.filter(o => o.created_at >= todayStart) || []
     const weekOrders = orders?.filter(o => o.created_at >= weekStart) || []
     const completedOrders = orders?.filter(o => o.status === 'completed') || []
-    const failedOrders = orders?.filter(o => o.status === 'failed') || []
-    const pendingReviewOrders = orders?.filter(o => o.status === 'pending_review') || []
+    const failedOrders = orders?.filter(o => ['failed', 'qa_blocked', 'gate_failed'].includes(o.status)) || []
+    const pendingReviewOrders = orders?.filter(o => ['pending_review', 'ready_for_review'].includes(o.status)) || []
     const stuckOrders = orders?.filter(o => 
       o.status === 'processing' && o.created_at <= stuckThreshold
     ) || []

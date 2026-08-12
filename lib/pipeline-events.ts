@@ -1,5 +1,6 @@
 import { SupabaseClient } from '@supabase/supabase-js'
 import { OrderStatus } from './order-status'
+import { HARDENED_V1_ENABLED } from './pipeline-capabilities'
 
 export type PipelineEventLevel = 'info' | 'warning' | 'error'
 
@@ -15,16 +16,19 @@ export interface PipelineEventInput {
 
 export function safePipelineError(error: unknown): string {
   const raw = error instanceof Error ? error.message : String(error || 'Unknown pipeline failure')
-  return raw
-    .replace(/(sk|key|token|secret|password)[=:]\s*[^\s,;]+/gi, '$1=[REDACTED]')
-    .replace(/[\r\n\t]+/g, ' ')
-    .slice(0, 500)
+  if (/brief.*(missing|mismatch|approved|source)/i.test(raw)) return 'TRANSLATION_BRIEF_INVALID'
+  if (/source.*(missing|hash|retrieve|binary)/i.test(raw)) return 'SOURCE_INTEGRITY_FAILURE'
+  if (/quality gate|refusal|too short/i.test(raw)) return 'TRANSLATION_QUALITY_FAILURE'
+  if (/validation|artifact|package/i.test(raw)) return 'PACKAGE_VALIDATION_FAILURE'
+  if (/timeout|timed out/i.test(raw)) return 'PROVIDER_TIMEOUT'
+  return 'PIPELINE_EXECUTION_FAILURE'
 }
 
 export async function recordPipelineEvent(
   supabase: SupabaseClient,
   input: PipelineEventInput,
 ): Promise<void> {
+  if (!HARDENED_V1_ENABLED) return
   const { error } = await supabase.from('pipeline_events').insert({
     order_id: input.orderId,
     language: input.language || null,
@@ -47,14 +51,14 @@ export async function recordTerminalFailure(input: {
   const safeMessage = safePipelineError(input.error)
   const failedAt = new Date().toISOString()
 
-  const { error: updateError } = await input.supabase.from('orders').update({
+  const failureUpdate = HARDENED_V1_ENABLED ? {
     status: 'failed',
     failed_stage: input.stage,
     failure_message: safeMessage,
     failed_at: failedAt,
     completed_at: null,
-  }).eq('id', input.orderId)
-  if (updateError) console.error('[PipelineFailure] Unable to mark order failed:', updateError.message)
+  } : { status: 'failed', completed_at: null }
+  const { error: updateError } = await input.supabase.from('orders').update(failureUpdate).eq('id', input.orderId)
 
   await recordPipelineEvent(input.supabase, {
     orderId: input.orderId,
@@ -65,5 +69,6 @@ export async function recordTerminalFailure(input: {
     safeMessage,
     details: { adminAlertRequired: true, failedAt },
   })
+  if (updateError) throw new Error(`Terminal failure state persistence failed: ${updateError.message}`)
   return safeMessage
 }

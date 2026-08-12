@@ -389,7 +389,7 @@ export default function AdminPage() {
               className="flex-1 border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-violet-400"
             />
             <div className="flex gap-2 flex-wrap">
-              {['all', 'completed', 'processing', 'failed', 'pending'].map(s => (
+              {['all', 'completed', 'processing', 'failed', 'pending', 'qa_blocked', 'gate_failed'].map(s => (
                 <button
                   key={s}
                   onClick={() => setFilter(s)}
@@ -461,7 +461,7 @@ export default function AdminPage() {
                     </td>
                     <td className="px-4 py-3 text-gray-400 text-xs whitespace-nowrap">{fmtDate(o.created_at)}</td>
                   </tr>
-                  {o.status === 'pending_review' && (
+                  {['pending_review', 'ready_for_review'].includes(o.status) && (
                     <tr className="bg-orange-50">
                       <td colSpan={8} className="px-4 pb-3 pt-1">
                         {actionMsg[o.id] ? (
@@ -531,7 +531,7 @@ export default function AdminPage() {
                   </div>
                 </div>
                 <p className="text-gray-400 text-xs">{fmtDate(o.created_at)}</p>
-                {o.status === 'pending_review' && (
+                {['pending_review', 'ready_for_review'].includes(o.status) && (
                   <div className="pt-2 border-t border-orange-100">
                     {actionMsg[o.id] ? (
                       <span className="text-sm text-gray-700">{actionMsg[o.id]}</span>

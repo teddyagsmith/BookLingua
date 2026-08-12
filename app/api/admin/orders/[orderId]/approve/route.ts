@@ -5,6 +5,8 @@ import { runMandatoryQA } from '@/lib/delivery-gate'
 import { Resend } from 'resend'
 import fs from 'fs'
 import path from 'path'
+import { assemblePackageManifest, evaluatePackageManifest } from '@/lib/package-manifest'
+import { HARDENED_V1_ENABLED } from '@/lib/pipeline-capabilities'
 
 let resend: Resend | null = null
 function getResend() {
@@ -49,11 +51,22 @@ export async function POST(
     if (error || !order) {
       return NextResponse.json({ error: 'Order not found' }, { status: 404 })
     }
-    if (order.status !== 'pending_review') {
+    if (!['pending_review', 'ready_for_review'].includes(order.status)) {
       return NextResponse.json({ error: 'Order is not pending review' }, { status: 400 })
     }
 
     const languages = (order.languages as string[]) || []
+    if (order.status === 'ready_for_review') {
+      if (!HARDENED_V1_ENABLED) return NextResponse.json({ error: 'Hardened package capability is disabled' }, { status: 409 })
+      for (const language of languages) {
+        const { data: row } = await getSupabaseAdmin().from('package_manifests')
+          .select('build_id, status').eq('order_id', orderId).eq('language', language)
+          .order('created_at', { ascending: false }).limit(1).maybeSingle()
+        if (!row || row.status !== 'pass') return NextResponse.json({ error: `Package is not passed for ${language}` }, { status: 409 })
+        const authoritative = await assemblePackageManifest({ supabase: getSupabaseAdmin(), orderId, language, buildId: row.build_id })
+        if (evaluatePackageManifest(authoritative).status !== 'pass') return NextResponse.json({ error: `Package changed or is incomplete for ${language}` }, { status: 409 })
+      }
+    }
     const downloadLinks = languages.map((lang: string) => ({
       language: LANGUAGE_NAMES[lang] || lang,
       reviewUrl: buildDownloadUrl(orderId, lang, 'review'),

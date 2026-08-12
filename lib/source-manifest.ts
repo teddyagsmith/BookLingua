@@ -23,6 +23,7 @@ export interface SourceManifestV1 {
   parserStatus: ParserStatus
   parserConfidence: number
   generatedAt: string
+  structureAuthority: 'advisory'
 }
 
 export function sha256(buffer: Buffer): string {
@@ -68,5 +69,6 @@ export function buildSourceManifest(input: {
     parserStatus,
     parserConfidence,
     generatedAt: input.generatedAt || new Date().toISOString(),
+    structureAuthority: 'advisory',
   }
 }
