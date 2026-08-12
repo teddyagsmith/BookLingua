@@ -65,10 +65,9 @@ Work is being performed on an isolated branch based directly on the live product
 - Status: COMPLETE
 - Files changed:
   - `package.json`
-  - `.github/workflows/ci.yml`
   - `lib/artifact-validation-v2.ts`
   - `tests/artifact-validation.test.ts`
-- Implementation: `npm test` now discovers only intentional TypeScript tests and does not execute root diagnostic scripts. CI runs tests, type checking and production build on non-main pushes/PRs. A structured validator opens actual EPUB/DOCX ZIP bytes and hard-fails corrupt/empty packages, leaked markers, visible markdown, missing/duplicate chapter sequences, duplicate headings and substantial duplicate content.
+- Implementation: `npm test` now discovers only intentional TypeScript tests and does not execute root diagnostic scripts. A structured validator opens actual EPUB/DOCX ZIP bytes and hard-fails corrupt/empty packages, leaked markers, visible markdown, missing/duplicate chapter sequences, duplicate headings and substantial duplicate content.
 - Tests:
   - `npm test` — 8 passed, 0 failed
   - Synthetic coverage includes good EPUB/DOCX, missing chapter, duplicate chapter number, marker leak, visible markdown, duplicate substantial content and corrupt/empty packages.
@@ -177,6 +176,8 @@ Work is being performed on an isolated branch based directly on the live product
 5. `86307e09` — add disabled semantic-v2 contracts
 6. `9fef8bf9` — add hardened package contracts
 7. `3692ae58` — version customer package assets
+8. `cbe640bf` — finalize pipeline-hardening report
+9. Push-compatibility commit — remove the optional GitHub Actions workflow because the available repository token lacks GitHub's `workflow` scope. Test commands and regression coverage remain unchanged.
 
 All commits are on `booklingua/pipeline-hardening-v2`, based directly on live production commit `040dfa034b836af9fe6a935163d3570793bd0c7a`. The Hollow King rebuild commit is not an ancestor of this branch.
 
@@ -246,11 +247,12 @@ All commits are on `booklingua/pipeline-hardening-v2`, based directly on live pr
 6. The legacy approval QA path remains broken as documented in the audit; this branch does not pretend the new package gate has replaced it.
 7. `npm install` reports existing dependency vulnerabilities; no broad dependency upgrade was attempted because it is outside this work block and could be breaking.
 8. Next.js 14.2 still warns that `serverExternalPackages` is unrecognized in `next.config.js`.
+9. GitHub Actions automation is not included because GitHub rejected workflow-file updates from the available token. The explicit local test/typecheck/build commands remain available and passing.
 
 ## Recommended review and deployment sequence
 
 1. Review commits independently in the order listed above.
-2. Run CI and repeat tests in a clean Node 20 checkout without production environment values.
+2. Repeat tests in a clean Node 20 checkout without production environment values; add CI later using a GitHub credential with approved workflow scope.
 3. Review SQL, then apply migrations in order to a staging Supabase project only.
 4. Verify private storage buckets/policies and exercise synthetic EPUB/DOCX/TXT upload → checkout linking in staging.
 5. Review translation-brief UI and prompt snapshots; confirm both passes use the same fingerprint.
