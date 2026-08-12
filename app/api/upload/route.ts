@@ -13,7 +13,9 @@ import { getSupabaseAdmin } from '@/lib/supabase'
 import mammoth from 'mammoth'
 import AdmZip from 'adm-zip'
 import { buildSourceManifest, SourceFormat } from '@/lib/source-manifest'
-import { SOURCE_UPLOAD_BUCKET, sourceStoragePath } from '@/lib/source-binary'
+import { HARDENED_SOURCE_BUCKET, SOURCE_UPLOAD_BUCKET, sourceStoragePath } from '@/lib/source-binary'
+import { issueUploadIdentity } from '@/lib/upload-identity'
+import { HARDENED_V1_ENABLED } from '@/lib/pipeline-capabilities'
 
 // ---------------------------------------------------------------------------
 // EPUB text extraction
@@ -157,7 +159,7 @@ export async function POST(request: NextRequest) {
   try {
     const formData = await request.formData()
     const file = formData.get('file') as File
-    const sessionId = formData.get('sessionId') as string
+    const { uploadId: sessionId, uploadToken } = issueUploadIdentity()
 
     if (!file) {
       return NextResponse.json({ error: 'No file provided' }, { status: 400 })
@@ -169,6 +171,9 @@ export async function POST(request: NextRequest) {
     }
     const sourceFormat = fileExtension as SourceFormat
     const binary = Buffer.from(await file.arrayBuffer())
+    if (!binary.length || binary.length > 50 * 1024 * 1024) {
+      return NextResponse.json({ error: 'File must be between 1 byte and 50 MB' }, { status: 400 })
+    }
     const storagePath = sourceStoragePath(sessionId, fileExtension)
     let textContent = ''
     let wordCount = 0
@@ -200,9 +205,10 @@ export async function POST(request: NextRequest) {
       : fileExtension === 'docx'
         ? 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
         : 'text/plain'
+    const sourceBucket = HARDENED_V1_ENABLED ? HARDENED_SOURCE_BUCKET : SOURCE_UPLOAD_BUCKET
     const { error: uploadError } = await getSupabaseAdmin().storage
-      .from(SOURCE_UPLOAD_BUCKET)
-      .upload(storagePath, binary, { contentType, upsert: true })
+      .from(sourceBucket)
+      .upload(storagePath, binary, { contentType, upsert: false })
     if (uploadError) throw new Error(`Original binary storage failed: ${uploadError.message}`)
 
     const sourceManifest = buildSourceManifest({
@@ -214,23 +220,34 @@ export async function POST(request: NextRequest) {
     })
 
     // Store in temp_uploads for the checkout flow
+    const tempRow: any = HARDENED_V1_ENABLED ? {
+      session_id: sessionId,
+      file_name: file.name,
+      file_format: `.${fileExtension}`,
+      content: textContent,
+      word_count: wordCount,
+      source_storage_path: storagePath,
+      source_storage_bucket: sourceBucket,
+      source_sha256: sourceManifest.sourceHash,
+      source_size_bytes: binary.length,
+      source_manifest: sourceManifest,
+      created_at: new Date().toISOString(),
+    } : {
+      session_id: sessionId,
+      file_name: file.name,
+      file_format: `.${fileExtension}`,
+      content: textContent,
+      word_count: wordCount,
+      created_at: new Date().toISOString(),
+    }
     const { error: contentError } = await getSupabaseAdmin()
       .from('temp_uploads')
-      .upsert({
-        session_id: sessionId,
-        file_name: file.name,
-        file_format: `.${fileExtension}`,
-        content: textContent,
-        word_count: wordCount,
-        source_storage_path: storagePath,
-        source_sha256: sourceManifest.sourceHash,
-        source_size_bytes: binary.length,
-        source_manifest: sourceManifest,
-        created_at: new Date().toISOString(),
-      })
+      .upsert(tempRow)
 
     if (contentError) {
       console.error('Content storage error:', contentError)
+      await getSupabaseAdmin().storage.from(sourceBucket).remove([storagePath])
+      return NextResponse.json({ error: 'Upload metadata could not be saved' }, { status: 500 })
     }
 
     return NextResponse.json({
@@ -240,6 +257,8 @@ export async function POST(request: NextRequest) {
       fileFormat: `.${fileExtension}`,
       sourceHash: sourceManifest.sourceHash,
       sourceManifest,
+      sessionId,
+      uploadToken,
     })
 
   } catch (error) {

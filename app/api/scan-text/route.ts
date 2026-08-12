@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { verifyUploadIdentity } from '@/lib/upload-identity'
 import { getSupabaseAdmin } from '@/lib/supabase'
 import Anthropic from '@anthropic-ai/sdk'
 import { extractCulturalTerms } from '@/lib/cultural-term-extractor'
@@ -246,7 +247,8 @@ function keywordScan(text: string, languages: string[]): Finding[] {
 
 export async function POST(request: NextRequest) {
   try {
-    const { sessionId, text, genre, languages, maxFindings = 8 } = await request.json()
+    const { sessionId, uploadToken, text, genre, languages, maxFindings = 8 } = await request.json()
+    if (sessionId && !verifyUploadIdentity(sessionId, uploadToken)) return NextResponse.json({ error: 'Invalid upload identity' }, { status: 403 })
 
     let textToScan = ''
 

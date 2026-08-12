@@ -1,21 +1,25 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getSupabaseAdmin } from '@/lib/supabase'
+import { verifyUploadIdentity } from '@/lib/upload-identity'
+import { HARDENED_V1_ENABLED } from '@/lib/pipeline-capabilities'
 
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
-    const { sessionId, decisions } = body
+    const { sessionId, uploadToken, decisions } = body
 
     if (!sessionId || !Array.isArray(decisions)) {
       return NextResponse.json({ error: 'sessionId and decisions array required' }, { status: 400 })
     }
+    if (!verifyUploadIdentity(sessionId, uploadToken)) return NextResponse.json({ error: 'Invalid upload identity' }, { status: 403 })
 
+    const update = HARDENED_V1_ENABLED ? {
+      glossary_decisions: decisions,
+      glossary_saved_at: new Date().toISOString(),
+    } : { glossary_decisions: JSON.stringify(decisions) }
     const { error } = await getSupabaseAdmin()
       .from('temp_uploads')
-      .update({
-        glossary_decisions: decisions,
-        glossary_saved_at: new Date().toISOString(),
-      })
+      .update(update)
       .eq('session_id', sessionId)
       .select('session_id')
       .maybeSingle()
@@ -25,6 +29,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Failed to save decisions' }, { status: 500 })
     }
 
+    if (!HARDENED_V1_ENABLED) return NextResponse.json({ success: true, mode: 'legacy' })
     const { data: saved } = await getSupabaseAdmin()
       .from('temp_uploads')
       .select('glossary_saved_at')

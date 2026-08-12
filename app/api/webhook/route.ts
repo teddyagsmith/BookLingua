@@ -4,6 +4,7 @@ import { Resend } from 'resend'
 import { getSupabaseAdmin } from '@/lib/supabase'
 import { inngest } from '@/lib/inngest'
 import { linkSourceUploadToOrder } from '@/lib/link-source-upload'
+import { verifyUploadIdentity } from '@/lib/upload-identity'
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
   apiVersion: '2023-10-16',
@@ -61,8 +62,12 @@ export async function POST(request: NextRequest) {
       selectedUpsells,
       specialInstructions,
       sessionId,
+      uploadToken,
       book_setting,
     } = session.metadata!
+    if (!verifyUploadIdentity(sessionId, uploadToken)) {
+      return NextResponse.json({ error: 'Invalid upload identity' }, { status: 400 })
+    }
 
     const customerEmail = session.customer_email!
     const languages = JSON.parse(selectedLanguages)

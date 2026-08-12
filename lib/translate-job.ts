@@ -9,7 +9,8 @@ import crypto from 'crypto'
 import { extractStyleProfile, storeStyleProfile, loadStylePrompt } from './style-extractor'
 import { extractCulturalTerms, storeCulturalTerms, loadGlossaryPrompt } from './cultural-term-extractor'
 import { recordTerminalFailure } from './pipeline-events'
-import { loadTranslationBrief, renderTranslationBriefPrompt } from './translation-brief'
+import { assertTranslationBriefForSource, loadTranslationBrief, renderTranslationBriefPrompt } from './translation-brief'
+import { HARDENED_V1_ENABLED } from './pipeline-capabilities'
 
 const anthropic = new Anthropic({
   apiKey: process.env.ANTHROPIC_API_KEY,
@@ -232,7 +233,7 @@ export const translateBook = inngest.createFunction(
 
     const { data: fileData } = await getSupabaseAdmin()
       .from('files')
-      .select('content, type, file_url')
+      .select('content, type, file_url, original_content')
       .eq('order_id', orderId)
       .eq('type', 'original')
       .single()
@@ -242,7 +243,10 @@ export const translateBook = inngest.createFunction(
     let originalBuffer: Buffer | null = null
     if (fileData.file_url) {
       const { downloadOriginalBinary } = await import('./source-binary')
-      originalBuffer = await downloadOriginalBinary(getSupabaseAdmin(), fileData.file_url)
+      let sourceHash: string | null = null
+      let sourceBucket: string | undefined
+      try { const metadata = JSON.parse(fileData.original_content || '{}'); sourceHash = metadata.sha256 || null; sourceBucket = metadata.storageBucket || undefined } catch {}
+      originalBuffer = await downloadOriginalBinary(getSupabaseAdmin(), fileData.file_url, sourceHash, sourceBucket)
     }
     if (fileData.content.startsWith('{')) {
       try {
@@ -410,11 +414,16 @@ export const translateBook = inngest.createFunction(
       const genreGuidance = GENRE_GUIDANCE[order.genre || 'general'] || GENRE_GUIDANCE['general']
       const stylePrompt = await loadStylePrompt(orderId, getSupabaseAdmin())
       const glossaryPrompt = await loadGlossaryPrompt(orderId, getSupabaseAdmin())
-      const { data: sourceManifestFile } = await getSupabaseAdmin().from('files')
-        .select('id').eq('order_id', orderId).eq('type', 'source_manifest').maybeSingle()
-      const translationBrief = await loadTranslationBrief(getSupabaseAdmin(), orderId, langCode)
+      const { data: sourceManifestFile } = HARDENED_V1_ENABLED
+        ? await getSupabaseAdmin().from('files').select('id, content').eq('order_id', orderId).eq('type', 'source_manifest').maybeSingle()
+        : { data: null }
+      const translationBrief = sourceManifestFile ? await loadTranslationBrief(getSupabaseAdmin(), orderId, langCode) : null
       if (sourceManifestFile && !translationBrief) {
         throw new Error(`Required translation brief missing for hardened order language ${langCode}`)
+      }
+      if (sourceManifestFile && translationBrief) {
+        const sourceHash = JSON.parse(sourceManifestFile.content).sourceHash
+        assertTranslationBriefForSource(translationBrief, langCode, sourceHash)
       }
       const briefPrompt = translationBrief ? renderTranslationBriefPrompt(translationBrief) : glossaryPrompt
 
@@ -425,11 +434,10 @@ export const translateBook = inngest.createFunction(
       for (let i = 0; i < chunks.length; i++) {
         const chunk = chunks[i]
         const chunkResult = await step.run(`translate-${langCode}-chunk-${i}`, async () => {
-          const { data: cached } = await getSupabaseAdmin()
-            .from('translation_chunks')
-            .select('content, input_tokens, output_tokens')
+          let cacheQuery = getSupabaseAdmin().from('translation_chunks').select('content, input_tokens, output_tokens')
             .eq('order_id', orderId).eq('lang_code', langCode).eq('chunk_index', i).eq('pass', 'sonnet')
-            .maybeSingle()
+          if (HARDENED_V1_ENABLED) cacheQuery = cacheQuery.eq('pipeline_version', 'legacy-v1').eq('schema_version', '1.0').eq('structure_fingerprint', 'legacy')
+          const { data: cached } = await cacheQuery.maybeSingle()
           if (cached?.content) {
             return { text: cached.content, input: cached.input_tokens || 0, output: cached.output_tokens || 0 }
           }
@@ -467,10 +475,12 @@ ${chunk}`,
           })
 
           const text = response.content[0].type === 'text' ? response.content[0].text : ''
-          await getSupabaseAdmin().from('translation_chunks').upsert({
+          const cacheRow = {
             order_id: orderId, lang_code: langCode, chunk_index: i, pass: 'sonnet',
             content: text, input_tokens: response.usage.input_tokens, output_tokens: response.usage.output_tokens,
-          }, { onConflict: 'order_id,lang_code,chunk_index,pass' })
+            ...(HARDENED_V1_ENABLED ? { pipeline_version: 'legacy-v1', schema_version: '1.0', structure_fingerprint: 'legacy' } : {}),
+          }
+          await getSupabaseAdmin().from('translation_chunks').upsert(cacheRow, { onConflict: HARDENED_V1_ENABLED ? 'order_id,lang_code,chunk_index,pass,pipeline_version,schema_version,structure_fingerprint' : 'order_id,lang_code,chunk_index,pass' })
 
           return { text, input: response.usage.input_tokens, output: response.usage.output_tokens }
         })
@@ -506,11 +516,10 @@ ${chunk}`,
         const chunkLabel = editorialChunks.length > 1 ? ` (chunk ${i + 1}/${editorialChunks.length})` : ''
 
         const editorialResult = await step.run(`editorial-${langCode}-chunk-${i}`, async () => {
-          const { data: cached } = await getSupabaseAdmin()
-            .from('translation_chunks')
-            .select('content, input_tokens, output_tokens')
+          let cacheQuery = getSupabaseAdmin().from('translation_chunks').select('content, input_tokens, output_tokens')
             .eq('order_id', orderId).eq('lang_code', langCode).eq('chunk_index', i).eq('pass', 'opus')
-            .maybeSingle()
+          if (HARDENED_V1_ENABLED) cacheQuery = cacheQuery.eq('pipeline_version', 'legacy-v1').eq('schema_version', '1.0').eq('structure_fingerprint', 'legacy')
+          const { data: cached } = await cacheQuery.maybeSingle()
           if (cached?.content) return { text: cached.content, input: cached.input_tokens || 0, output: cached.output_tokens || 0 }
 
           const response = await anthropic.messages.create({
@@ -587,10 +596,12 @@ ORIGINAL: [term] | KEPT AS: [term] | REASON: [why untranslated]
           })
 
           const text = response.content[0].type === 'text' ? response.content[0].text : ''
-          await getSupabaseAdmin().from('translation_chunks').upsert({
+          const cacheRow = {
             order_id: orderId, lang_code: langCode, chunk_index: i, pass: 'opus',
             content: text, input_tokens: response.usage.input_tokens, output_tokens: response.usage.output_tokens,
-          }, { onConflict: 'order_id,lang_code,chunk_index,pass' })
+            ...(HARDENED_V1_ENABLED ? { pipeline_version: 'legacy-v1', schema_version: '1.0', structure_fingerprint: 'legacy' } : {}),
+          }
+          await getSupabaseAdmin().from('translation_chunks').upsert(cacheRow, { onConflict: HARDENED_V1_ENABLED ? 'order_id,lang_code,chunk_index,pass,pipeline_version,schema_version,structure_fingerprint' : 'order_id,lang_code,chunk_index,pass' })
 
           return { text, input: response.usage.input_tokens, output: response.usage.output_tokens }
         })

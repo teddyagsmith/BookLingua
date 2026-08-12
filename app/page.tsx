@@ -246,7 +246,9 @@ export default function Home() {
   const [voucherApplied, setVoucherApplied] = useState<{ code: string; discount: number; type: string; discountAmount: string } | null>(null)
   const [voucherError, setVoucherError] = useState('')
   const [voucherLoading, setVoucherLoading] = useState(false)
-  const sessionIdRef = useRef<string>(crypto.randomUUID())
+  const sessionIdRef = useRef<string>('')
+  const uploadTokenRef = useRef<string>('')
+  const briefApprovedRef = useRef(false)
   const [uploadComplete, setUploadComplete] = useState(false)
   const [uploadError, setUploadError] = useState('')
   const [scanFindings, setScanFindings] = useState<any[]>([])
@@ -453,11 +455,12 @@ export default function Home() {
       try {
         const formData = new FormData()
         formData.append('file', file)
-        formData.append('sessionId', sessionIdRef.current)
-
         const res = await fetch('/api/upload', { method: 'POST', body: formData })
         if (!res.ok) throw new Error('Upload failed')
         const result = await res.json()
+        sessionIdRef.current = result.sessionId
+        uploadTokenRef.current = result.uploadToken
+        briefApprovedRef.current = false
         // Use server-calculated word count for all formats (backend extraction is more accurate)
         if (result.wordCount) {
           setWordCount(result.wordCount)
@@ -482,6 +485,7 @@ export default function Home() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           sessionId: sessionIdRef.current,
+          uploadToken: uploadTokenRef.current,
           genre: selectedGenre,
           languages: selectedLanguages,
           maxFindings: 8,
@@ -542,10 +546,12 @@ export default function Home() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           sessionId: sessionIdRef.current,
+          uploadToken: uploadTokenRef.current,
           decisions,
         }),
       })
       if (!response.ok) throw new Error('Translation choices were not saved')
+      briefApprovedRef.current = true
     } catch (err) {
       console.error('[scan] Failed to save glossary decisions:', err)
       alert('We could not save your translation choices. Please try again before continuing.')
@@ -567,6 +573,10 @@ export default function Home() {
     setIsProcessing(true)
 
     try {
+      if (!briefApprovedRef.current && !(await applyScanResponses())) {
+        setIsProcessing(false)
+        return
+      }
       const response = await fetch('/api/checkout', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -585,6 +595,7 @@ export default function Home() {
           totalAmount: calculateTotal(),
           voucherCode: voucherApplied?.code || '',
           sessionId: sessionIdRef.current,
+          uploadToken: uploadTokenRef.current,
           bookSetting,
           affiliateCode,
         }),
@@ -1314,7 +1325,7 @@ export default function Home() {
                         </div>
                       </div>
                       <button
-                        onClick={() => { setUploadedFile(null); setWordCount(0); setSelectedTier(null); setUploadComplete(false); setUploadError(''); sessionIdRef.current = crypto.randomUUID() }}
+                onClick={() => { setUploadedFile(null); setWordCount(0); setSelectedTier(null); setUploadComplete(false); setUploadError(''); sessionIdRef.current = ''; uploadTokenRef.current = ''; briefApprovedRef.current = false }}
                         className="text-gray-400 hover:text-red-500 transition"
                       >
                         ✕

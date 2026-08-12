@@ -1,11 +1,13 @@
 import { SupabaseClient } from '@supabase/supabase-js'
-import { storeTranslationBriefs } from './translation-brief'
+import { prepareTranslationBriefRows } from './translation-brief'
 
 interface TempUploadSource {
+  session_id?: string | null
   content: string
   file_name?: string | null
   file_format?: string | null
   source_storage_path?: string | null
+  source_storage_bucket?: string | null
   source_sha256?: string | null
   source_size_bytes?: number | null
   source_manifest?: unknown
@@ -19,45 +21,31 @@ export async function linkSourceUploadToOrder(
   tempUpload: TempUploadSource,
   languages: string[],
 ): Promise<void> {
-  const metadata = {
-    filename: tempUpload.file_name || null,
-    format: tempUpload.file_format || null,
-    sha256: tempUpload.source_sha256 || null,
-    sizeBytes: tempUpload.source_size_bytes || null,
-  }
-
-  const { error: originalError } = await supabase.from('files').insert({
-    order_id: orderId,
-    type: 'original',
-    language: 'en',
-    content: tempUpload.content,
-    file_url: tempUpload.source_storage_path || null,
-    original_content: JSON.stringify(metadata),
-  })
-  if (originalError) throw new Error(`Failed to link original source: ${originalError.message}`)
-
-  if (tempUpload.source_manifest) {
-    const { error: manifestError } = await supabase.from('files').insert({
-      order_id: orderId,
-      type: 'source_manifest',
-      language: 'en',
-      content: JSON.stringify(tempUpload.source_manifest),
-    })
-    if (manifestError) throw new Error(`Failed to link source manifest: ${manifestError.message}`)
-
+  if (tempUpload.source_manifest && tempUpload.source_storage_path && tempUpload.source_sha256) {
+    if (!tempUpload.glossary_saved_at) throw new Error('Author translation choices were not approved')
     const manifest = tempUpload.source_manifest as { sourceHash?: string }
+    if (!manifest.sourceHash || manifest.sourceHash !== tempUpload.source_sha256) throw new Error('Source manifest hash mismatch')
     const decisions = Array.isArray(tempUpload.glossary_decisions)
       ? tempUpload.glossary_decisions
       : typeof tempUpload.glossary_decisions === 'string'
         ? JSON.parse(tempUpload.glossary_decisions)
         : []
-    await storeTranslationBriefs({
-      supabase,
-      orderId,
+    const briefs = prepareTranslationBriefRows({
       languages,
-      sourceManifestFingerprint: manifest.sourceHash || 'unknown',
-      approvedAt: tempUpload.glossary_saved_at || new Date().toISOString(),
+      sourceManifestFingerprint: manifest.sourceHash,
+      approvedAt: tempUpload.glossary_saved_at,
       decisions,
     })
+    const { error } = await supabase.rpc('link_hardened_source_to_order', {
+      p_order_id: orderId,
+      p_session_id: tempUpload.session_id,
+      p_briefs: briefs,
+    })
+    if (error) throw new Error(`Failed to atomically link source: ${error.message}`)
+    return
   }
+
+  // Compatibility path for uploads created before the hardening schema.
+  const { error } = await supabase.from('files').insert({ order_id: orderId, type: 'original', language: 'en', content: tempUpload.content })
+  if (error) throw new Error(`Failed to link legacy source: ${error.message}`)
 }

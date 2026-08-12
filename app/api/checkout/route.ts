@@ -3,6 +3,7 @@ import Stripe from 'stripe'
 import { getSupabaseAdmin } from '@/lib/supabase'
 import { inngest } from '@/lib/inngest'
 import { linkSourceUploadToOrder } from '@/lib/link-source-upload'
+import { verifyUploadIdentity } from '@/lib/upload-identity'
 import { Resend } from 'resend'
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
@@ -203,9 +204,13 @@ export async function POST(request: NextRequest) {
       specialInstructions,
       voucherCode,
       sessionId,
+      uploadToken,
       bookSetting,
       affiliateCode,
     } = body
+    if (!verifyUploadIdentity(sessionId, uploadToken)) {
+      return NextResponse.json({ error: 'Invalid or expired upload session' }, { status: 403 })
+    }
 
     // ✅ SECURITY: Recalculate price server-side — ignore any client-submitted totalAmount
     // Also validate tier against word count — correct it if client sent wrong tier
@@ -373,6 +378,7 @@ export async function POST(request: NextRequest) {
         voucherCode: appliedVoucher || '',
         finalAmount: finalAmount.toString(),
         sessionId: sessionId || '',
+        uploadToken: uploadToken || '',
         specialInstructions: (specialInstructions || '').slice(0, 490), // Stripe 500 char limit
         book_setting: (bookSetting || '').slice(0, 490),
         affiliateCode: (affiliateCode || '').toUpperCase(),
