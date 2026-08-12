@@ -1,4 +1,5 @@
 import Anthropic from '@anthropic-ai/sdk'
+import { LAUNCH_PACK_SCHEMA_VERSION, LaunchPackV1, validateLaunchPack } from './launch-pack-schema'
 
 const anthropic = new Anthropic({
   apiKey: process.env.ANTHROPIC_API_KEY,
@@ -13,7 +14,7 @@ interface LaunchStrategyInput {
   targetMarket: string // e.g., "Spain/Latin America", "France", "Germany", "Brazil/Portugal"
 }
 
-interface LaunchStrategyOutput {
+export interface LaunchStrategyOutput {
   backendKeywords: string[] // 7 keyword boxes, each up to 50 chars
   adKeywords: string[] // 20-30 keywords for Amazon Ads
   categories: string[] // Recommended categories for that market
@@ -25,6 +26,18 @@ interface LaunchStrategyOutput {
   bookDescription: string // Translated + optimized for that market
   reviewStrategy: string[]
   kdpUploadChecklist: string[]
+}
+
+export function toCanonicalLaunchPack(
+  strategy: LaunchStrategyOutput,
+  language: string,
+  market: string,
+  purchased: boolean,
+): LaunchPackV1 {
+  const pack: LaunchPackV1 = { schemaVersion: LAUNCH_PACK_SCHEMA_VERSION, language, market, ...strategy }
+  const errors = validateLaunchPack({ pack, expectedLanguage: language, expectedMarket: market, purchased })
+  if (errors.length) throw new Error(`Launch Pack validation failed: ${errors.join('; ')}`)
+  return pack
 }
 
 export async function generateLaunchStrategy(

@@ -145,6 +145,29 @@ Work is being performed on an isolated branch based directly on the live product
 - Risks: Existing order approval remains the legacy path. The hardened package builder is not yet invoked from `translate-job.ts`; activating it before semantic structure/builder parity is reviewed would be unsafe.
 - Teddy review: B3 prebuild integration should be enabled only after choosing the semantic eligibility threshold and validating builders against a synthetic end-to-end book fixture.
 
+### B9 + E1–E3 — Versioned product assets and structured schemas
+
+- Status: COMPLETE for schema/validation groundwork; Launch Pack generation integration NEEDS_REVIEW
+- Files changed:
+  - `public/assets/BookLingua_Author_Upload_Guide_v1.docx`
+  - `lib/upload-guide.ts`
+  - `lib/launch-pack-schema.ts`
+  - `lib/launch-strategy.ts`
+  - `lib/translation-notes.ts`
+  - `tests/product-assets.test.ts`
+  - `app/page.tsx`
+- Implementation: The existing guide is now a versioned production asset with a pinned SHA-256. Launch Packs have a canonical v1 schema and deterministic entitlement/locale/completeness checks. Translation notes have a validated v1 schema, legacy migration parser and human renderer. Package completeness already requires these assets as applicable. The scanner UI now refuses to advance if glossary/brief choices fail to save.
+- Tests:
+  - `npm test` — 20 passed, 0 failed
+  - Launch Pack entitlement/locale/required sections passed.
+  - Legacy-to-structured translation notes and renderer passed.
+  - Upload guide asset existence/hash passed.
+  - `npx tsc --noEmit` — passed
+  - `npm run build` — passed (existing Next.js config warning)
+  - `git diff --check` — passed
+- Risks: `lib/launch-strategy.ts` still has limited legacy market configuration and is not invoked by the production job. It would be unsafe to claim automated Launch Pack delivery yet.
+- NEEDS_REVIEW: Choose the canonical market mapping and whether to port the richer manual Launch Pack generator before wiring generation. No new marketing content was invented.
+
 ## Safety confirmation
 
 - Nothing deployed.

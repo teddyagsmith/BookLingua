@@ -508,7 +508,7 @@ export default function Home() {
     setScanLoading(false)
   }
 
-  const applyScanResponses = async () => {
+  const applyScanResponses = async (): Promise<boolean> => {
     const instructionLines: string[] = []
     scanFindings.forEach((finding) => {
       const response = scanResponses[finding.original]
@@ -537,7 +537,7 @@ export default function Home() {
 
     // Save glossary decisions to the server so they are available after payment
     try {
-      await fetch('/api/save-glossary', {
+      const response = await fetch('/api/save-glossary', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -545,14 +545,18 @@ export default function Home() {
           decisions,
         }),
       })
+      if (!response.ok) throw new Error('Translation choices were not saved')
     } catch (err) {
       console.error('[scan] Failed to save glossary decisions:', err)
+      alert('We could not save your translation choices. Please try again before continuing.')
+      return false
     }
 
     if (instructionLines.length > 0) {
       const scanBlock = `AUTO-DETECTED TRANSLATION PREFERENCES:\n${instructionLines.join('\n')}`
       setSpecialInstructions(prev => prev ? `${prev}\n\n${scanBlock}` : scanBlock)
     }
+    return true
   }
 
   const handleCheckout = async () => {
@@ -1521,7 +1525,7 @@ export default function Home() {
                             Skip & Continue →
                           </button>
                           <button
-                            onClick={async () => { await applyScanResponses(); setCheckoutStep(4); }}
+                            onClick={async () => { if (await applyScanResponses()) setCheckoutStep(4); }}
                             className="flex-1 py-3 bg-brand text-white rounded-xl font-bold text-sm shadow-lg hover:shadow-xl transition-all"
                           >
                             Save Preferences & Continue →
@@ -1793,7 +1797,7 @@ export default function Home() {
                     Skip & Continue →
                   </button>
                   <button
-                    onClick={async () => { await applyScanResponses(); setCheckoutStep(4); }}
+                    onClick={async () => { if (await applyScanResponses()) setCheckoutStep(4); }}
                     className="flex-1 py-3 bg-brand text-white rounded-xl font-bold text-sm shadow-lg hover:shadow-xl transition-all"
                   >
                     Save Preferences & Continue →
