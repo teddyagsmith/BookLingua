@@ -1,6 +1,7 @@
 import AdmZip from 'adm-zip'
 import { Document, HeadingLevel, Packer, Paragraph, TextRun } from 'docx'
 import { SemanticDocumentV2, SemanticNodeV2, validateSemanticDocument } from './semantic-document'
+import { deterministicDocx } from './deterministic-docx'
 
 function heading(level: number | null): typeof HeadingLevel[keyof typeof HeadingLevel] {
   return level === 1 ? HeadingLevel.HEADING_1 : level === 2 ? HeadingLevel.HEADING_2 : level === 3 ? HeadingLevel.HEADING_3 : HeadingLevel.HEADING_4
@@ -21,7 +22,7 @@ export async function buildSemanticDocx(document: SemanticDocumentV2, title: str
   assertTranslated(document)
   const children = [new Paragraph({ text: title, heading: HeadingLevel.TITLE })]
   for (const node of document.nodes) children.push(nodeParagraph(node, node.translatedText!))
-  return Buffer.from(await Packer.toBuffer(new Document({ sections: [{ children }] })))
+  return deterministicDocx(Buffer.from(await Packer.toBuffer(new Document({ sections: [{ children }] }))))
 }
 
 export async function buildSemanticReviewDocx(pass1: SemanticDocumentV2, pass2: SemanticDocumentV2, title: string): Promise<Buffer> {
@@ -40,7 +41,7 @@ export async function buildSemanticReviewDocx(pass1: SemanticDocumentV2, pass2: 
       new TextRun({ text: second.translatedText!, highlight: 'yellow' }),
     ]))
   })
-  return Buffer.from(await Packer.toBuffer(new Document({ sections: [{ children }] })))
+  return deterministicDocx(Buffer.from(await Packer.toBuffer(new Document({ sections: [{ children }] }))))
 }
 
 function escapeXml(text: string): string {
@@ -76,6 +77,10 @@ export function buildSemanticEpub(source: Buffer, document: SemanticDocumentV2):
     const entry = zip.getEntry(entryPath); if (!entry) throw new Error(`EPUB source entry missing: ${entryPath}`)
     let index = 0
     const xml = entry.getData().toString('utf8').replace(/<(h[1-6]|p|li)\b([^>]*)>([\s\S]*?)<\/\1>/gi, (_full: string, tag: string, attrs: string, inner: string) => {
+      // The canonical parser deliberately omits empty/markup-only blocks. The
+      // rebuilder must apply the identical selection rule or its source-location
+      // indexes diverge on real EPUBs containing empty layout paragraphs.
+      if (!inner.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim()) return _full
       const node = nodes[index++]
       if (!node) throw new Error(`EPUB semantic block count changed: ${entryPath}`)
       return `<${tag}${attrs}>${replaceTextPreservingInline(inner,node.translatedText!)}</${tag}>`
@@ -89,7 +94,22 @@ export function buildSemanticEpub(source: Buffer, document: SemanticDocumentV2):
     for (const [sourceText, translatedText] of Array.from(headingMap.entries())) xml = xml.split(`>${sourceText}<`).join(`>${escapeXml(translatedText)}<`)
     zip.updateFile(entry.entryName, Buffer.from(xml))
   }
-  return zip.toBuffer()
+  // Repack instead of serializing the mutated source archive directly. Some
+  // Google Docs EPUBs use ZIP data descriptors; adm-zip otherwise preserves
+  // that flag without writing a new descriptor and produces unreadable output.
+  // Repacking also restores the required first, uncompressed mimetype entry.
+  const output: any = new (AdmZip as any)(undefined, { noSort: true })
+  const entries = zip.getEntries()
+  const mimetype = entries.find((entry: any) => entry.entryName === 'mimetype')
+  if (mimetype) {
+    output.addFile('mimetype', mimetype.getData())
+    output.getEntry('mimetype').header.method = 0
+  }
+  for (const entry of entries) {
+    if (entry.entryName === 'mimetype') continue
+    output.addFile(entry.entryName, entry.getData())
+  }
+  return output.toBuffer()
 }
 
 export function buildSemanticEpubFromDocument(document: SemanticDocumentV2, title: string): Buffer {

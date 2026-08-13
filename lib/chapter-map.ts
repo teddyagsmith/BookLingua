@@ -1,5 +1,6 @@
 import { Document, HeadingLevel, Packer, Paragraph, Table, TableCell, TableRow } from 'docx'
 import { SemanticDocumentV2 } from './semantic-document'
+import { deterministicDocx } from './deterministic-docx'
 
 export interface ChapterMapRow {
   chapterId: string
@@ -45,8 +46,8 @@ export async function renderChapterMapDocx(rows: ChapterMapRow[]): Promise<Buffe
       new TableCell({ children: [new Paragraph(row.status)] }),
     ] })),
   ]
-  return Packer.toBuffer(new Document({ sections: [{ children: [
+  return deterministicDocx(Buffer.from(await Packer.toBuffer(new Document({ sections: [{ children: [
     new Paragraph({ text: 'BookLingua Chapter Map', heading: HeadingLevel.TITLE }),
     new Table({ rows: tableRows }),
-  ] }] }))
+  ] }] }))))
 }

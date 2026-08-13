@@ -99,6 +99,33 @@ test('EPUB rebuild preserves inline semantics, links, attributes and anchors', (
   assert.equal(validateArtifact(output.toBuffer(),'epub').passed,true)
 })
 
+test('EPUB rebuild ignores parser-omitted empty layout blocks', () => {
+  const source:any=new AdmZip(epubFixture())
+  source.updateFile('OEBPS/10.xhtml',Buffer.from('<html><body><h1>Chapter 10</h1><p>Ten body.</p><p><span> </span></p></body></html>'))
+  const buffer=source.toBuffer(),document=parseSemanticEpub(buffer,'hash')
+  document.nodes.forEach(node=>{node.translatedText=`T ${node.sourceText}`})
+  assert.doesNotThrow(()=>buildSemanticEpub(buffer,document))
+})
+
+test('EPUB rebuild repacks output with readable entries and mimetype first', () => {
+  const source: any = new AdmZip(epubFixture())
+  const input = source.toBuffer()
+  const document = parseSemanticEpub(input, 'descriptor-hash')
+  document.nodes.forEach(node => { node.translatedText = `T ${node.sourceText}` })
+  const output = buildSemanticEpub(input, document)
+  assert.equal(validateArtifact(output, 'epub').passed, true)
+  assert.equal(new AdmZip(output).getEntries()[0].entryName, 'mimetype')
+})
+
+test('DOCX semantic artifacts are byte-stable across immutable retries', async () => {
+  const document = parseSemanticEpub(epubFixture(), 'stable-hash')
+  document.nodes = document.nodes.map((node, index) => ({ ...node, translatedText: `Translated ${index}` }))
+  const first = await buildSemanticDocx(document, 'Stable', 'final')
+  await new Promise(resolve => setTimeout(resolve, 10))
+  const second = await buildSemanticDocx(document, 'Stable', 'final')
+  assert.deepEqual(first, second)
+})
+
 test('chapter map is one-to-one and emits CSV and DOCX', async () => {
   const document = parseSemanticTxt('# Chapter 10\nBody ten.\n# Chapter 11\nBody eleven.', 'hash')
   document.nodes.forEach(node => { node.translatedText = node.sourceText.replace('Chapter', 'Chapitre') })
