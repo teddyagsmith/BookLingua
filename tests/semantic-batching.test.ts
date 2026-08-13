@@ -25,7 +25,6 @@ test('small input creates one complete deterministic batch', () => {
   assert.deepEqual(first.map(x => x.orderedNodeIds), second.map(x => x.orderedNodeIds))
   assert.doesNotThrow(() => assertCompleteBatchCoverage(source, first))
 })
-
 test('multiple batches preserve order and whole nodes', () => {
   const source = nodes([60, 60, 20, 80])
   const batches = createDeterministicSemanticBatches(source, 100)
@@ -72,4 +71,3 @@ test('full 1,760-node aggregate has exact identity and order', () => {
   assert.doesNotThrow(() => assertCompleteBatchCoverage(source,batches))
   assert.equal(batches.flatMap(x=>x.orderedNodeIds).length,1760)
 })
-

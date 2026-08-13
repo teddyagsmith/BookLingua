@@ -12,7 +12,6 @@ export interface SemanticBatch {
   startsChapter: boolean
   endsChapter: boolean
 }
-
 function words(value: string): number {
   return value.trim().split(/\s+/).filter(Boolean).length
 }
@@ -87,4 +86,3 @@ export function assertCompleteBatchCoverage(authoritative: SemanticNodeV2[], bat
     if (batch.nodes.some((node, index) => node.id !== batch.orderedNodeIds[index])) throw new Error('Semantic batch node identity mismatch')
   }
 }
-
