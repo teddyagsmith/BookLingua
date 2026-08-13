@@ -1,0 +1,5 @@
+# Full-book batching remediation — separate future production manifest.
+# NEVER use `supabase db push`. Requires a fresh backup and explicit approval.
+supabase/deployment/production_batching_incremental_preconditions.sql
+supabase/migrations/202608130001_full_book_batching_observability.sql
+supabase/deployment/production_batching_incremental_postconditions.sql
