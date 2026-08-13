@@ -1,5 +1,5 @@
 import Anthropic from '@anthropic-ai/sdk'
-import { LAUNCH_PACK_SCHEMA_VERSION, LaunchPackV1, validateLaunchPack } from './launch-pack-schema'
+import { LAUNCH_PACK_SCHEMA_VERSION, LaunchPackV1, launchMarket, validateLaunchPack } from './launch-pack-schema'
 
 const anthropic = new Anthropic({
   apiKey: process.env.ANTHROPIC_API_KEY,
@@ -30,12 +30,12 @@ export interface LaunchStrategyOutput {
 
 export function toCanonicalLaunchPack(
   strategy: LaunchStrategyOutput,
-  language: string,
-  market: string,
+  locale: string,
   purchased: boolean,
 ): LaunchPackV1 {
-  const pack: LaunchPackV1 = { schemaVersion: LAUNCH_PACK_SCHEMA_VERSION, language, market, ...strategy }
-  const errors = validateLaunchPack({ pack, expectedLanguage: language, expectedMarket: market, purchased })
+  const identity = launchMarket(locale)
+  const pack: LaunchPackV1 = { schemaVersion: LAUNCH_PACK_SCHEMA_VERSION, ...identity, ...strategy }
+  const errors = validateLaunchPack({ pack, expectedLocale: locale, purchased })
   if (errors.length) throw new Error(`Launch Pack validation failed: ${errors.join('; ')}`)
   return pack
 }

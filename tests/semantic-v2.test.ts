@@ -89,6 +89,15 @@ test('semantic builders retain node order and produce structurally valid DOCX an
   assert.match(outputZip.getEntry('OEBPS/11.xhtml')!.getData().toString(), /P2 Chapter 11/)
 })
 
+test('EPUB rebuild preserves inline semantics, links, attributes and anchors', () => {
+  const zip: any = new AdmZip(epubFixture())
+  zip.updateFile('OEBPS/10.xhtml', Buffer.from('<html><body><h1 id="chapter">Chapter <em>10</em></h1><p class="lead">A <strong>bold <i>nested</i></strong> sentence with <a href="#note" data-x="1">linked words</a> and H<sub>2</sub>O.<br/>Footnote<sup><a id="ref" href="#fn">1</a></sup></p></body></html>'))
+  const doc = parseSemanticEpub(zip.toBuffer(),'inline-hash'); doc.nodes.forEach(node => { node.translatedText=`Traduit ${node.sourceText}` })
+  const output: any = new AdmZip(buildSemanticEpub(zip.toBuffer(),doc)); const xml=output.getEntry('OEBPS/10.xhtml').getData().toString()
+  for (const expected of ['<em>','<strong>','<i>','<a href="#note" data-x="1">','<sub>','<sup>','<br/>','id="ref"','href="#fn"','class="lead"']) assert.match(xml,new RegExp(expected.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')))
+  assert.equal(validateArtifact(output.toBuffer(),'epub').passed,true)
+})
+
 test('chapter map is one-to-one and emits CSV and DOCX', async () => {
   const document = parseSemanticTxt('# Chapter 10\nBody ten.\n# Chapter 11\nBody eleven.', 'hash')
   document.nodes.forEach(node => { node.translatedText = node.sourceText.replace('Chapter', 'Chapitre') })

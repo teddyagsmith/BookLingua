@@ -31,7 +31,6 @@ export interface SemanticPipelineInput {
   allowReviewedStructure?: boolean
   buildId?: string
   launchPack?: Buffer
-  launchMarket?: string
 }
 
 export function deterministicSemanticBuildId(orderId: string, language: string, sourceHash: string, briefRevision: number): string {
@@ -131,7 +130,7 @@ export async function runSemanticPipeline(input: SemanticPipelineInput) {
   if (input.launchPack) {
     let pack: LaunchPackV1
     try { pack = JSON.parse(input.launchPack.toString('utf8')) } catch { throw new Error('Launch Pack is not valid JSON') }
-    const launchErrors = validateLaunchPack({ pack, expectedLanguage: input.language, expectedMarket: input.launchMarket || pack.market, purchased: true })
+    const launchErrors = validateLaunchPack({ pack, expectedLocale: input.language, purchased: true })
     if (launchErrors.length) throw new Error(`Launch Pack validation failed: ${launchErrors.join('; ')}`)
     await storeValidated(input, buildId, 'launch_pack', 'launch-pack.json', input.launchPack)
   }

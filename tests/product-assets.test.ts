@@ -9,7 +9,7 @@ import { UPLOAD_GUIDE_ASSET_PATH, UPLOAD_GUIDE_SHA256 } from '../lib/upload-guid
 
 function validLaunchPack(): LaunchPackV1 {
   return {
-    schemaVersion: '1.0', language: 'French', market: 'France',
+    schemaVersion: '2.0', locale: 'fr', language: 'French', market: 'France', amazonDomain: 'amazon.fr', currency: 'EUR',
     backendKeywords: Array.from({ length: 7 }, (_, index) => `mot clé ${index + 1}`),
     adKeywords: Array.from({ length: 20 }, (_, index) => `publicité ${index + 1}`),
     categories: ['Catégorie A', 'Catégorie B', 'Catégorie C'],
@@ -19,8 +19,8 @@ function validLaunchPack(): LaunchPackV1 {
 }
 
 test('Launch Pack validation enforces entitlement, locale and required sections', () => {
-  assert.deepEqual(validateLaunchPack({ pack: validLaunchPack(), expectedLanguage: 'French', expectedMarket: 'France', purchased: true }), [])
-  assert.match(validateLaunchPack({ pack: validLaunchPack(), expectedLanguage: 'German', expectedMarket: 'Germany', purchased: false }).join(' '), /not entitled/)
+  assert.deepEqual(validateLaunchPack({ pack: validLaunchPack(), expectedLocale: 'fr', purchased: true }), [])
+  assert.match(validateLaunchPack({ pack: validLaunchPack(), expectedLocale: 'de', purchased: false }).join(' '), /not entitled/)
 })
 
 test('legacy notes can migrate into a validated structured schema and render', () => {

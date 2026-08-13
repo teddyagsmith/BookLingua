@@ -47,6 +47,21 @@ function escapeXml(text: string): string {
   return text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
 }
 
+function replaceTextPreservingInline(inner: string, translated: string): string {
+  const tokens = inner.split(/(<[^>]+>)/g)
+  const textIndexes = tokens.map((token,index) => !token.startsWith('<') && token.trim() ? index : -1).filter(index => index >= 0)
+  if (!textIndexes.length) return inner
+  const weights = textIndexes.map(index => tokens[index].trim().split(/\s+/).length)
+  const words = translated.trim().split(/\s+/); let offset = 0; const total = weights.reduce((a,b)=>a+b,0)
+  textIndexes.forEach((tokenIndex, i) => {
+    const remaining = words.length-offset
+    const count = i === textIndexes.length-1 ? remaining : Math.max(1, Math.min(remaining-(textIndexes.length-i-1), Math.round(words.length*weights[i]/total)))
+    const leading = tokens[tokenIndex].match(/^\s*/)?.[0] || ''; const trailing = tokens[tokenIndex].match(/\s*$/)?.[0] || ''
+    tokens[tokenIndex] = `${leading}${escapeXml(words.slice(offset,offset+count).join(' '))}${trailing}`; offset += count
+  })
+  return tokens.join('')
+}
+
 export function buildSemanticEpub(source: Buffer, document: SemanticDocumentV2): Buffer {
   assertTranslated(document)
   if (document.sourceFormat !== 'epub') throw new Error('EPUB output requires an EPUB semantic source')
@@ -60,10 +75,10 @@ export function buildSemanticEpub(source: Buffer, document: SemanticDocumentV2):
   for (const [entryPath, nodes] of Array.from(byPath.entries())) {
     const entry = zip.getEntry(entryPath); if (!entry) throw new Error(`EPUB source entry missing: ${entryPath}`)
     let index = 0
-    const xml = entry.getData().toString('utf8').replace(/<(h[1-6]|p|li)\b([^>]*)>[\s\S]*?<\/\1>/gi, (_full: string, tag: string, attrs: string) => {
+    const xml = entry.getData().toString('utf8').replace(/<(h[1-6]|p|li)\b([^>]*)>([\s\S]*?)<\/\1>/gi, (_full: string, tag: string, attrs: string, inner: string) => {
       const node = nodes[index++]
       if (!node) throw new Error(`EPUB semantic block count changed: ${entryPath}`)
-      return `<${tag}${attrs}>${escapeXml(node.translatedText!)}</${tag}>`
+      return `<${tag}${attrs}>${replaceTextPreservingInline(inner,node.translatedText!)}</${tag}>`
     })
     if (index !== nodes.length) throw new Error(`EPUB semantic block count changed: ${entryPath}`)
     zip.updateFile(entryPath, Buffer.from(xml))
