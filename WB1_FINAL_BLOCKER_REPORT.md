@@ -56,7 +56,7 @@ Resend v3 still cannot prove exactly-once provider delivery across provider-succ
 | Schema constraints | 8/8 invalid/valid probes | PASS |
 | Source linkage | 4/4 including rollback and conflicting retry | PASS |
 | Build identity | 5/5 plus simultaneous allocation | PASS |
-| Package gate | 7/7 including missing/FAIL/multi-language/stale build/fabrication | PASS |
+| Package gate/approval | 9/9 including missing/FAIL/multi-language/stale build/fabrication, duplicate approval, and post-approval supersession | PASS |
 | RPC concurrency | concurrent build allocations serialized; earlier source/gate concurrency repeated on same local stack | PASS |
 | RLS/Storage | public and anon-key reads denied; service-role upload/read HTTP 200; both hardened buckets private | PASS |
 | Uploads | real TXT/DOCX/EPUB succeeded; malformed/spoofed rejected in the staging rehearsal; unchanged paths regression-tested | PASS |
@@ -70,7 +70,7 @@ No model API or real external email was invoked.
 
 - Starting automated count: 36.
 - Ending automated count: 39 passed, 0 failed.
-- Real SQL probes: schema 8/8; linkage 4/4; build identity 5/5; gate 7/7.
+- Real SQL probes: schema 8/8; linkage 4/4; build identity 5/5; gate/approval 9/9.
 - `npm run verify:migrations`: PASS.
 - `npx tsc --noEmit`: PASS.
 - `npm run build`: PASS (pre-existing Next.js config and Browserslist warnings only).

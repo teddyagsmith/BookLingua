@@ -82,6 +82,18 @@ insert into gate_results values('stale FAIL, current PASS','ready_for_review',
   resolve_order_package_gate('61000000-0000-0000-0000-000000000004'),
   resolve_order_package_gate('61000000-0000-0000-0000-000000000004')='ready_for_review');
 
+-- Approval binds the current build and creates only one durable logical delivery event.
+select begin_hardened_delivery('61000000-0000-0000-0000-000000000004');
+select begin_hardened_delivery('61000000-0000-0000-0000-000000000004');
+insert into gate_results select 'duplicate approval delivery event','1',count(*)::text,count(*)=1
+  from delivery_events where order_id='61000000-0000-0000-0000-000000000004';
+do $$ begin
+  perform begin_order_language_build('61000000-0000-0000-0000-000000000004','fr','62000000-0000-0000-0000-000000000033');
+  insert into gate_results values('supersession after approval','rejected','accepted',false);
+exception when others then
+  insert into gate_results values('supersession after approval','rejected',sqlerrm,sqlerrm='order_delivery_already_started');
+end $$;
+
 -- Wrong-language and fabricated latest PASS must fail authority.
 select * from begin_order_language_build('61000000-0000-0000-0000-000000000001','fr','62000000-0000-0000-0000-000000000099');
 insert into package_manifests(order_id,language,build_id,schema_version,status,manifest,created_at)
