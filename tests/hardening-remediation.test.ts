@@ -140,6 +140,13 @@ test('hardened external delivery is fail-closed and cannot be enabled by truthy 
   assert.match(approve, /delivery_events/)
 })
 
+test('hardened downloads require approval and accept the delivery-pending state', () => {
+  const download = fs.readFileSync(path.join(process.cwd(), 'app/api/download/[orderId]/[lang]/route.ts'), 'utf8')
+  assert.match(download, /\['completed', 'pending_review', 'delivery_pending'\]/)
+  assert.match(download, /order\.status === 'delivery_pending'/)
+  assert.doesNotMatch(download, /order\.status === 'ready_for_review'/)
+})
+
 test('repository migration contract has unique active versions and a committed disposable baseline', () => {
   const migrationDir = path.join(process.cwd(), 'supabase/migrations')
   const versions = fs.readdirSync(migrationDir).filter(f => /^\d+_.*\.sql$/.test(f)).map(f => f.match(/^(\d+)_/)![1])

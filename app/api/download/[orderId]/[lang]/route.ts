@@ -657,7 +657,7 @@ export async function GET(
       .single()
 
     if (!order) return NextResponse.json({ error: 'Order not found' }, { status: 404 })
-    if (!['completed', 'pending_review', 'ready_for_review'].includes(order.status)) return NextResponse.json({ error: 'Translation not yet complete' }, { status: 400 })
+    if (!['completed', 'pending_review', 'delivery_pending'].includes(order.status)) return NextResponse.json({ error: 'Translation not yet approved for download' }, { status: 400 })
 
     const fileFormat  = (order.file_format || '.docx').toLowerCase()
     const upsells     = (order.upsells || []) as string[]
@@ -673,7 +673,7 @@ export async function GET(
       : type === 'review' ? 'review_docx'
         : effectiveFormat === '.epub' ? 'final_epub' : 'final_docx'
     let storedArtifact: any = null
-    if (HARDENED_V1_ENABLED && (order.status === 'ready_for_review' || (order.status === 'completed' && Boolean(order.source_linked_at)))) {
+    if (HARDENED_V1_ENABLED && (order.status === 'delivery_pending' || (order.status === 'completed' && Boolean(order.source_linked_at)))) {
       const { data: currentBuild } = await getSupabaseAdmin().from('order_language_builds')
         .select('id').eq('order_id', orderId).eq('language', lang).eq('is_current', true).maybeSingle()
       if (!currentBuild) return NextResponse.json({ error: 'Current validated build unavailable' }, { status: 409 })
