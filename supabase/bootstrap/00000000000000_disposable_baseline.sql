@@ -2,6 +2,8 @@
 -- This restores the checked-in baseline schema before incremental migrations.
 -- Do not commit or apply to hosted environments.
 
+set booklingua.hosted_rehearsal = 'on';
+
 CREATE TABLE orders (
   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
   stripe_session_id TEXT UNIQUE,
@@ -19,6 +21,9 @@ CREATE TABLE orders (
   status TEXT DEFAULT 'pending',
   created_at TIMESTAMPTZ DEFAULT NOW(),
   completed_at TIMESTAMPTZ,
+  api_cost NUMERIC,
+  margin_pct NUMERIC,
+  voucher_code TEXT,
   download_token TEXT
 );
 
@@ -45,7 +50,8 @@ CREATE TABLE translation_chunks (
   input_tokens INTEGER DEFAULT 0,
   output_tokens INTEGER DEFAULT 0,
   created_at TIMESTAMPTZ DEFAULT NOW(),
-  UNIQUE (order_id, lang_code, chunk_index, pass)
+  UNIQUE (order_id, lang_code, chunk_index, pass),
+  CONSTRAINT translation_chunks_pass_check CHECK (pass IN ('sonnet', 'opus'))
 );
 
 CREATE TABLE temp_uploads (
@@ -78,6 +84,8 @@ CREATE INDEX idx_files_type_language ON files(type, language);
 ALTER TABLE orders ENABLE ROW LEVEL SECURITY;
 ALTER TABLE files ENABLE ROW LEVEL SECURITY;
 ALTER TABLE temp_uploads ENABLE ROW LEVEL SECURITY;
+ALTER TABLE translation_chunks ENABLE ROW LEVEL SECURITY;
+ALTER TABLE email_subscribers ENABLE ROW LEVEL SECURITY;
 
 CREATE POLICY "Service role has full access to orders" ON orders
   FOR ALL USING (auth.role() = 'service_role');

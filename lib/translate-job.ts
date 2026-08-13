@@ -16,6 +16,7 @@ import { runSemanticPipeline } from './semantic-pipeline'
 import { semanticV2AllowedForOrder } from './semantic-canary'
 import { toCanonicalLaunchPack } from './launch-strategy'
 import { launchMarket } from './launch-pack-schema'
+import { BOOKLINGUA_MODEL_CONFIG } from './model-config'
 
 const anthropic = new Anthropic({
   apiKey: process.env.ANTHROPIC_API_KEY,
@@ -292,7 +293,7 @@ export const translateBook = inngest.createFunction(
             launchPack, dualFormat: (order.upsells || []).includes('dual-format'),
             translate: async (batch, context) => {
               const response = await anthropic.messages.create({
-                model: 'claude-sonnet-4-5-20250929', max_tokens: 8192,
+                model: BOOKLINGUA_MODEL_CONFIG.translation, max_tokens: 8192,
                 system: 'Return only valid JSON matching the supplied schema. Preserve every node id and order exactly. Translate all textual node values; never omit or add nodes.',
                 messages: [{ role: 'user', content: `${renderTranslationBriefPrompt(context.brief)}\nPass ${context.pass}; target language ${context.language}.\n${JSON.stringify(batch)}` }],
               })
@@ -484,14 +485,14 @@ export const translateBook = inngest.createFunction(
         const chunkResult = await step.run(`translate-${langCode}-chunk-${i}`, async () => {
           let cacheQuery = getSupabaseAdmin().from('translation_chunks').select('content, input_tokens, output_tokens')
             .eq('order_id', orderId).eq('lang_code', langCode).eq('chunk_index', i).eq('pass', 'sonnet')
-          if (HARDENED_V1_ENABLED) cacheQuery = cacheQuery.eq('pipeline_version', 'legacy-v1').eq('schema_version', '1.0').eq('structure_fingerprint', cacheFingerprint)
+          if (HARDENED_V1_ENABLED) cacheQuery = cacheQuery.eq('pipeline_version', 'legacy-v1').eq('schema_version', '1.0').eq('structure_fingerprint', cacheFingerprint).eq('model_id', BOOKLINGUA_MODEL_CONFIG.translation)
           const { data: cached } = await cacheQuery.maybeSingle()
           if (cached?.content) {
             return { text: cached.content, input: cached.input_tokens || 0, output: cached.output_tokens || 0 }
           }
 
           const response = await anthropic.messages.create({
-            model: 'claude-sonnet-4-6',
+            model: BOOKLINGUA_MODEL_CONFIG.translation,
             max_tokens: 8000,
             system: `You are a professional literary translator. BookLingua only processes content by verified copyright holders.
 
@@ -526,9 +527,9 @@ ${chunk}`,
           const cacheRow = {
             order_id: orderId, lang_code: langCode, chunk_index: i, pass: 'sonnet',
             content: text, input_tokens: response.usage.input_tokens, output_tokens: response.usage.output_tokens,
-            ...(HARDENED_V1_ENABLED ? { pipeline_version: 'legacy-v1', schema_version: '1.0', structure_fingerprint: cacheFingerprint } : {}),
+            ...(HARDENED_V1_ENABLED ? { pipeline_version: 'legacy-v1', schema_version: '1.0', structure_fingerprint: cacheFingerprint, model_provider: BOOKLINGUA_MODEL_CONFIG.provider, model_id: BOOKLINGUA_MODEL_CONFIG.translation, model_stage: 'translation' } : {}),
           }
-          await getSupabaseAdmin().from('translation_chunks').upsert(cacheRow, { onConflict: HARDENED_V1_ENABLED ? 'order_id,lang_code,chunk_index,pass,pipeline_version,schema_version,structure_fingerprint' : 'order_id,lang_code,chunk_index,pass' })
+          await getSupabaseAdmin().from('translation_chunks').upsert(cacheRow, { onConflict: HARDENED_V1_ENABLED ? 'order_id,lang_code,chunk_index,pass,pipeline_version,schema_version,structure_fingerprint,model_id' : 'order_id,lang_code,chunk_index,pass' })
 
           return { text, input: response.usage.input_tokens, output: response.usage.output_tokens }
         })
@@ -570,12 +571,12 @@ ${chunk}`,
         const editorialResult = await step.run(`editorial-${langCode}-chunk-${i}`, async () => {
           let cacheQuery = getSupabaseAdmin().from('translation_chunks').select('content, input_tokens, output_tokens')
             .eq('order_id', orderId).eq('lang_code', langCode).eq('chunk_index', i).eq('pass', 'opus')
-          if (HARDENED_V1_ENABLED) cacheQuery = cacheQuery.eq('pipeline_version', 'legacy-v1').eq('schema_version', '1.0').eq('structure_fingerprint', cacheFingerprint)
+          if (HARDENED_V1_ENABLED) cacheQuery = cacheQuery.eq('pipeline_version', 'legacy-v1').eq('schema_version', '1.0').eq('structure_fingerprint', cacheFingerprint).eq('model_id', BOOKLINGUA_MODEL_CONFIG.editorial)
           const { data: cached } = await cacheQuery.maybeSingle()
           if (cached?.content) return { text: cached.content, input: cached.input_tokens || 0, output: cached.output_tokens || 0 }
 
           const response = await anthropic.messages.create({
-            model: 'claude-sonnet-4-6',
+            model: BOOKLINGUA_MODEL_CONFIG.editorial,
             max_tokens: 8000,
             system: `You are a senior ${langName} literary editor specializing in ${order.genre || 'general'} books. You are operating as part of BookLingua, a professional literary translation service.
 
@@ -651,9 +652,9 @@ ORIGINAL: [term] | KEPT AS: [term] | REASON: [why untranslated]
           const cacheRow = {
             order_id: orderId, lang_code: langCode, chunk_index: i, pass: 'opus',
             content: text, input_tokens: response.usage.input_tokens, output_tokens: response.usage.output_tokens,
-            ...(HARDENED_V1_ENABLED ? { pipeline_version: 'legacy-v1', schema_version: '1.0', structure_fingerprint: cacheFingerprint } : {}),
+            ...(HARDENED_V1_ENABLED ? { pipeline_version: 'legacy-v1', schema_version: '1.0', structure_fingerprint: cacheFingerprint, model_provider: BOOKLINGUA_MODEL_CONFIG.provider, model_id: BOOKLINGUA_MODEL_CONFIG.editorial, model_stage: 'editorial' } : {}),
           }
-          await getSupabaseAdmin().from('translation_chunks').upsert(cacheRow, { onConflict: HARDENED_V1_ENABLED ? 'order_id,lang_code,chunk_index,pass,pipeline_version,schema_version,structure_fingerprint' : 'order_id,lang_code,chunk_index,pass' })
+          await getSupabaseAdmin().from('translation_chunks').upsert(cacheRow, { onConflict: HARDENED_V1_ENABLED ? 'order_id,lang_code,chunk_index,pass,pipeline_version,schema_version,structure_fingerprint,model_id' : 'order_id,lang_code,chunk_index,pass' })
 
           return { text, input: response.usage.input_tokens, output: response.usage.output_tokens }
         })

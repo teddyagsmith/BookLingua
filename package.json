@@ -10,7 +10,8 @@
     "test:types": "tsc --noEmit",
     "check": "npm test && npm run test:types && npm run build",
     "verify:migrations": "node scripts/verify-migration-contract.mjs",
-    "staging:reset": "bash scripts/reset-disposable-supabase.sh"
+    "staging:reset": "bash scripts/reset-disposable-supabase.sh",
+    "staging:hosted-reset": "bash scripts/reset-hosted-baseline-supabase.sh"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.24.0",

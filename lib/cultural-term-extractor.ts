@@ -15,6 +15,7 @@
  */
 
 import Anthropic from '@anthropic-ai/sdk'
+import { BOOKLINGUA_MODEL_CONFIG } from './model-config'
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -142,7 +143,7 @@ export async function extractCulturalTerms(
 
   try {
     const response = await client.messages.create({
-      model: 'claude-sonnet-4-6',
+      model: BOOKLINGUA_MODEL_CONFIG.normal,
       max_tokens: 2000,
       messages: [{
         role: 'user',

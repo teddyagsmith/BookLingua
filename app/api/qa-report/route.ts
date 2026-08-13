@@ -13,6 +13,7 @@ import { promisify } from "util";
 import { writeFile, readFile, unlink } from "fs/promises";
 import { join } from "path";
 import { tmpdir } from "os";
+import { BOOKLINGUA_MODEL_CONFIG } from "@/lib/model-config";
 
 const execAsync = promisify(exec);
 
@@ -120,7 +121,7 @@ Every field must be filled. Return valid JSON only.`;
         "anthropic-version": "2023-06-01",
       },
       body: JSON.stringify({
-        model: "claude-sonnet-4-6",
+        model: BOOKLINGUA_MODEL_CONFIG.normal,
         max_tokens: 2500,
         messages: [{ role: "user", content: prompt }],
       }),

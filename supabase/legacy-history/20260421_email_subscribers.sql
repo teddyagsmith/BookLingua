@@ -1,4 +1,4 @@
--- Email subscribers table for BookLingua popup signups
+-- QUARANTINED HISTORICAL MIGRATION. Hosted state already represents this schema.
 CREATE TABLE IF NOT EXISTS email_subscribers (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   email TEXT NOT NULL UNIQUE,

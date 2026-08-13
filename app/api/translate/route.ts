@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import Anthropic from '@anthropic-ai/sdk'
 import { Resend } from 'resend'
+import { BOOKLINGUA_MODEL_CONFIG } from '@/lib/model-config'
 
 const anthropic = new Anthropic({
   apiKey: process.env.ANTHROPIC_API_KEY,
@@ -45,7 +46,7 @@ export async function POST(request: NextRequest) {
       console.log(`Translating to ${langName}...`)
       
       const translationResponse = await anthropic.messages.create({
-        model: 'claude-sonnet-4-6',
+        model: BOOKLINGUA_MODEL_CONFIG.translation,
         max_tokens: 100000,
         messages: [
           {
@@ -80,7 +81,7 @@ Provide ONLY the translation, no explanations or notes.`,
       console.log(`Editorial review for ${langName}...`)
       
       const editorialResponse = await anthropic.messages.create({
-        model: 'claude-opus-4-20250514',
+        model: BOOKLINGUA_MODEL_CONFIG.editorial,
         max_tokens: 100000,
         messages: [
           {

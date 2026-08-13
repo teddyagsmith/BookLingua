@@ -368,7 +368,7 @@ begin
   if v_missing <> 0 then raise exception 'package_state_changed'; end if;
   select jsonb_object_agg(language,id order by language) into v_builds
     from order_language_builds where order_id=p_order_id and is_current;
-  v_event_key := encode(extensions.digest(p_order_id::text || ':' || v_builds::text, 'sha256'),'hex');
+  v_event_key := public.booklingua_sha256(p_order_id::text || ':' || v_builds::text);
   insert into delivery_events(order_id,event_key,package_builds,state)
     values(p_order_id,v_event_key,v_builds,'pending')
     on conflict(event_key) do update set event_key=excluded.event_key

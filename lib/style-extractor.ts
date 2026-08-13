@@ -18,6 +18,7 @@
  */
 
 import Anthropic from '@anthropic-ai/sdk'
+import { BOOKLINGUA_MODEL_CONFIG } from './model-config'
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -116,7 +117,7 @@ export async function extractStyleProfile(
 
   try {
     const response = await client.messages.create({
-      model: 'claude-sonnet-4-6',
+      model: BOOKLINGUA_MODEL_CONFIG.normal,
       max_tokens: 1500,
       messages: [{
         role: 'user',

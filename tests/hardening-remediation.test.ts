@@ -12,6 +12,7 @@ import { ARTIFACT_BUCKET } from '../lib/artifact-store'
 import { assertSupportedSourcePackage } from '../lib/source-upload-validation'
 import AdmZip from 'adm-zip'
 import { assertHardenedUploadReady } from '../lib/hardened-upload'
+import { BOOKLINGUA_MODEL_CONFIG } from '../lib/model-config'
 
 process.env.STRIPE_WEBHOOK_SECRET ||= 'synthetic-test-secret'
 
@@ -163,4 +164,20 @@ test('repository migration contract has unique active versions and a committed d
   assert.equal(new Set(versions).size, versions.length)
   assert.ok(fs.existsSync(path.join(process.cwd(), 'supabase/bootstrap/00000000000000_disposable_baseline.sql')))
   assert.ok(fs.existsSync(path.join(process.cwd(), 'supabase/legacy-history/20250630_add_pipeline_version.sql')))
+})
+
+test('hosted prerequisites preserve legacy passes and bind semantic cache to actual models', () => {
+  const root=process.cwd()
+  const prerequisites=fs.readFileSync(path.join(root,'supabase/migrations/202608120000_hosted_prerequisites.sql'),'utf8')
+  const cache=fs.readFileSync(path.join(root,'supabase/migrations/202608120004_pipeline_hardening_cache.sql'),'utf8')
+  const manifest=fs.readFileSync(path.join(root,'supabase/deployment/production_incremental_manifest.txt'),'utf8')
+  assert.match(prerequisites,/add column if not exists qa_errors text/i)
+  for (const stage of ['sonnet','opus','semantic-pass1','semantic-pass2']) assert.match(prerequisites,new RegExp(stage))
+  assert.match(cache,/structure_fingerprint, model_id/)
+  assert.doesNotMatch(manifest,/20260401_email_subscribers/)
+  assert.equal(BOOKLINGUA_MODEL_CONFIG.translation,'claude-sonnet-5')
+  assert.equal(BOOKLINGUA_MODEL_CONFIG.editorial,'claude-sonnet-5')
+  assert.equal(BOOKLINGUA_MODEL_CONFIG.launchPack,'claude-opus-5')
+  const proof=fs.readFileSync(path.join(root,'tests/staging/wb2_real_model_proof.ts'),'utf8')
+  assert.doesNotMatch(proof,/temperature\s*:/)
 })

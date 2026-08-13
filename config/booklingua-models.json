@@ -1,0 +1,7 @@
+{
+  "provider": "anthropic",
+  "translation": "claude-sonnet-5",
+  "editorial": "claude-sonnet-5",
+  "launchPack": "claude-opus-5",
+  "normal": "claude-sonnet-5"
+}

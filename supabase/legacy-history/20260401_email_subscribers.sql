@@ -1,4 +1,4 @@
--- Email subscribers table for BookLingua newsletter
+-- QUARANTINED HISTORICAL MIGRATION. Never replay against hosted production.
 create table if not exists email_subscribers (
   id uuid primary key default gen_random_uuid(),
   email text not null unique,
@@ -12,9 +12,11 @@ create index if not exists email_subscribers_email_idx on email_subscribers(emai
 -- Row-level security (only service role can write)
 alter table email_subscribers enable row level security;
 
--- Service role policy (API uses service key)
+-- Service role policy (API uses service key). Historical migration: this file
+-- is excluded from the hosted production incremental manifest.
 create policy "Service role full access"
   on email_subscribers
   for all
-  using (true)
-  with check (true);
+  to service_role
+  using (auth.role() = 'service_role')
+  with check (auth.role() = 'service_role');

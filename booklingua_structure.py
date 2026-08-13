@@ -10,6 +10,8 @@ Also contains EPUB_STYLESHEET for generate_epub().
 
 import os
 import re
+import json
+from pathlib import Path
 from typing import Dict, List, Optional
 
 from docx import Document
@@ -167,10 +169,10 @@ def validate_with_claude(
         prompt = _CLAUDE_PROMPT + "\n\n" + "\n".join(lines)
 
         try:
+            model_config = json.loads((Path(__file__).parent / "config" / "booklingua-models.json").read_text())
             resp = anthropic_client.messages.create(
-                model="claude-sonnet-4-6",
+                model=model_config["normal"],
                 max_tokens=1024,
-                temperature=0,
                 messages=[{"role": "user", "content": prompt}],
             )
             content = resp.content[0].text if resp.content else ""

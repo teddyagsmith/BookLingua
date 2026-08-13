@@ -7,7 +7,7 @@ alter table translation_chunks
   add column if not exists structure_fingerprint text not null default 'legacy';
 
 create index if not exists translation_chunks_versioned_lookup_idx
-  on translation_chunks(order_id, lang_code, pass, pipeline_version, structure_fingerprint, chunk_index);
+  on translation_chunks(order_id, lang_code, pass, pipeline_version, structure_fingerprint, model_id, chunk_index);
 
 -- Replace the legacy conflict identity so legacy and semantic rows can coexist.
 alter table translation_chunks
@@ -18,5 +18,12 @@ alter table translation_chunks
 alter table translation_chunks
   add constraint translation_chunks_versioned_identity_key unique(
     order_id, lang_code, chunk_index, pass,
-    pipeline_version, schema_version, structure_fingerprint
+    pipeline_version, schema_version, structure_fingerprint, model_id
+  );
+
+alter table translation_chunks
+  add constraint translation_chunks_semantic_model_identity_check
+  check (
+    pipeline_version <> 'semantic-v2'
+    or (model_provider is not null and model_id is not null and model_stage is not null)
   );

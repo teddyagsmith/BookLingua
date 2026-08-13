@@ -15,6 +15,7 @@ import { TranslationBriefV1, assertTranslationBriefForSource, translationBriefFi
 import { ArtifactType } from './package-manifest'
 import { UPLOAD_GUIDE_ASSET_PATH, UPLOAD_GUIDE_SHA256 } from './upload-guide'
 import { LaunchPackV1, validateLaunchPack } from './launch-pack-schema'
+import { BOOKLINGUA_MODEL_CONFIG } from './model-config'
 
 export type SemanticTranslator = (input: NodeTranslationInput, context: { pass: 1 | 2; language: string; brief: TranslationBriefV1 }) => Promise<NodeTranslationOutput>
 
@@ -32,6 +33,9 @@ export interface SemanticPipelineInput {
   buildId?: string
   launchPack?: Buffer
   dualFormat?: boolean
+  modelProvider?: string
+  translationModel?: string
+  editorialModel?: string
 }
 
 export function deterministicSemanticBuildId(orderId: string, language: string, sourceHash: string, briefRevision: number): string {
@@ -76,13 +80,18 @@ async function storeValidated(input: SemanticPipelineInput, buildId: string, typ
 }
 
 async function cachedTranslation(input: SemanticPipelineInput, batch: NodeTranslationInput, pass: 1|2): Promise<NodeTranslationOutput> {
+  const modelProvider = input.modelProvider || BOOKLINGUA_MODEL_CONFIG.provider
+  const modelId = pass === 1
+    ? input.translationModel || BOOKLINGUA_MODEL_CONFIG.translation
+    : input.editorialModel || BOOKLINGUA_MODEL_CONFIG.editorial
+  const modelStage = pass === 1 ? 'translation' : 'editorial'
   const cache = input.supabase.from('translation_chunks').select('content').eq('order_id',input.orderId).eq('lang_code',input.language)
-    .eq('chunk_index',0).eq('pass',`semantic-pass${pass}`).eq('pipeline_version','semantic-v2').eq('schema_version',batch.schemaVersion).eq('structure_fingerprint',batch.sourceFingerprint)
+    .eq('chunk_index',0).eq('pass',`semantic-pass${pass}`).eq('pipeline_version','semantic-v2').eq('schema_version',batch.schemaVersion).eq('structure_fingerprint',batch.sourceFingerprint).eq('model_provider',modelProvider).eq('model_id',modelId).eq('model_stage',modelStage)
   const { data: existing, error: readError } = await cache.maybeSingle()
   if (readError) throw new Error(`Semantic cache read failed: ${readError.message}`)
   if (existing?.content) return JSON.parse(existing.content)
   const output = await input.translate(batch,{pass,language:input.language,brief:input.brief})
-  const { error } = await input.supabase.from('translation_chunks').upsert({ order_id:input.orderId,lang_code:input.language,chunk_index:0,pass:`semantic-pass${pass}`,content:JSON.stringify(output),pipeline_version:'semantic-v2',schema_version:batch.schemaVersion,structure_fingerprint:batch.sourceFingerprint },{onConflict:'order_id,lang_code,chunk_index,pass,pipeline_version,schema_version,structure_fingerprint'})
+  const { error } = await input.supabase.from('translation_chunks').upsert({ order_id:input.orderId,lang_code:input.language,chunk_index:0,pass:`semantic-pass${pass}`,content:JSON.stringify(output),pipeline_version:'semantic-v2',schema_version:batch.schemaVersion,structure_fingerprint:batch.sourceFingerprint,model_provider:modelProvider,model_id:modelId,model_stage:modelStage },{onConflict:'order_id,lang_code,chunk_index,pass,pipeline_version,schema_version,structure_fingerprint,model_id'})
   if (error) throw new Error(`Semantic cache persistence failed: ${error.message}`)
   return output
 }

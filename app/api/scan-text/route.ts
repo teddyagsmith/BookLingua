@@ -4,6 +4,7 @@ import { HARDENED_V1_ENABLED } from '@/lib/pipeline-capabilities'
 import { getSupabaseAdmin } from '@/lib/supabase'
 import Anthropic from '@anthropic-ai/sdk'
 import { extractCulturalTerms } from '@/lib/cultural-term-extractor'
+import { BOOKLINGUA_MODEL_CONFIG } from '@/lib/model-config'
 
 const anthropic = new Anthropic({
   apiKey: process.env.ANTHROPIC_API_KEY,
@@ -359,7 +360,7 @@ export async function POST(request: NextRequest) {
     try {
       const sampleText = textToScan.length > 3000 ? textToScan.slice(0, 3000) + '...' : textToScan
       const response = await anthropic.messages.create({
-        model: 'claude-sonnet-4-6',
+        model: BOOKLINGUA_MODEL_CONFIG.normal,
         max_tokens: 1000,
         system: `You are a pre-translation content scanner for BookLingua. Scan text for proper names and fantasy elements that need author guidance. Be concise.`,
         messages: [{

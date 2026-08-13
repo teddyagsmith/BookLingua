@@ -1,0 +1,11 @@
+# BookLingua hosted production incremental manifest
+# NEVER use `supabase db push` for this hosted project.
+# Execute in one controlled psql transaction after backup/PITR approval.
+supabase/deployment/production_incremental_preconditions.sql
+supabase/migrations/202608120000_hosted_prerequisites.sql
+supabase/migrations/202608120001_pipeline_hardening_source.sql
+supabase/migrations/202608120002_pipeline_hardening_state.sql
+supabase/migrations/202608120003_pipeline_hardening_briefs.sql
+supabase/migrations/202608120004_pipeline_hardening_cache.sql
+supabase/migrations/202608120005_semantic_pipeline.sql
+supabase/deployment/production_incremental_postconditions.sql

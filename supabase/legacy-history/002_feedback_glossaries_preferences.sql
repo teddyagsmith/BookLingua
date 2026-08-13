@@ -1,3 +1,4 @@
+-- QUARANTINED HISTORICAL MIGRATION. Not approved for hosted replay.
 -- ─── order_feedback ──────────────────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS order_feedback (
   id          UUID DEFAULT gen_random_uuid() PRIMARY KEY,

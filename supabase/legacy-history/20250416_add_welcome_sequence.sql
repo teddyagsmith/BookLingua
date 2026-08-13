@@ -1,4 +1,4 @@
--- Add welcome sequence tracking to email_subscribers
+-- QUARANTINED HISTORICAL MIGRATION. Hosted state already represents this schema.
 
 ALTER TABLE email_subscribers 
 ADD COLUMN IF NOT EXISTS welcome_sequence_day INTEGER DEFAULT NULL,

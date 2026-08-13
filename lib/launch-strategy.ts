@@ -1,5 +1,6 @@
 import Anthropic from '@anthropic-ai/sdk'
 import { LAUNCH_PACK_SCHEMA_VERSION, LaunchPackV1, launchMarket, validateLaunchPack } from './launch-pack-schema'
+import { BOOKLINGUA_MODEL_CONFIG } from './model-config'
 
 const anthropic = new Anthropic({
   apiKey: process.env.ANTHROPIC_API_KEY,
@@ -44,7 +45,7 @@ export async function generateLaunchStrategy(
   input: LaunchStrategyInput
 ): Promise<LaunchStrategyOutput> {
   const response = await anthropic.messages.create({
-    model: 'claude-sonnet-4-6',
+    model: BOOKLINGUA_MODEL_CONFIG.launchPack,
     max_tokens: 4000,
     messages: [
       {
