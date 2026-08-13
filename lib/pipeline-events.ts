@@ -60,15 +60,18 @@ export async function recordTerminalFailure(input: {
   } : { status: 'failed', completed_at: null }
   const { error: updateError } = await input.supabase.from('orders').update(failureUpdate).eq('id', input.orderId)
 
-  await recordPipelineEvent(input.supabase, {
-    orderId: input.orderId,
-    language: input.language,
-    stage: input.stage,
-    status: 'failed',
-    level: 'error',
-    safeMessage,
-    details: { adminAlertRequired: true, failedAt },
-  })
+  if (HARDENED_V1_ENABLED) {
+    const { error: cleanupError } = await input.supabase.rpc('fail_active_order_builds', {
+      p_order_id: input.orderId, p_stage: input.stage, p_safe_error: safeMessage, p_failed_at: failedAt,
+    })
+    if (cleanupError) throw new Error(`Terminal build cleanup/audit failed: ${cleanupError.message}`)
+  } else {
+    await recordPipelineEvent(input.supabase, {
+      orderId: input.orderId, language: input.language, stage: input.stage,
+      status: 'failed', level: 'error', safeMessage,
+      details: { adminAlertRequired: true, failedAt },
+    })
+  }
   if (updateError) throw new Error(`Terminal failure state persistence failed: ${updateError.message}`)
   return safeMessage
 }

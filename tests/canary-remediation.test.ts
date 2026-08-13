@@ -3,6 +3,8 @@ import assert from 'node:assert/strict'
 import { extractLaunchPackText, generateLaunchStrategy, parseLaunchStrategyText, toCanonicalLaunchPack } from '../lib/launch-strategy'
 import { finalizeSemanticOrder } from '../lib/semantic-finalization'
 import { PackageArtifact, PackageManifestV1, requiredArtifactTypes } from '../lib/package-manifest'
+import { cachedLaunchPack, launchPackIdentity } from '../lib/launch-pack-cache'
+import { launchMarket } from '../lib/launch-pack-schema'
 
 const strategy = {
   backendKeywords: ['one','two','three','four','five','six','seven'],
@@ -37,6 +39,18 @@ test('Launch Pack captures successful and failed attempt metadata', async () => 
     attempt: 3, onMetadata: record => { records.push(record) }, createMessage: async () => { throw new Error('provider failed') },
   }), /provider failed/)
   assert.equal(records[1].attempt, 3); assert.equal(records[1].success, false); assert.equal(records[1].modelId, 'claude-opus-5')
+})
+
+test('validated Launch Pack is generated once and reused on whole-job retry', async () => {
+  const rows:any[]=[]
+  const db:any={from(){let filters:any={};const chain:any={select:()=>chain,eq:(k:string,v:any)=>{filters[k]=v;return chain},maybeSingle:async()=>({data:rows.find(r=>Object.entries(filters).every(([k,v])=>r[k]===v))||null,error:null}),insert:async(row:any)=>{rows.push(row);return{error:null}}};return chain}}
+  const market=launchMarket('fr');let calls=0
+  const generate=async()=>{calls++;return {schemaVersion:'2.0',...market,backendKeywords:['1','2','3','4','5','6','7'],adKeywords:Array.from({length:20},(_,i)=>`a${i}`),categories:['a','b','c'],pricingRecommendation:{ebook:'€1',paperback:'€2',reasoning:'test'},bookDescription:'test',reviewStrategy:['test'],kdpUploadChecklist:['test']} as any}
+  const input={supabase:db,orderId:'o',language:'fr',sourceFingerprint:'source',modelId:'claude-opus-5',generate}
+  assert.equal((await cachedLaunchPack(input)).cached,false)
+  assert.equal((await cachedLaunchPack(input)).cached,true)
+  assert.equal(calls,1)
+  assert.notEqual(launchPackIdentity({...input,schemaVersion:'2.0',entitled:true}),launchPackIdentity({...input,sourceFingerprint:'changed',schemaVersion:'2.0',entitled:true}))
 })
 
 function artifact(buildId: string, type: PackageArtifact['type']): PackageArtifact {

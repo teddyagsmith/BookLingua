@@ -39,6 +39,7 @@ export interface LaunchPackExecutionMetadata {
   success: boolean
   stage: 'launch-pack'
   requestId: string
+  providerRequestId?: string
   errorCode?: string
 }
 
@@ -182,10 +183,10 @@ Respond with ONLY the JSON object, no additional text.`,
   })
 
   const strategy = parseLaunchStrategyText(extractLaunchPackText(response.content as Array<{ type: string; text?: string }>))
-  await execution.onMetadata?.({ provider: 'anthropic', modelId: response.model, inputTokens: response.usage?.input_tokens, outputTokens: response.usage?.output_tokens, attempt, success: true, stage: 'launch-pack', requestId })
+  await execution.onMetadata?.({ provider: 'anthropic', modelId: response.model, ...(response.id ? { providerRequestId: response.id } : {}), inputTokens: response.usage?.input_tokens, outputTokens: response.usage?.output_tokens, attempt, success: true, stage: 'launch-pack', requestId })
   return strategy
   } catch (error) {
-    await execution.onMetadata?.({ provider: 'anthropic', modelId: response?.model || BOOKLINGUA_MODEL_CONFIG.launchPack, inputTokens: response?.usage?.input_tokens, outputTokens: response?.usage?.output_tokens, attempt, success: false, stage: 'launch-pack', requestId, errorCode: error instanceof Error ? error.message : 'LAUNCH_PACK_EXECUTION_FAILED' })
+    await execution.onMetadata?.({ provider: 'anthropic', modelId: response?.model || BOOKLINGUA_MODEL_CONFIG.launchPack, ...(response?.id ? { providerRequestId: response.id } : {}), inputTokens: response?.usage?.input_tokens, outputTokens: response?.usage?.output_tokens, attempt, success: false, stage: 'launch-pack', requestId, errorCode: error instanceof Error ? error.message : 'LAUNCH_PACK_EXECUTION_FAILED' })
     throw error
   }
 }

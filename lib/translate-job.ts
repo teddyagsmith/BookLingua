@@ -18,6 +18,8 @@ import { toCanonicalLaunchPack } from './launch-strategy'
 import { launchMarket } from './launch-pack-schema'
 import { BOOKLINGUA_MODEL_CONFIG } from './model-config'
 import { finalizeSemanticOrder } from './semantic-finalization'
+import { cachedLaunchPack } from './launch-pack-cache'
+import { recordModelTelemetry } from './model-telemetry'
 
 const anthropic = new Anthropic({
   apiKey: process.env.ANTHROPIC_API_KEY,
@@ -298,32 +300,57 @@ export const translateBook = inngest.createFunction(
           let launchPack: Buffer | undefined
           if ((order.upsells || []).includes('launch-pack')) {
             const market = launchMarket(language)
-            const strategy = await generateLaunchStrategy({ bookTitle: order.book_title, authorName: order.author_name, genre: order.genre, bookDescription: fileContent.slice(0, 2500), targetLanguage: market.language, targetMarket: market.market }, {
-              attempt: attempt + 1,
-              requestId: `${orderId}:${language}:launch-pack`,
-              onMetadata: async metadata => {
-                const { error } = await getSupabaseAdmin().from('pipeline_events').insert({
-                  order_id: orderId, language, stage: 'launch_pack_model', status: metadata.success ? 'passed' : 'failed',
-                  level: metadata.success ? 'info' : 'error', safe_message: metadata.success ? 'MODEL_USAGE_CAPTURED' : 'MODEL_ATTEMPT_FAILED', details: metadata,
-                })
-                if (error) throw new Error(`Launch Pack usage metadata persistence failed: ${error.message}`)
-              },
-            })
-            launchPack = Buffer.from(JSON.stringify(toCanonicalLaunchPack(strategy, language, true)))
+            const sourceFingerprint=crypto.createHash('sha256').update(source).digest('hex')
+            const cached=await cachedLaunchPack({supabase:getSupabaseAdmin(),orderId,language,sourceFingerprint,modelId:BOOKLINGUA_MODEL_CONFIG.launchPack,generate:async()=>{
+              const strategy = await generateLaunchStrategy({ bookTitle: order.book_title, authorName: order.author_name, genre: order.genre, bookDescription: fileContent.slice(0, 2500), targetLanguage: market.language, targetMarket: market.market }, {
+                attempt: attempt + 1,
+                requestId: `${orderId}:${language}:launch-pack`,
+                onMetadata: async metadata => {
+                  await recordModelTelemetry(getSupabaseAdmin(), { orderId, language, stage:'launch-pack', attempt:metadata.attempt,
+                    requestIdentity:metadata.requestId, provider:metadata.provider, modelId:metadata.modelId,
+                    providerRequestId:metadata.providerRequestId, success:metadata.success, inputTokens:metadata.inputTokens,
+                    outputTokens:metadata.outputTokens, cacheStatus:metadata.success?'write':'miss', errorCode:metadata.errorCode })
+                  const { error } = await getSupabaseAdmin().from('pipeline_events').insert({
+                    order_id: orderId, language, stage: 'launch_pack_model', status: metadata.success ? 'passed' : 'failed',
+                    level: metadata.success ? 'info' : 'error', safe_message: metadata.success ? 'MODEL_USAGE_CAPTURED' : 'MODEL_ATTEMPT_FAILED', details: metadata,
+                  })
+                  if (error) throw new Error(`Launch Pack usage metadata persistence failed: ${error.message}`)
+                },
+              })
+              return toCanonicalLaunchPack(strategy, language, true)
+            }})
+            if(cached.cached)await recordModelTelemetry(getSupabaseAdmin(),{orderId,language,stage:'launch-pack',attempt:1,
+              requestIdentity:`${orderId}:${language}:launch-pack:cache-hit`,provider:'anthropic',modelId:BOOKLINGUA_MODEL_CONFIG.launchPack,
+              success:true,inputTokens:0,outputTokens:0,cacheStatus:'hit'})
+            launchPack = Buffer.from(JSON.stringify(cached.pack))
           }
           const result = await runSemanticPipeline({
             supabase: getSupabaseAdmin(), orderId, language, sourceFormat: format, source,
             title: order.book_title, brief, notes, allowReviewedStructure: order.semantic_structure_approved === true,
             launchPack, dualFormat: (order.upsells || []).includes('dual-format'),
             translate: async (batch, context) => {
-              const response = await anthropic.messages.create({
-                model: BOOKLINGUA_MODEL_CONFIG.translation, max_tokens: 8192,
-                system: 'Return only valid JSON matching the supplied schema. Preserve every node id and order exactly. Translate all textual node values; never omit or add nodes.',
-                messages: [{ role: 'user', content: `${renderTranslationBriefPrompt(context.brief)}\nPass ${context.pass}; target language ${context.language}.\n${JSON.stringify(batch)}` }],
-              })
-              const text = response.content.find(block => block.type === 'text')
-              if (!text || text.type !== 'text') throw new Error('Semantic model returned no JSON text')
-              return JSON.parse(text.text.replace(/^```json\s*|\s*```$/g, ''))
+              let response: any
+              const stage=context.pass===1?'translation':'editorial';const requestIdentity=`${orderId}:${language}:${stage}:${context.batchId}`
+              try{
+                response = await anthropic.messages.create({
+                  model: BOOKLINGUA_MODEL_CONFIG.translation, max_tokens: 8192,
+                  system: 'Return only valid JSON matching the supplied schema. Preserve every node id and order exactly. Translate all textual node values; never omit or add nodes.',
+                  messages: [{ role: 'user', content: `${renderTranslationBriefPrompt(context.brief)}\nPass ${context.pass}; target language ${context.language}.\n${JSON.stringify(batch)}` }],
+                })
+                const text = response.content.find((block:any) => block.type === 'text')
+                if (!text || text.type !== 'text') throw new Error('Semantic model returned no JSON text')
+                const parsed=JSON.parse(text.text.replace(/^```json\s*|\s*```$/g, ''))
+                await recordModelTelemetry(getSupabaseAdmin(),{orderId,language,stage,batchId:context.batchId,attempt:attempt+1,requestIdentity,
+                  provider:'anthropic',modelId:response.model,providerRequestId:response.id,success:true,inputTokens:response.usage.input_tokens,
+                  outputTokens:response.usage.output_tokens,cacheStatus:'write'})
+                return parsed
+              }catch(error){
+                await recordModelTelemetry(getSupabaseAdmin(),{orderId,language,stage,batchId:context.batchId,attempt:attempt+1,requestIdentity,
+                  provider:'anthropic',modelId:response?.model||BOOKLINGUA_MODEL_CONFIG.translation,providerRequestId:response?.id,success:false,
+                  inputTokens:response?.usage.input_tokens,outputTokens:response?.usage.output_tokens,cacheStatus:'miss',
+                  errorCode:error instanceof SyntaxError?'MODEL_JSON_INVALID':error instanceof Error?error.name:'MODEL_FAILURE'})
+                throw error
+              }
             },
           })
           return { buildId: result.buildId, status: result.manifest.status }
