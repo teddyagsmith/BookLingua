@@ -4,6 +4,7 @@ import AdmZip from 'adm-zip'
 import { Document, HeadingLevel, Packer, Paragraph } from 'docx'
 import { runSemanticPipeline } from '../../lib/semantic-pipeline'
 import { buildTranslationBrief, translationBriefFingerprint } from '../../lib/translation-brief'
+import { toCanonicalLaunchPack } from '../../lib/launch-strategy'
 
 const url = process.env.NEXT_PUBLIC_SUPABASE_URL!
 const key = process.env.SUPABASE_SERVICE_ROLE_KEY!
@@ -24,24 +25,26 @@ async function docx(): Promise<Buffer> {
   return Buffer.from(await Packer.toBuffer(new Document({sections:[{children}]})))
 }
 
-async function run(format: 'epub'|'docx'|'txt', source: Buffer, suffix: number) {
+async function run(format: 'epub'|'docx'|'txt', source: Buffer, suffix: number, entitled=false) {
   const orderId = `91000000-0000-0000-0000-${String(suffix).padStart(12,'0')}`; const language='fr'
   const sourceHash=createHash('sha256').update(source).digest('hex')
   await db.from('orders').delete().eq('id',orderId)
-  const { error: orderError } = await db.from('orders').insert({ id:orderId,email:`wb2-${suffix}@example.invalid`,author_name:'Synthetic',book_title:`WB2 ${format}`,word_count:1000,tier:'small',file_format:`.${format}`,languages:[language],amount_paid:99,status:'processing',pipeline_version:'semantic-v2' })
+  const { error: orderError } = await db.from('orders').insert({ id:orderId,email:`wb2-${suffix}@example.invalid`,author_name:'Synthetic',book_title:`WB2 ${format}`,word_count:1000,tier:'small',file_format:`.${format}`,languages:[language],upsells:entitled?['launch-pack','dual-format']:[],amount_paid:99,status:'processing',pipeline_version:'semantic-v2' })
   if (orderError) throw orderError
   const manifest={schemaVersion:'1.0',sourceHash,sourceFormat:format,sourceSizeBytes:source.length,structureFingerprint:sourceHash,parserVersion:'synthetic',createdAt:new Date().toISOString()}
   const { error:fileError }=await db.from('files').insert({order_id:orderId,type:'source_manifest',language:'en',content:JSON.stringify(manifest),file_url:`synthetic/${orderId}`,original_content:JSON.stringify({sha256:sourceHash})}); if(fileError) throw fileError
   const brief=buildTranslationBrief({language,sourceManifestFingerprint:sourceHash,approvedAt:'2026-08-13T00:00:00.000Z',approvalSource:'admin',decisions:[]})
   const {error:briefError}=await db.from('translation_briefs').insert({order_id:orderId,language,source_manifest_fingerprint:sourceHash,schema_version:'1.0',revision:brief.revision,brief,content_fingerprint:translationBriefFingerprint(brief),approved_at:brief.approvedAt,approval_source:'admin'}); if(briefError) throw briefError
-  const result=await runSemanticPipeline({supabase:db,orderId,language,sourceFormat:format,source,title:`WB2 ${format}`,brief,notes:{schemaVersion:'1.0',language,approach:'No notable translation decisions in deterministic synthetic fixture.',sections:[]},allowReviewedStructure:format==='txt',translate:async(batch,context)=>({...batch,nodes:batch.nodes.map(node=>({...node,text:`${context.pass===1?'P1':'P2'} ${node.text}`}))})})
+  const strategy:any={backendKeywords:Array.from({length:7},(_,i)=>`mot ${i}`),adKeywords:Array.from({length:20},(_,i)=>`annonce ${i}`),categories:['A','B','C'],pricingRecommendation:{ebook:'4.99 EUR',paperback:'12.99 EUR',reasoning:'Synthetic'},bookDescription:'Description synthétique',reviewStrategy:['Review'],kdpUploadChecklist:['Upload']}
+  const launchPack=entitled?Buffer.from(JSON.stringify(toCanonicalLaunchPack(strategy,language,true))):undefined
+  const result=await runSemanticPipeline({supabase:db,orderId,language,sourceFormat:format,source,title:`WB2 ${format}`,brief,notes:{schemaVersion:'1.0',language,approach:'No notable translation decisions in deterministic synthetic fixture.',sections:[]},allowReviewedStructure:format==='txt',launchPack,dualFormat:entitled,translate:async(batch,context)=>({...batch,nodes:batch.nodes.map(node=>({...node,text:`${context.pass===1?'P1':'P2'} ${node.text}`}))})})
   if(result.manifest.status!=='pass') throw new Error(`${format} package failed: ${result.manifest.errors.join('; ')}`)
   return {format,buildId:result.buildId,status:result.manifest.status,artifacts:result.manifest.artifacts.length}
 }
 
 async function main() {
   const results=[]
-  results.push(await run('epub',epub(),1)); results.push(await run('docx',await docx(),2)); results.push(await run('txt',Buffer.from(Array.from({length:12},(_,i)=>`# Chapter ${i+1}\nSynthetic body ${i+1}.`).join('\n\n')),3))
+  results.push(await run('epub',epub(),11)); results.push(await run('docx',await docx(),12)); results.push(await run('txt',Buffer.from(Array.from({length:12},(_,i)=>`# Chapter ${i+1}\nSynthetic body ${i+1}.`).join('\n\n')),13)); results.push(await run('docx',await docx(),14,true))
   console.log(JSON.stringify(results,null,2))
 }
 main().catch(error => { console.error(error); process.exitCode=1 })

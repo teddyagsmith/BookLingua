@@ -6,9 +6,10 @@ import { parseSemanticDocx, parseSemanticEpub, parseSemanticTxt } from '../lib/s
 import { createNodeTranslationInput, validateAndMergeNodeOutput } from '../lib/node-translation-contract'
 import { buildChapterMap, renderChapterMapCsv, renderChapterMapDocx } from '../lib/chapter-map'
 import { evaluateSemanticEligibility } from '../lib/semantic-document'
-import { buildSemanticDocx, buildSemanticEpub, buildSemanticReviewDocx } from '../lib/semantic-artifacts'
+import { buildSemanticDocx, buildSemanticEpub, buildSemanticEpubFromDocument, buildSemanticReviewDocx } from '../lib/semantic-artifacts'
 import { validateArtifact } from '../lib/artifact-validation-v2'
 import { deterministicSemanticBuildId } from '../lib/semantic-pipeline'
+import { semanticV2AllowedForOrder } from '../lib/semantic-canary'
 
 function epubFixture(): Buffer {
   const zip: any = new AdmZip()
@@ -105,4 +106,16 @@ test('chapter map is one-to-one and emits CSV and DOCX', async () => {
   assert.deepEqual(rows.map(row => row.sourceChapterNumber), ['10', '11'])
   assert.match(renderChapterMapCsv(rows), /Chapitre 11/)
   assert.ok((await renderChapterMapDocx(rows)).length > 0)
+})
+
+test('dual-format EPUB is generated directly from authoritative semantic nodes', () => {
+  const doc: any={schemaVersion:'2.0',sourceHash:'hash',sourceFormat:'docx',parserConfidence:1,nodes:[{id:'h',chapterId:'c',type:'heading',headingLevel:1,sourceChapterNumber:'1',sourceText:'Chapter 1',translatedText:'Chapitre 1',order:0,sourceLocation:'x'},{id:'p',chapterId:'c',type:'paragraph',headingLevel:null,sourceChapterNumber:null,sourceText:'Hello',translatedText:'Bonjour',order:1,sourceLocation:'y'}]}
+  assert.equal(validateArtifact(buildSemanticEpubFromDocument(doc,'Synthetic'),'epub').passed,true)
+})
+
+test('semantic canary activation is explicit and never selects legacy orders', () => {
+  const g=process.env.PIPELINE_VERSION,c=process.env.SEMANTIC_V2_CANARY_ORDER_IDS
+  process.env.PIPELINE_VERSION='legacy-v1'; process.env.SEMANTIC_V2_CANARY_ORDER_IDS='canary-1'
+  assert.equal(semanticV2AllowedForOrder('canary-1','semantic-v2'),true); assert.equal(semanticV2AllowedForOrder('other','semantic-v2'),false); assert.equal(semanticV2AllowedForOrder('canary-1','legacy-v1'),false)
+  g===undefined?delete process.env.PIPELINE_VERSION:process.env.PIPELINE_VERSION=g; c===undefined?delete process.env.SEMANTIC_V2_CANARY_ORDER_IDS:process.env.SEMANTIC_V2_CANARY_ORDER_IDS=c
 })

@@ -5,7 +5,7 @@ import { SupabaseClient } from '@supabase/supabase-js'
 import { parseSemanticDocx, parseSemanticEpub, parseSemanticTxt } from './semantic-parser'
 import { evaluateSemanticEligibility, SemanticDocumentV2 } from './semantic-document'
 import { createNodeTranslationInput, nodeBatchFingerprint, NodeTranslationInput, NodeTranslationOutput, validateAndMergeNodeOutput } from './node-translation-contract'
-import { buildSemanticDocx, buildSemanticEpub, buildSemanticReviewDocx } from './semantic-artifacts'
+import { buildSemanticDocx, buildSemanticEpub, buildSemanticEpubFromDocument, buildSemanticReviewDocx } from './semantic-artifacts'
 import { buildChapterMap, renderChapterMapCsv, renderChapterMapDocx } from './chapter-map'
 import { validateArtifact } from './artifact-validation-v2'
 import { storeImmutableArtifact } from './artifact-store'
@@ -31,6 +31,7 @@ export interface SemanticPipelineInput {
   allowReviewedStructure?: boolean
   buildId?: string
   launchPack?: Buffer
+  dualFormat?: boolean
 }
 
 export function deterministicSemanticBuildId(orderId: string, language: string, sourceHash: string, briefRevision: number): string {
@@ -126,8 +127,8 @@ export async function runSemanticPipeline(input: SemanticPipelineInput) {
   await storeValidated(input, buildId, 'translation_brief', 'translation-brief.json', Buffer.from(JSON.stringify(input.brief, null, 2)))
   await storeValidated(input, buildId, 'pass1_docx', `${input.title} - ${input.language} - Pass 1.docx`, await buildSemanticDocx(pass1, input.title, 'pass1'), 'docx')
   await storeValidated(input, buildId, 'review_docx', `${input.title} - ${input.language} - Review.docx`, await buildSemanticReviewDocx(pass1, pass2, input.title), 'docx')
-  if (input.sourceFormat === 'epub') await storeValidated(input, buildId, 'final_epub', `${input.title} - ${input.language} - Final.epub`, buildSemanticEpub(input.source, pass2), 'epub')
-  else await storeValidated(input, buildId, 'final_docx', `${input.title} - ${input.language} - Final.docx`, await buildSemanticDocx(pass2, input.title, 'final'), 'docx')
+  if (input.sourceFormat === 'epub' || input.dualFormat) await storeValidated(input, buildId, 'final_epub', `${input.title} - ${input.language} - Final.epub`, input.sourceFormat === 'epub' ? buildSemanticEpub(input.source, pass2) : buildSemanticEpubFromDocument(pass2, input.title), 'epub')
+  if (input.sourceFormat !== 'epub' || input.dualFormat) await storeValidated(input, buildId, 'final_docx', `${input.title} - ${input.language} - Final.docx`, await buildSemanticDocx(pass2, input.title, 'final'), 'docx')
   const map = buildChapterMap(pass2)
   if (map.some(row => row.status !== 'mapped')) throw new Error('Chapter map is incomplete')
   await storeValidated(input, buildId, 'chapter_map_csv', 'chapter-map.csv', Buffer.from(renderChapterMapCsv(map)))

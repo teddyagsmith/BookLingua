@@ -70,11 +70,12 @@ export async function POST(
         const authoritative = await assemblePackageManifest({ supabase: getSupabaseAdmin(), orderId, language, buildId: row.build_id })
         if (evaluatePackageManifest(authoritative).status !== 'pass') return NextResponse.json({ error: `Package changed or is incomplete for ${language}` }, { status: 409 })
       }
-      const { error: deliveryError } = await getSupabaseAdmin().rpc('begin_hardened_delivery', { p_order_id: orderId })
+      const { data: deliveryEventId, error: deliveryError } = await getSupabaseAdmin().rpc('begin_hardened_delivery', { p_order_id: orderId })
       if (deliveryError) return NextResponse.json({ error: 'Package state changed before approval' }, { status: 409 })
       if (!HARDENED_EXTERNAL_DELIVERY_ENABLED) {
         return NextResponse.json({ success: true, approved: true, externalDelivery: 'pending_disabled', emailSent: false }, { status: 202 })
       }
+      ;(order as any).delivery_event_id = deliveryEventId
     }
     const downloadLinks = languages.map((lang: string) => ({
       language: LANGUAGE_NAMES[lang] || lang,
@@ -181,7 +182,7 @@ export async function POST(
       to: order.email,
       subject: `Your translations are ready: ${order.book_title} 🎉`,
       html: customerEmailHtml,
-    })
+    }, order.status === 'pending_review' ? undefined : { idempotencyKey: `delivery/${(order as any).delivery_event_id}` })
     if (sendError) throw new Error('Customer delivery email failed')
 
     if (order.status !== 'pending_review') {

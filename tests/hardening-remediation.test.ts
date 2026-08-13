@@ -147,6 +147,16 @@ test('hardened downloads require approval and accept the delivery-pending state'
   assert.doesNotMatch(download, /order\.status === 'ready_for_review'/)
 })
 
+test('hardened email paths use deterministic provider idempotency keys', () => {
+  const webhook=fs.readFileSync(path.join(process.cwd(),'app/api/webhook/route.ts'),'utf8'); const approve=fs.readFileSync(path.join(process.cwd(),'app/api/admin/orders/[orderId]/approve/route.ts'),'utf8')
+  assert.match(webhook,/idempotencyKey: `confirmation\//); assert.match(webhook,/idempotencyKey: `admin-order\//); assert.match(approve,/idempotencyKey: `delivery\//)
+})
+
+test('real semantic job wires Launch Pack and dual-format entitlements', () => {
+  const job=fs.readFileSync(path.join(process.cwd(),'lib/translate-job.ts'),'utf8'); const pipeline=fs.readFileSync(path.join(process.cwd(),'lib/semantic-pipeline.ts'),'utf8')
+  assert.match(job,/toCanonicalLaunchPack/); assert.match(job,/launchPack, dualFormat:/); assert.match(pipeline,/buildSemanticEpubFromDocument/)
+})
+
 test('repository migration contract has unique active versions and a committed disposable baseline', () => {
   const migrationDir = path.join(process.cwd(), 'supabase/migrations')
   const versions = fs.readdirSync(migrationDir).filter(f => /^\d+_.*\.sql$/.test(f)).map(f => f.match(/^(\d+)_/)![1])

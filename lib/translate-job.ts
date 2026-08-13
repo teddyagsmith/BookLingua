@@ -13,6 +13,9 @@ import { assertTranslationBriefForSource, loadTranslationBrief, renderTranslatio
 import { HARDENED_V1_ENABLED } from './pipeline-capabilities'
 import { SEMANTIC_V2_ENABLED } from './semantic-document'
 import { runSemanticPipeline } from './semantic-pipeline'
+import { semanticV2AllowedForOrder } from './semantic-canary'
+import { toCanonicalLaunchPack } from './launch-strategy'
+import { launchMarket } from './launch-pack-schema'
 
 const anthropic = new Anthropic({
   apiKey: process.env.ANTHROPIC_API_KEY,
@@ -264,7 +267,7 @@ export const translateBook = inngest.createFunction(
 
     // semantic-v2 requires both environment capability and explicit per-order selection.
     // Existing/legacy orders never enter this branch merely because staging enables the capability.
-    if (HARDENED_V1_ENABLED && SEMANTIC_V2_ENABLED && order.pipeline_version === 'semantic-v2') {
+    if (HARDENED_V1_ENABLED && semanticV2AllowedForOrder(orderId, order.pipeline_version)) {
       const source = originalBuffer || Buffer.from(fileContent, 'utf8')
       const format = String(order.file_format || '.txt').replace(/^\./, '') as 'epub' | 'docx' | 'txt'
       for (const language of languages) {
@@ -277,9 +280,16 @@ export const translateBook = inngest.createFunction(
             approach: 'Author-approved terminology decisions applied consistently in both translation passes.',
             sections: brief.items.length ? [{ id: 'author-decisions', title: 'Author-approved decisions', entries: brief.items.map(item => ({ source: item.sourceTerm, target: item.targetInstruction, reason: item.authorDecision })) }] : [],
           }
+          let launchPack: Buffer | undefined
+          if ((order.upsells || []).includes('launch-pack')) {
+            const market = launchMarket(language)
+            const strategy = await generateLaunchStrategy({ bookTitle: order.book_title, authorName: order.author_name, genre: order.genre, bookDescription: fileContent.slice(0, 2500), targetLanguage: market.language, targetMarket: market.market })
+            launchPack = Buffer.from(JSON.stringify(toCanonicalLaunchPack(strategy, language, true)))
+          }
           const result = await runSemanticPipeline({
             supabase: getSupabaseAdmin(), orderId, language, sourceFormat: format, source,
             title: order.book_title, brief, notes, allowReviewedStructure: order.semantic_structure_approved === true,
+            launchPack, dualFormat: (order.upsells || []).includes('dual-format'),
             translate: async (batch, context) => {
               const response = await anthropic.messages.create({
                 model: 'claude-sonnet-4-5-20250929', max_tokens: 8192,

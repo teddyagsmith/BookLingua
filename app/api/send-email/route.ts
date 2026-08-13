@@ -49,7 +49,7 @@ export async function POST(req: NextRequest) {
       to: recipients,
       subject,
       html,
-      reply_to: replyTo || 'hello@booklingua.io',
+      replyTo: replyTo || 'hello@booklingua.io',
     })
 
     if (error) {

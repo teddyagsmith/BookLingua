@@ -91,3 +91,23 @@ export function buildSemanticEpub(source: Buffer, document: SemanticDocumentV2):
   }
   return zip.toBuffer()
 }
+
+export function buildSemanticEpubFromDocument(document: SemanticDocumentV2, title: string): Buffer {
+  assertTranslated(document)
+  const zip: any = new AdmZip()
+  zip.addFile('mimetype', Buffer.from('application/epub+zip'))
+  zip.addFile('META-INF/container.xml', Buffer.from('<?xml version="1.0"?><container xmlns="urn:oasis:names:tc:opendocument:xmlns:container"><rootfiles><rootfile full-path="OPS/book.opf" media-type="application/oebps-package+xml"/></rootfiles></container>'))
+  const chapters: Array<{ id: string; title: string; nodes: SemanticNodeV2[] }> = []
+  for (const node of document.nodes) {
+    if (node.type === 'heading' && node.headingLevel === 1 || !chapters.length) chapters.push({ id: `c${chapters.length + 1}`, title: node.type === 'heading' ? node.translatedText! : title, nodes: [] })
+    chapters[chapters.length - 1].nodes.push(node)
+  }
+  for (const chapter of chapters) {
+    const body = chapter.nodes.map(n => n.type === 'heading' ? `<h${Math.min(6,n.headingLevel||1)}>${escapeXml(n.translatedText!)}</h${Math.min(6,n.headingLevel||1)}>` : `<p>${escapeXml(n.translatedText!)}</p>`).join('')
+    zip.addFile(`OPS/${chapter.id}.xhtml`, Buffer.from(`<html xmlns="http://www.w3.org/1999/xhtml"><head><title>${escapeXml(chapter.title)}</title></head><body>${body}</body></html>`))
+  }
+  const manifest = chapters.map(c=>`<item id="${c.id}" href="${c.id}.xhtml" media-type="application/xhtml+xml"/>`).join('')
+  const spine = chapters.map(c=>`<itemref idref="${c.id}"/>`).join('')
+  zip.addFile('OPS/book.opf', Buffer.from(`<package xmlns="http://www.idpf.org/2007/opf" version="3.0"><metadata xmlns:dc="http://purl.org/dc/elements/1.1/"><dc:title>${escapeXml(title)}</dc:title></metadata><manifest>${manifest}</manifest><spine>${spine}</spine></package>`))
+  return zip.toBuffer()
+}

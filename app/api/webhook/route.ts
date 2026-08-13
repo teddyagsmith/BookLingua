@@ -175,7 +175,7 @@ export async function POST(request: NextRequest) {
           <p>Best,<br>The BookLingua Team</p>
         </div>
       `,
-      })
+      }, HARDENED_V1_ENABLED ? { idempotencyKey: `confirmation/${order.id}` } : undefined)
       if (HARDENED_V1_ENABLED) {
         const { error } = await getSupabaseAdmin().from('orders').update({ confirmation_sent_at: new Date().toISOString() }).eq('id', order.id)
         if (error) throw new Error(`Confirmation stage persistence failed: ${error.message}`)
@@ -203,7 +203,7 @@ export async function POST(request: NextRequest) {
         <hr>
         <p>Translation will start automatically.</p>
       `,
-      })
+      }, HARDENED_V1_ENABLED ? { idempotencyKey: `admin-order/${order.id}` } : undefined)
       if (HARDENED_V1_ENABLED) {
         const { error } = await getSupabaseAdmin().from('orders').update({ admin_notification_sent_at: new Date().toISOString() }).eq('id', order.id)
         if (error) throw new Error(`Admin notification stage persistence failed: ${error.message}`)
