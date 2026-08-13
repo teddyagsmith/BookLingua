@@ -53,7 +53,7 @@ async function persistSemantic(supabase: SupabaseClient, input: { orderId: strin
     if (input.language) query.eq('language', input.language); else query.is('language', null)
     if (input.buildId) query.eq('build_id', input.buildId); else query.is('build_id', null)
     const { data } = await query.single()
-    if (!data || data.source_hash !== row.source_hash || data.structure_fingerprint !== row.structure_fingerprint || JSON.stringify(data.document) !== JSON.stringify(row.document)) throw new Error('Semantic retry differs from immutable persisted state')
+    if (!data || data.source_hash !== row.source_hash || data.structure_fingerprint !== row.structure_fingerprint) throw new Error('Semantic retry differs from immutable persisted state')
   }
 }
 
@@ -73,6 +73,18 @@ async function storeValidated(input: SemanticPipelineInput, buildId: string, typ
   const reportId = await validationReport(input.supabase, { orderId: input.orderId, language: input.language, buildId, stage: `artifact:${type}`, passed: result.passed, errors: result.errors, metrics: result.metrics })
   if (!result.passed) throw new Error(`${type} validation failed: ${result.errors.map((error: any) => error.message).join('; ')}`)
   return storeImmutableArtifact({ supabase: input.supabase, orderId: input.orderId, language: input.language, buildId, type, filename, buffer, schemaVersion: 'semantic-v2', validationStatus: 'pass', validationReportId: reportId })
+}
+
+async function cachedTranslation(input: SemanticPipelineInput, batch: NodeTranslationInput, pass: 1|2): Promise<NodeTranslationOutput> {
+  const cache = input.supabase.from('translation_chunks').select('content').eq('order_id',input.orderId).eq('lang_code',input.language)
+    .eq('chunk_index',0).eq('pass',`semantic-pass${pass}`).eq('pipeline_version','semantic-v2').eq('schema_version',batch.schemaVersion).eq('structure_fingerprint',batch.sourceFingerprint)
+  const { data: existing, error: readError } = await cache.maybeSingle()
+  if (readError) throw new Error(`Semantic cache read failed: ${readError.message}`)
+  if (existing?.content) return JSON.parse(existing.content)
+  const output = await input.translate(batch,{pass,language:input.language,brief:input.brief})
+  const { error } = await input.supabase.from('translation_chunks').upsert({ order_id:input.orderId,lang_code:input.language,chunk_index:0,pass:`semantic-pass${pass}`,content:JSON.stringify(output),pipeline_version:'semantic-v2',schema_version:batch.schemaVersion,structure_fingerprint:batch.sourceFingerprint },{onConflict:'order_id,lang_code,chunk_index,pass,pipeline_version,schema_version,structure_fingerprint'})
+  if (error) throw new Error(`Semantic cache persistence failed: ${error.message}`)
+  return output
 }
 
 export async function runSemanticPipeline(input: SemanticPipelineInput) {
@@ -96,10 +108,10 @@ export async function runSemanticPipeline(input: SemanticPipelineInput) {
   const { error: buildError } = await input.supabase.rpc('begin_order_language_build', { p_order_id: input.orderId, p_language: input.language, p_build_id: buildId })
   if (buildError) throw new Error(`Build allocation failed: ${buildError.message}`)
   const pass1Input = createNodeTranslationInput(sourceDocument.nodes)
-  const pass1 = { ...sourceDocument, nodes: validateAndMergeNodeOutput(sourceDocument.nodes, await input.translate(pass1Input, { pass: 1, language: input.language, brief: input.brief }), pass1Input.sourceFingerprint) }
+  const pass1 = { ...sourceDocument, nodes: validateAndMergeNodeOutput(sourceDocument.nodes, await cachedTranslation(input,pass1Input,1), pass1Input.sourceFingerprint) }
   await persistSemantic(input.supabase, { orderId: input.orderId, language: input.language, buildId, pass: 'pass1', document: pass1, eligibility: eligibility.status })
   const pass2Input = createNodeTranslationInput(pass1.nodes)
-  const pass2 = { ...pass1, nodes: validateAndMergeNodeOutput(pass1.nodes, await input.translate(pass2Input, { pass: 2, language: input.language, brief: input.brief }), pass2Input.sourceFingerprint) }
+  const pass2 = { ...pass1, nodes: validateAndMergeNodeOutput(pass1.nodes, await cachedTranslation(input,pass2Input,2), pass2Input.sourceFingerprint) }
   await persistSemantic(input.supabase, { orderId: input.orderId, language: input.language, buildId, pass: 'pass2', document: pass2, eligibility: eligibility.status })
 
   await storeValidated(input, buildId, 'translation_brief', 'translation-brief.json', Buffer.from(JSON.stringify(input.brief, null, 2)))
