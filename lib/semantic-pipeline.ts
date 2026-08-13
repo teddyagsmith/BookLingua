@@ -113,6 +113,16 @@ export async function runSemanticPipeline(input: SemanticPipelineInput) {
   const pass2 = { ...pass1, nodes: validateAndMergeNodeOutput(pass1.nodes, await cachedTranslation(input,pass2Input,2), pass2Input.sourceFingerprint) }
   await persistSemantic(input.supabase, { orderId: input.orderId, language: input.language, buildId, pass: 'pass2', document: pass2, eligibility: eligibility.status })
 
+  // A completed build is immutable. Retries must reuse its validated package rather
+  // than regenerate container formats (DOCX ZIP metadata is not byte-stable).
+  const { data: completedPackage, error: completedPackageError } = await input.supabase
+    .from('package_manifests').select('manifest').eq('order_id', input.orderId)
+    .eq('language', input.language).eq('build_id', buildId).eq('status', 'pass').maybeSingle()
+  if (completedPackageError) throw new Error(`Completed package lookup failed: ${completedPackageError.message}`)
+  if (completedPackage?.manifest) {
+    return { buildId, eligibility, pass1, pass2, manifest: completedPackage.manifest }
+  }
+
   await storeValidated(input, buildId, 'translation_brief', 'translation-brief.json', Buffer.from(JSON.stringify(input.brief, null, 2)))
   await storeValidated(input, buildId, 'pass1_docx', `${input.title} - ${input.language} - Pass 1.docx`, await buildSemanticDocx(pass1, input.title, 'pass1'), 'docx')
   await storeValidated(input, buildId, 'review_docx', `${input.title} - ${input.language} - Review.docx`, await buildSemanticReviewDocx(pass1, pass2, input.title), 'docx')
