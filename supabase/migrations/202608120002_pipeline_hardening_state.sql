@@ -1,6 +1,6 @@
 -- Pipeline hardening v2: normalized stage, validation and artifact records.
 -- DO NOT apply automatically.
--- Apply after 20260812_pipeline_hardening_source.sql.
+-- Apply after 202608120001_pipeline_hardening_source.sql.
 
 alter table orders
   add column if not exists failed_stage text,
@@ -130,6 +130,83 @@ create policy "Service role manages artifacts" on artifacts
 create policy "Service role manages package manifests" on package_manifests
   for all using (auth.role() = 'service_role');
 
+-- Recompute package authority from persisted rows. A caller-supplied `pass`
+-- value or manifest JSON is never sufficient to make an order reviewable.
+create or replace function is_authoritative_package_manifest(p_manifest_id uuid)
+returns boolean
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  with selected as (
+    select p.*, o.file_format, o.upsells
+    from package_manifests p
+    join orders o on o.id = p.order_id
+    where p.id = p_manifest_id
+  ), required_types as (
+    select unnest(array[
+      'translation_brief', 'pass1_docx', 'review_docx', 'translation_notes',
+      'chapter_map_docx', 'chapter_map_csv', 'upload_guide'
+    ]::text[]) artifact_type
+    union all
+    select 'final_epub' from selected
+      where replace(file_format, '.', '') = 'epub'
+        or coalesce(upsells, '[]'::jsonb) ? 'dual-format'
+    union all
+    select 'final_docx' from selected
+      where replace(file_format, '.', '') in ('docx', 'txt')
+        or coalesce(upsells, '[]'::jsonb) ? 'dual-format'
+    union all
+    select 'launch_pack' from selected
+      where coalesce(upsells, '[]'::jsonb) ? 'launch-pack'
+  ), manifest_items as (
+    select item
+    from selected s
+    cross join lateral jsonb_array_elements(
+      case when jsonb_typeof(s.manifest->'artifacts') = 'array'
+        then s.manifest->'artifacts' else '[]'::jsonb end
+    ) item
+  ), authoritative_items as (
+    select mi.item, a.artifact_type
+    from manifest_items mi
+    join selected s on true
+    join artifacts a
+      on a.id::text = mi.item->>'id'
+     and a.order_id = s.order_id
+     and a.language = s.language
+     and a.build_id = s.build_id
+     and a.artifact_type = mi.item->>'type'
+     and a.storage_bucket = mi.item->>'storageBucket'
+     and a.storage_path = mi.item->>'storagePath'
+     and a.sha256 = mi.item->>'sha256'
+     and a.size_bytes::text = mi.item->>'sizeBytes'
+     and a.validation_status = 'pass'
+    join validation_reports vr
+      on vr.id = a.validation_report_id
+     and vr.order_id = a.order_id
+     and vr.language = a.language
+     and vr.build_id = a.build_id
+     and vr.passed = true
+  )
+  select coalesce((select
+    s.status = 'pass'
+    and s.manifest->>'orderId' = s.order_id::text
+    and s.manifest->>'language' = s.language
+    and s.manifest->>'buildId' = s.build_id::text
+    and s.manifest->>'status' = 'pass'
+    and jsonb_typeof(s.manifest->'errors') = 'array'
+    and jsonb_array_length(s.manifest->'errors') = 0
+    and (select count(*) from manifest_items) = (select count(*) from authoritative_items)
+    and not exists (
+      select 1 from required_types r
+      where (select count(*) from authoritative_items a where a.artifact_type = r.artifact_type) <> 1
+    )
+  from selected s), false);
+$$;
+revoke all on function is_authoritative_package_manifest(uuid) from public;
+grant execute on function is_authoritative_package_manifest(uuid) to service_role;
+
 -- Resolve an order gate in one database transaction. A PASS is possible only
 -- when every purchased language has exactly one latest passing package.
 create or replace function resolve_order_package_gate(p_order_id uuid)
@@ -139,7 +216,7 @@ security definer
 set search_path = public
 as $$
 declare
-  v_languages text[];
+  v_languages jsonb;
   v_missing_or_failed integer;
   v_status text;
 begin
@@ -147,9 +224,10 @@ begin
   if v_languages is null then raise exception 'order_not_found'; end if;
 
   with required_languages as (
-    select unnest(v_languages) as language
+    select jsonb_array_elements_text(v_languages) as language
   ), latest_packages as (
-    select distinct on (language) language, status
+    select distinct on (language) language, status,
+      is_authoritative_package_manifest(id) as authoritative
     from package_manifests
     where order_id = p_order_id
     order by language, created_at desc, id desc
@@ -157,9 +235,13 @@ begin
   select count(*) into v_missing_or_failed
   from required_languages r
   left join latest_packages p using (language)
-  where p.language is null or p.status <> 'pass';
+  where p.language is null or p.status <> 'pass' or p.authoritative is not true;
 
-  if cardinality(v_languages) = 0 or cardinality(v_languages) <> (select count(distinct language) from unnest(v_languages) as u(language)) then
+  if jsonb_typeof(v_languages) <> 'array'
+    or jsonb_array_length(v_languages) = 0
+    or jsonb_array_length(v_languages) <> (
+      select count(distinct language) from jsonb_array_elements_text(v_languages) as u(language)
+    ) then
     raise exception 'invalid_order_languages';
   end if;
   if (select status from orders where id = p_order_id) in ('delivery_pending', 'completed') then
@@ -176,18 +258,22 @@ grant execute on function resolve_order_package_gate(uuid) to service_role;
 
 create or replace function begin_hardened_delivery(p_order_id uuid)
 returns void language plpgsql security definer set search_path = public as $$
-declare v_languages text[]; v_missing integer;
+declare v_languages jsonb; v_missing integer;
 begin
   select languages into v_languages from orders
   where id = p_order_id and status in ('ready_for_review', 'delivery_pending') for update;
   if v_languages is null then raise exception 'order_not_ready_for_delivery'; end if;
-  with required_languages as (select unnest(v_languages) language),
+  if jsonb_typeof(v_languages) <> 'array' or jsonb_array_length(v_languages) = 0 then
+    raise exception 'invalid_order_languages';
+  end if;
+  with required_languages as (select jsonb_array_elements_text(v_languages) language),
   latest as (
-    select distinct on (language) language, status from package_manifests
+    select distinct on (language) language, status,
+      is_authoritative_package_manifest(id) as authoritative from package_manifests
     where order_id = p_order_id order by language, created_at desc, id desc
   )
   select count(*) into v_missing from required_languages r left join latest p using(language)
-  where p.language is null or p.status <> 'pass';
+  where p.language is null or p.status <> 'pass' or p.authoritative is not true;
   if v_missing <> 0 then raise exception 'package_state_changed'; end if;
   update orders set status = 'delivery_pending', delivery_started_at = coalesce(delivery_started_at, now()), completed_at = null
   where id = p_order_id;

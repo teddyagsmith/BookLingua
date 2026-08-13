@@ -175,7 +175,13 @@ export async function POST(request: NextRequest) {
     if (!binary.length || binary.length > 50 * 1024 * 1024) {
       return NextResponse.json({ error: 'File must be between 1 byte and 50 MB' }, { status: 400 })
     }
-    if (HARDENED_V1_ENABLED) assertSupportedSourcePackage(sourceFormat, binary)
+    if (HARDENED_V1_ENABLED) {
+      try {
+        assertSupportedSourcePackage(sourceFormat, binary)
+      } catch {
+        return NextResponse.json({ error: 'Uploaded document package is malformed' }, { status: 400 })
+      }
+    }
     const storagePath = sourceStoragePath(sessionId, fileExtension)
     let textContent = ''
     let wordCount = 0

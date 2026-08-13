@@ -54,14 +54,18 @@ as $$
 declare
   v_upload temp_uploads%rowtype;
   v_brief jsonb;
-  v_languages text[];
+  v_languages jsonb;
 begin
   perform pg_advisory_xact_lock(hashtext(p_order_id::text));
   select languages into v_languages from orders where id = p_order_id for update;
   if v_languages is null then raise exception 'order_not_found'; end if;
   select * into v_upload from temp_uploads where session_id = p_session_id::text for update;
   if not found then
-    if exists(select 1 from orders where id = p_order_id and source_linked_at is not null) then return; end if;
+    if exists(select 1 from orders where id = p_order_id
+      and source_linked_at is not null and source_upload_id = p_session_id) then return; end if;
+    if exists(select 1 from orders where id = p_order_id and source_linked_at is not null) then
+      raise exception 'order_already_linked_to_other_source';
+    end if;
     raise exception 'source_upload_not_found';
   end if;
   if v_upload.source_storage_path is null or v_upload.source_storage_bucket <> 'booklingua-private-sources'
@@ -72,9 +76,10 @@ begin
   if v_upload.source_manifest->>'sourceHash' <> v_upload.source_sha256 then raise exception 'source_manifest_hash_mismatch'; end if;
   if (select file_format from orders where id = p_order_id) <> v_upload.file_format then raise exception 'source_format_mismatch'; end if;
   if jsonb_typeof(p_briefs) <> 'array'
-    or jsonb_array_length(p_briefs) <> cardinality(v_languages)
-    or (select count(distinct value->>'language') from jsonb_array_elements(p_briefs)) <> cardinality(v_languages)
-    or exists(select 1 from unnest(v_languages) language where not exists(
+    or jsonb_typeof(v_languages) <> 'array'
+    or jsonb_array_length(p_briefs) <> jsonb_array_length(v_languages)
+    or (select count(distinct value->>'language') from jsonb_array_elements(p_briefs)) <> jsonb_array_length(v_languages)
+    or exists(select 1 from jsonb_array_elements_text(v_languages) language where not exists(
       select 1 from jsonb_array_elements(p_briefs) b where b->>'language' = language
     )) then raise exception 'translation_brief_language_set_mismatch'; end if;
 
