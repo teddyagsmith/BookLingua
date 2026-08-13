@@ -1,4 +1,5 @@
 import Anthropic from '@anthropic-ai/sdk'
+import type { Message, MessageCreateParamsNonStreaming } from '@anthropic-ai/sdk/resources/messages'
 import { LAUNCH_PACK_SCHEMA_VERSION, LaunchPackV1, launchMarket, validateLaunchPack } from './launch-pack-schema'
 import { BOOKLINGUA_MODEL_CONFIG } from './model-config'
 
@@ -29,6 +30,38 @@ export interface LaunchStrategyOutput {
   kdpUploadChecklist: string[]
 }
 
+export interface LaunchPackExecutionMetadata {
+  provider: 'anthropic'
+  modelId: string
+  inputTokens?: number
+  outputTokens?: number
+  attempt: number
+  success: boolean
+  stage: 'launch-pack'
+  requestId: string
+  errorCode?: string
+}
+
+type AnthropicMessage = Message
+
+export function extractLaunchPackText(content: Array<{ type: string; text?: string }>): string {
+  const text = content.find(block => block.type === 'text')
+  if (!text?.text?.trim()) {
+    throw new Error('Launch Pack model returned no non-empty text block')
+  }
+  return text.text
+}
+
+export function parseLaunchStrategyText(raw: string): LaunchStrategyOutput {
+  const cleaned = raw.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim()
+  if (!cleaned) throw new Error('Launch Pack model returned empty text')
+  try {
+    return JSON.parse(cleaned) as LaunchStrategyOutput
+  } catch {
+    throw new Error('Launch Pack model returned malformed JSON')
+  }
+}
+
 export function toCanonicalLaunchPack(
   strategy: LaunchStrategyOutput,
   locale: string,
@@ -42,11 +75,23 @@ export function toCanonicalLaunchPack(
 }
 
 export async function generateLaunchStrategy(
-  input: LaunchStrategyInput
+  input: LaunchStrategyInput,
+  execution: {
+    attempt?: number
+    requestId?: string
+    onMetadata?: (metadata: LaunchPackExecutionMetadata) => Promise<void> | void
+    createMessage?: (params: MessageCreateParamsNonStreaming) => Promise<AnthropicMessage>
+  } = {},
 ): Promise<LaunchStrategyOutput> {
-  const response = await anthropic.messages.create({
+  const attempt = execution.attempt || 1
+  const requestId = execution.requestId || `launch-pack:${input.targetLanguage}:${attempt}`
+  let response: AnthropicMessage | undefined
+  try {
+  response = await (execution.createMessage || ((params) => anthropic.messages.create(params)))({
     model: BOOKLINGUA_MODEL_CONFIG.launchPack,
-    max_tokens: 4000,
+    // Opus may spend part of this budget on thinking blocks before emitting the
+    // canonical JSON text block. 4,000 truncated valid Launch Packs in staging.
+    max_tokens: 8192,
     messages: [
       {
         role: 'user',
@@ -136,18 +181,13 @@ Respond with ONLY the JSON object, no additional text.`,
     ],
   })
 
-  const content = response.content[0]
-  if (content.type !== 'text') {
-    throw new Error('Unexpected response type')
+  const strategy = parseLaunchStrategyText(extractLaunchPackText(response.content as Array<{ type: string; text?: string }>))
+  await execution.onMetadata?.({ provider: 'anthropic', modelId: response.model, inputTokens: response.usage?.input_tokens, outputTokens: response.usage?.output_tokens, attempt, success: true, stage: 'launch-pack', requestId })
+  return strategy
+  } catch (error) {
+    await execution.onMetadata?.({ provider: 'anthropic', modelId: response?.model || BOOKLINGUA_MODEL_CONFIG.launchPack, inputTokens: response?.usage?.input_tokens, outputTokens: response?.usage?.output_tokens, attempt, success: false, stage: 'launch-pack', requestId, errorCode: error instanceof Error ? error.message : 'LAUNCH_PACK_EXECUTION_FAILED' })
+    throw error
   }
-
-  // Parse the JSON response
-  const cleanedResponse = content.text
-    .replace(/```json\n?/g, '')
-    .replace(/```\n?/g, '')
-    .trim()
-
-  return JSON.parse(cleanedResponse) as LaunchStrategyOutput
 }
 
 // Market configurations

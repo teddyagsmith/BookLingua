@@ -143,9 +143,9 @@ test('hardened external delivery is fail-closed and cannot be enabled by truthy 
 
 test('hardened downloads require approval and accept the delivery-pending state', () => {
   const download = fs.readFileSync(path.join(process.cwd(), 'app/api/download/[orderId]/[lang]/route.ts'), 'utf8')
-  assert.match(download, /\['completed', 'pending_review', 'delivery_pending'\]/)
+  assert.match(download, /\['completed', 'pending_review', 'ready_for_review', 'delivery_pending'\]/)
   assert.match(download, /order\.status === 'delivery_pending'/)
-  assert.doesNotMatch(download, /order\.status === 'ready_for_review'/)
+  assert.match(download, /order\.status === 'ready_for_review'/)
 })
 
 test('hardened email paths use deterministic provider idempotency keys', () => {
@@ -156,6 +156,14 @@ test('hardened email paths use deterministic provider idempotency keys', () => {
 test('real semantic job wires Launch Pack and dual-format entitlements', () => {
   const job=fs.readFileSync(path.join(process.cwd(),'lib/translate-job.ts'),'utf8'); const pipeline=fs.readFileSync(path.join(process.cwd(),'lib/semantic-pipeline.ts'),'utf8')
   assert.match(job,/toCanonicalLaunchPack/); assert.match(job,/launchPack, dualFormat:/); assert.match(pipeline,/buildSemanticEpubFromDocument/)
+})
+
+test('completed semantic retry checks authoritative package before any model call', () => {
+  const job = fs.readFileSync(path.join(process.cwd(), 'lib/translate-job.ts'), 'utf8')
+  const completedLookup = job.indexOf(".eq('status', 'pass').maybeSingle()")
+  const launchCall = job.indexOf('generateLaunchStrategy', completedLookup)
+  assert.ok(completedLookup > 0 && launchCall > completedLookup)
+  assert.match(job, /is_authoritative_package_manifest/)
 })
 
 test('repository migration contract has unique active versions and a committed disposable baseline', () => {

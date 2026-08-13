@@ -6,6 +6,30 @@ function escapeHtml(value: string): string {
   return value.replace(/[&<>"']/g, character => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[character]!))
 }
 
+export function renderAggregateReviewEmail(input: {
+  bookTitle: string
+  adminUrl: string
+  manifests: PackageManifestV1[]
+  artifactUrls: Record<string, Record<string, string>>
+}): { subject: string; html: string; templateVersion: string } {
+  const evaluated = input.manifests.map(evaluatePackageManifest)
+  const passed = evaluated.length > 0 && evaluated.every(manifest => manifest.status === 'pass')
+  const sections = evaluated.map(manifest => {
+    const artifacts = manifest.artifacts.map(artifact => {
+      const url = input.artifactUrls[manifest.language]?.[artifact.type]
+      const label = `${artifact.type} — ${artifact.validationStatus} — sha256 ${artifact.sha256}`
+      return `<li>${url ? `<a href="${escapeHtml(url)}">${escapeHtml(label)}</a>` : escapeHtml(label)}</li>`
+    }).join('')
+    const errors = manifest.errors.map(error => `<li>${escapeHtml(error)}</li>`).join('')
+    return `<section><h2>${escapeHtml(manifest.language)} — ${manifest.status.toUpperCase()}</h2>${manifest.status === 'pass' ? `<h3>Validated artifacts</h3><ul>${artifacts}</ul><p>Validation summary: every entitled artifact is present and authoritatively PASS.</p>` : `<h3>Blocking reasons</h3><ul>${errors}</ul>`}</section>`
+  }).join('')
+  return {
+    subject: `${passed ? 'PASS' : 'FAIL'} — INTERNAL REVIEW — ${input.bookTitle} — ${evaluated.map(item => item.language).join(', ')}`,
+    html: `<div data-template-version="${EMAIL_TEMPLATE_VERSION}"><h1>${passed ? 'PASS' : 'FAIL'} — Internal review</h1><p>Customer delivery is not authorized by this email.</p>${sections}<p><a href="${escapeHtml(input.adminUrl)}">Review in admin</a></p></div>`,
+    templateVersion: EMAIL_TEMPLATE_VERSION,
+  }
+}
+
 export function renderReviewEmail(input: {
   bookTitle: string
   adminUrl: string

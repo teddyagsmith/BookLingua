@@ -14,6 +14,7 @@ import { default as EPub } from 'epub-gen-memory'
 import JSZip from 'jszip'
 import { HARDENED_V1_ENABLED } from '@/lib/pipeline-capabilities'
 import { selectManifestArtifact, verifyStoredArtifact } from '@/lib/hardened-artifact'
+import type { ArtifactType } from '@/lib/package-manifest'
 
 const LANG_NAMES: Record<string, string> = {
   'es-es':    'Spanish_Spain',
@@ -657,7 +658,7 @@ export async function GET(
       .single()
 
     if (!order) return NextResponse.json({ error: 'Order not found' }, { status: 404 })
-    if (!['completed', 'pending_review', 'delivery_pending'].includes(order.status)) return NextResponse.json({ error: 'Translation not yet approved for download' }, { status: 400 })
+    if (!['completed', 'pending_review', 'ready_for_review', 'delivery_pending'].includes(order.status)) return NextResponse.json({ error: 'Translation not yet approved for download' }, { status: 400 })
 
     const fileFormat  = (order.file_format || '.docx').toLowerCase()
     const upsells     = (order.upsells || []) as string[]
@@ -669,11 +670,14 @@ export async function GET(
 
     // Hardened packages serve the exact immutable bytes that passed validation.
     // If no artifact table/row exists, legacy orders continue through the dynamic builder below.
-    const artifactType = type === 'pass1' ? 'pass1_docx'
+    const requestedArtifact = request.nextUrl.searchParams.get('artifact')
+    const allowedArtifactTypes = new Set(['translation_brief','pass1_docx','review_docx','final_epub','final_docx','translation_notes','chapter_map_docx','chapter_map_csv','upload_guide','launch_pack'])
+    if (requestedArtifact && !allowedArtifactTypes.has(requestedArtifact)) return NextResponse.json({ error: 'Unsupported artifact type' }, { status: 400 })
+    const artifactType = (requestedArtifact || (type === 'pass1' ? 'pass1_docx'
       : type === 'review' ? 'review_docx'
-        : effectiveFormat === '.epub' ? 'final_epub' : 'final_docx'
+        : effectiveFormat === '.epub' ? 'final_epub' : 'final_docx')) as ArtifactType
     let storedArtifact: any = null
-    if (HARDENED_V1_ENABLED && (order.status === 'delivery_pending' || (order.status === 'completed' && Boolean(order.source_linked_at)))) {
+    if (HARDENED_V1_ENABLED && (order.status === 'ready_for_review' || order.status === 'delivery_pending' || (order.status === 'completed' && Boolean(order.source_linked_at)))) {
       const { data: currentBuild } = await getSupabaseAdmin().from('order_language_builds')
         .select('id').eq('order_id', orderId).eq('language', lang).eq('is_current', true).maybeSingle()
       if (!currentBuild) return NextResponse.json({ error: 'Current validated build unavailable' }, { status: 409 })
@@ -700,9 +704,10 @@ export async function GET(
       catch {
         return NextResponse.json({ error: 'Stored artifact integrity check failed' }, { status: 409 })
       }
-      const contentType = storedArtifact.filename.endsWith('.epub')
-        ? 'application/epub+zip'
-        : 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+      const contentType = storedArtifact.filename.endsWith('.epub') ? 'application/epub+zip'
+        : storedArtifact.filename.endsWith('.docx') ? 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+          : storedArtifact.filename.endsWith('.json') ? 'application/json'
+            : storedArtifact.filename.endsWith('.csv') ? 'text/csv; charset=utf-8' : 'text/plain; charset=utf-8'
       return new NextResponse(buffer, { headers: {
         'Content-Type': contentType,
         'Content-Disposition': `attachment; filename="${storedArtifact.filename.replace(/"/g, '')}"`,

@@ -65,3 +65,8 @@ export function buildDownloadUrl(orderId: string, lang: string, type: 'review' |
   const token = signDownloadToken(orderId, lang)
   return `${process.env.NEXT_PUBLIC_APP_URL}/api/download/${orderId}/${lang}?token=${token}&type=${type}`
 }
+
+export function buildArtifactDownloadUrl(orderId: string, lang: string, artifact: string, appUrl = process.env.NEXT_PUBLIC_APP_URL!): string {
+  const token = signDownloadToken(orderId, lang)
+  return `${appUrl}/api/download/${orderId}/${lang}?token=${token}&artifact=${encodeURIComponent(artifact)}`
+}

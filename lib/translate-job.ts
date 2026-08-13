@@ -17,6 +17,7 @@ import { semanticV2AllowedForOrder } from './semantic-canary'
 import { toCanonicalLaunchPack } from './launch-strategy'
 import { launchMarket } from './launch-pack-schema'
 import { BOOKLINGUA_MODEL_CONFIG } from './model-config'
+import { finalizeSemanticOrder } from './semantic-finalization'
 
 const anthropic = new Anthropic({
   apiKey: process.env.ANTHROPIC_API_KEY,
@@ -215,7 +216,7 @@ export const translateBook = inngest.createFunction(
     },
   },
   [{ event: 'book.translate' }, { event: 'book/translate.requested' }],
-  async ({ event, step }) => {
+  async ({ event, step, attempt }) => {
     // Handle both event formats
     const orderId = event.data.orderId as string
     // If languages not in event, load from order
@@ -273,6 +274,19 @@ export const translateBook = inngest.createFunction(
       const format = String(order.file_format || '.txt').replace(/^\./, '') as 'epub' | 'docx' | 'txt'
       for (const language of languages) {
         await step.run(`semantic-v2-${language}`, async () => {
+          const { data: currentBuild, error: currentBuildError } = await getSupabaseAdmin().from('order_language_builds')
+            .select('id').eq('order_id', orderId).eq('language', language).eq('is_current', true).maybeSingle()
+          if (currentBuildError) throw new Error(`Completed semantic build lookup failed: ${currentBuildError.message}`)
+          if (currentBuild) {
+            const { data: completed, error: completedError } = await getSupabaseAdmin().from('package_manifests')
+              .select('id,manifest').eq('order_id', orderId).eq('language', language).eq('build_id', currentBuild.id).eq('status', 'pass').maybeSingle()
+            if (completedError) throw new Error(`Completed semantic package lookup failed: ${completedError.message}`)
+            if (completed) {
+              const { data: authoritative, error: authorityError } = await getSupabaseAdmin().rpc('is_authoritative_package_manifest', { p_manifest_id: completed.id })
+              if (authorityError) throw new Error(`Completed semantic package authority check failed: ${authorityError.message}`)
+              if (authoritative === true) return { buildId: currentBuild.id, status: 'pass', cached: true }
+            }
+          }
           const brief = await loadTranslationBrief(getSupabaseAdmin(), orderId, language)
           if (!brief) throw new Error(`Approved translation brief missing for semantic-v2 ${language}`)
           const notes = {
@@ -284,7 +298,17 @@ export const translateBook = inngest.createFunction(
           let launchPack: Buffer | undefined
           if ((order.upsells || []).includes('launch-pack')) {
             const market = launchMarket(language)
-            const strategy = await generateLaunchStrategy({ bookTitle: order.book_title, authorName: order.author_name, genre: order.genre, bookDescription: fileContent.slice(0, 2500), targetLanguage: market.language, targetMarket: market.market })
+            const strategy = await generateLaunchStrategy({ bookTitle: order.book_title, authorName: order.author_name, genre: order.genre, bookDescription: fileContent.slice(0, 2500), targetLanguage: market.language, targetMarket: market.market }, {
+              attempt: attempt + 1,
+              requestId: `${orderId}:${language}:launch-pack`,
+              onMetadata: async metadata => {
+                const { error } = await getSupabaseAdmin().from('pipeline_events').insert({
+                  order_id: orderId, language, stage: 'launch_pack_model', status: metadata.success ? 'passed' : 'failed',
+                  level: metadata.success ? 'info' : 'error', safe_message: metadata.success ? 'MODEL_USAGE_CAPTURED' : 'MODEL_ATTEMPT_FAILED', details: metadata,
+                })
+                if (error) throw new Error(`Launch Pack usage metadata persistence failed: ${error.message}`)
+              },
+            })
             launchPack = Buffer.from(JSON.stringify(toCanonicalLaunchPack(strategy, language, true)))
           }
           const result = await runSemanticPipeline({
@@ -305,7 +329,17 @@ export const translateBook = inngest.createFunction(
           return { buildId: result.buildId, status: result.manifest.status }
         })
       }
-      return { orderId, pipelineVersion: 'semantic-v2', languages }
+      const finalization = await step.run('semantic-v2-finalize', async () => finalizeSemanticOrder({
+        supabase: getSupabaseAdmin(), orderId, bookTitle: order.book_title, languages,
+        internalReviewAddress: process.env.ADMIN_EMAIL || 'gilly@myromancereads.com',
+        appUrl: process.env.NEXT_PUBLIC_APP_URL || 'https://booklingua.io',
+        sendInternalReview: async (message, options) => {
+          const result = await getResend().emails.send(message, options)
+          if (result.error) throw new Error(`Internal review email failed: ${result.error.message}`)
+          return { id: result.data?.id }
+        },
+      }))
+      return { orderId, pipelineVersion: 'semantic-v2', languages, finalization }
     }
 
     // ── Step 2: Extract segment metadata (non-fatal) ──
