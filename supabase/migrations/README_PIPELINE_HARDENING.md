@@ -13,11 +13,17 @@ prefix. The earlier repository history contains duplicate version
 compare the live migration ledger and schema, mark/reconcile the historical
 files explicitly, then apply these four new additive migrations in order.
 
-This repository is not a from-zero schema source. In particular, the checked-in
-migrations assume that `orders`, `files`, `temp_uploads`, `translation_chunks`,
-and Supabase Storage already exist. A fresh `supabase db reset` therefore needs
-an independently verified baseline schema snapshot; local shims are rehearsal
-fixtures only and must never be deployed.
+The production migrations remain forward-only increments over the existing
+hosted schema. Historical files with the already-deployed duplicate `20250630`
+identity live in `supabase/legacy-history/` and are deliberately excluded from
+normal `supabase db push`; their production ledger must not be rewritten.
+
+Disposable staging and CI use the separate, explicit baseline at
+`supabase/bootstrap/00000000000000_disposable_baseline.sql`. It is a capability
+baseline, not a claim to reconstruct production history, and must never be
+applied to hosted production. Run `npm run staging:reset` to build a clean local
+stack entirely from committed assets. Run `npm run verify:migrations` in CI to
+reject duplicate active versions or missing prerequisites.
 
 Release contract:
 
@@ -27,4 +33,8 @@ Release contract:
 4. Enable `PIPELINE_HARDENING_V1=enabled` only for a controlled staging environment and create new synthetic orders there.
 5. Rollback is disabling the flag; do not remove the additive schema during rollback.
 
-Existing orders remain on legacy behavior. No existing order is backfilled or inferred into the hardened path. The historical `20250630_add_qa_blocked.sql` migration remains required by the legacy approval route and must be verified separately before deployment.
+Existing orders remain on legacy behavior. No existing order is backfilled or
+inferred into the hardened path. Before production rollout, compare the hosted
+ledger read-only with `supabase/legacy-history/`, verify the legacy
+`qa_errors` capability, and record an approved reconciliation. That verification
+is a production prerequisite, not permission to repair historical migration IDs.

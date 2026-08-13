@@ -118,3 +118,32 @@ test('hardened behavior defaults disabled and admin supports both review states'
   assert.match(admin, /pending_review', 'ready_for_review/)
   assert.match(approve, /pending_review', 'ready_for_review/)
 })
+
+test('current build identity is enforced at every package authority boundary', () => {
+  const root = process.cwd()
+  const state = fs.readFileSync(path.join(root, 'supabase/migrations/202608120002_pipeline_hardening_state.sql'), 'utf8')
+  for (const file of ['lib/artifact-store.ts', 'lib/package-gate.ts', 'app/api/download/[orderId]/[lang]/route.ts', 'app/api/admin/orders/[orderId]/approve/route.ts']) {
+    assert.match(fs.readFileSync(path.join(root, file), 'utf8'), /order_language_builds/)
+  }
+  assert.match(state, /unique\s*\(order_id, language, generation\)/i)
+  assert.match(state, /where is_current/i)
+  assert.match(state, /begin_order_language_build/)
+  assert.match(state, /join order_language_builds b[\s\S]*b\.is_current/i)
+})
+
+test('hardened external delivery is fail-closed and cannot be enabled by truthy variants', () => {
+  const capability = fs.readFileSync(path.join(process.cwd(), 'lib/hardened-delivery-capability.ts'), 'utf8')
+  const approve = fs.readFileSync(path.join(process.cwd(), 'app/api/admin/orders/[orderId]/approve/route.ts'), 'utf8')
+  assert.match(capability, /=== 'enabled'/)
+  assert.match(approve, /pending_disabled/)
+  assert.match(approve, /emailSent: false/)
+  assert.match(approve, /delivery_events/)
+})
+
+test('repository migration contract has unique active versions and a committed disposable baseline', () => {
+  const migrationDir = path.join(process.cwd(), 'supabase/migrations')
+  const versions = fs.readdirSync(migrationDir).filter(f => /^\d+_.*\.sql$/.test(f)).map(f => f.match(/^(\d+)_/)![1])
+  assert.equal(new Set(versions).size, versions.length)
+  assert.ok(fs.existsSync(path.join(process.cwd(), 'supabase/bootstrap/00000000000000_disposable_baseline.sql')))
+  assert.ok(fs.existsSync(path.join(process.cwd(), 'supabase/legacy-history/20250630_add_pipeline_version.sql')))
+})

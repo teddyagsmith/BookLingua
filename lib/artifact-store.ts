@@ -16,6 +16,12 @@ export async function storeImmutableArtifact(input: {
   validationStatus: PackageArtifact['validationStatus']
   validationReportId?: string
 }): Promise<PackageArtifact> {
+  const { data: currentBuild, error: buildError } = await input.supabase.from('order_language_builds')
+    .select('id').eq('order_id', input.orderId).eq('language', input.language)
+    .eq('is_current', true).maybeSingle()
+  if (buildError || !currentBuild || currentBuild.id !== input.buildId) {
+    throw new Error('Artifact build is not the authoritative current build')
+  }
   const sha256 = createHash('sha256').update(input.buffer).digest('hex')
   if (input.validationStatus === 'pass' && !input.validationReportId) throw new Error('Passed artifacts require a validation report')
   const storagePath = `${input.orderId}/${input.language}/${input.buildId}/${input.type}/${sha256}/${input.filename}`

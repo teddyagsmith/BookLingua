@@ -1,3 +1,4 @@
+-- HISTORICAL RECORD ONLY: ambiguous deployed version 20250630; never db-push.
 -- Add qa_blocked status check constraint (if using check constraint)
 -- If the orders.status column uses a CHECK constraint, this may need manual update
 -- This migration is a no-op if status is just a text column without constraint

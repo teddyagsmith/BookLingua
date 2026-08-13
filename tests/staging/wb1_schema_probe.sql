@@ -49,6 +49,7 @@ end $$;
 insert into probe_results values ('brief mutation rejected', 'translation_briefs_are_immutable', true);
 
 -- Real validation/artifact foreign-key binding.
+select * from begin_order_language_build('10000000-0000-0000-0000-000000000001','fr','40000000-0000-0000-0000-000000000001');
 insert into validation_reports(id,order_id,language,build_id,stage,validator_version,passed)
 values ('30000000-0000-0000-0000-000000000001','10000000-0000-0000-0000-000000000001',
  'fr','40000000-0000-0000-0000-000000000001','final','1.0',true);
@@ -80,7 +81,7 @@ insert into probe_results values ('zero-byte artifact rejected', 'check_violatio
 -- never be authoritative or make the order reviewable.
 insert into package_manifests(id,order_id,language,build_id,schema_version,status,manifest)
 values ('50000000-0000-0000-0000-000000000001','10000000-0000-0000-0000-000000000001',
- 'fr','40000000-0000-0000-0000-000000000009','1.0','pass','{}');
+ 'fr','40000000-0000-0000-0000-000000000001','1.0','pass','{}');
 insert into probe_results values ('fabricated PASS retained as non-authoritative history',
   is_authoritative_package_manifest('50000000-0000-0000-0000-000000000001')::text,
   not is_authoritative_package_manifest('50000000-0000-0000-0000-000000000001'));

@@ -1,0 +1,2 @@
+export const HARDENED_EXTERNAL_DELIVERY_ENABLED =
+  process.env.HARDENED_EXTERNAL_DELIVERY === 'enabled'

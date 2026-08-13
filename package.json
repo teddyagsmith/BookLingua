@@ -8,7 +8,9 @@
     "start": "next start",
     "test": "tsx --test tests/*.test.ts",
     "test:types": "tsc --noEmit",
-    "check": "npm test && npm run test:types && npm run build"
+    "check": "npm test && npm run test:types && npm run build",
+    "verify:migrations": "node scripts/verify-migration-contract.mjs",
+    "staging:reset": "bash scripts/reset-disposable-supabase.sh"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.24.0",

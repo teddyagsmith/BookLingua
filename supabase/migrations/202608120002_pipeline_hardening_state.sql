@@ -8,6 +8,58 @@ alter table orders
   add column if not exists failed_at timestamptz,
   add column if not exists delivery_started_at timestamptz;
 
+create table if not exists order_language_builds (
+  id uuid primary key,
+  order_id uuid not null references orders(id) on delete cascade,
+  language text not null,
+  generation bigint not null check (generation > 0),
+  state text not null check (state in ('building', 'superseded', 'passed', 'failed', 'approved')),
+  is_current boolean not null default true,
+  started_at timestamptz not null default now(),
+  superseded_at timestamptz,
+  created_at timestamptz not null default now(),
+  unique(order_id, language, generation),
+  unique(id, order_id, language)
+);
+create unique index if not exists order_language_builds_one_current_idx
+  on order_language_builds(order_id, language) where is_current;
+create index if not exists order_language_builds_current_lookup_idx
+  on order_language_builds(order_id, language, is_current, generation desc);
+
+create or replace function begin_order_language_build(
+  p_order_id uuid, p_language text, p_build_id uuid
+) returns table(build_id uuid, generation bigint, created boolean)
+language plpgsql security definer set search_path = public as $$
+declare v_languages jsonb; v_order_status text; v_existing order_language_builds%rowtype; v_generation bigint;
+begin
+  perform pg_advisory_xact_lock(hashtext(p_order_id::text || ':' || p_language));
+  select languages,status into v_languages,v_order_status from orders where id=p_order_id for update;
+  if v_languages is null then raise exception 'order_not_found'; end if;
+  if not exists(select 1 from jsonb_array_elements_text(v_languages) l where l=p_language) then
+    raise exception 'language_not_purchased';
+  end if;
+  if v_order_status in ('delivery_pending','completed') then raise exception 'order_delivery_already_started'; end if;
+  select * into v_existing from order_language_builds where id=p_build_id;
+  if found then
+    if v_existing.order_id <> p_order_id or v_existing.language <> p_language then
+      raise exception 'build_identity_conflict';
+    end if;
+    return query select v_existing.id, v_existing.generation, false;
+    return;
+  end if;
+  select coalesce(max(b.generation),0)+1 into v_generation
+    from order_language_builds b where b.order_id=p_order_id and b.language=p_language;
+  update order_language_builds set is_current=false, state='superseded', superseded_at=now()
+    where order_id=p_order_id and language=p_language and is_current;
+  insert into order_language_builds(id,order_id,language,generation,state,is_current)
+    values(p_build_id,p_order_id,p_language,v_generation,'building',true);
+  return query select p_build_id, v_generation, true;
+end; $$;
+revoke all on function begin_order_language_build(uuid,text,uuid) from public;
+grant execute on function begin_order_language_build(uuid,text,uuid) to service_role;
+revoke insert, update, delete on order_language_builds from service_role;
+grant select on order_language_builds to service_role;
+
 create table if not exists pipeline_events (
   id uuid primary key default gen_random_uuid(),
   order_id uuid not null references orders(id) on delete cascade,
@@ -36,7 +88,9 @@ create table if not exists validation_reports (
   metrics jsonb not null default '{}'::jsonb,
   created_at timestamptz not null default now(),
   unique(order_id, language, build_id, stage, validator_version),
-  unique(id, order_id, language, build_id)
+  unique(id, order_id, language, build_id),
+  foreign key(build_id, order_id, language)
+    references order_language_builds(id, order_id, language)
 );
 alter table validation_reports alter column language set not null;
 
@@ -73,7 +127,22 @@ create table if not exists package_manifests (
   validation_report_id uuid,
   created_at timestamptz not null default now(),
   unique(order_id, language, build_id),
-  unique(id, order_id, language, build_id)
+  unique(id, order_id, language, build_id),
+  foreign key(build_id, order_id, language)
+    references order_language_builds(id, order_id, language)
+);
+
+create table if not exists delivery_events (
+  id uuid primary key default gen_random_uuid(),
+  order_id uuid not null references orders(id) on delete cascade,
+  event_key text not null unique,
+  package_builds jsonb not null,
+  state text not null check (state in ('pending', 'sending', 'sent', 'failed')) default 'pending',
+  attempt_count integer not null default 0,
+  provider_message_id text,
+  created_at timestamptz not null default now(),
+  sent_at timestamptz,
+  unique(id, order_id)
 );
 
 create or replace function prevent_hardened_history_mutation()
@@ -107,6 +176,17 @@ for each row execute function prevent_artifact_changes_during_delivery();
 create trigger package_manifests_delivery_guard before insert on package_manifests
 for each row execute function prevent_artifact_changes_during_delivery();
 
+create or replace function record_current_build_result()
+returns trigger language plpgsql security definer set search_path=public as $$
+begin
+  update order_language_builds set state=case when new.status='pass' then 'passed' else 'failed' end
+    where id=new.build_id and order_id=new.order_id and language=new.language and is_current;
+  return new;
+end; $$;
+drop trigger if exists package_manifest_records_current_build_result on package_manifests;
+create trigger package_manifest_records_current_build_result after insert on package_manifests
+for each row execute function record_current_build_result();
+
 create index if not exists artifacts_package_lookup_idx
   on artifacts(order_id, language, build_id, artifact_type, validation_status);
 create index if not exists package_manifests_gate_lookup_idx
@@ -116,11 +196,15 @@ alter table pipeline_events enable row level security;
 alter table validation_reports enable row level security;
 alter table artifacts enable row level security;
 alter table package_manifests enable row level security;
+alter table order_language_builds enable row level security;
+alter table delivery_events enable row level security;
 
 drop policy if exists "Service role manages pipeline events" on pipeline_events;
 drop policy if exists "Service role manages validation reports" on validation_reports;
 drop policy if exists "Service role manages artifacts" on artifacts;
 drop policy if exists "Service role manages package manifests" on package_manifests;
+drop policy if exists "Service role manages order language builds" on order_language_builds;
+drop policy if exists "Service role manages delivery events" on delivery_events;
 create policy "Service role manages pipeline events" on pipeline_events
   for all using (auth.role() = 'service_role');
 create policy "Service role manages validation reports" on validation_reports
@@ -128,6 +212,10 @@ create policy "Service role manages validation reports" on validation_reports
 create policy "Service role manages artifacts" on artifacts
   for all using (auth.role() = 'service_role');
 create policy "Service role manages package manifests" on package_manifests
+  for all using (auth.role() = 'service_role');
+create policy "Service role manages order language builds" on order_language_builds
+  for all using (auth.role() = 'service_role');
+create policy "Service role manages delivery events" on delivery_events
   for all using (auth.role() = 'service_role');
 
 -- Recompute package authority from persisted rows. A caller-supplied `pass`
@@ -143,7 +231,8 @@ as $$
     select p.*, o.file_format, o.upsells
     from package_manifests p
     join orders o on o.id = p.order_id
-    where p.id = p_manifest_id
+    join order_language_builds b on b.id=p.build_id and b.order_id=p.order_id and b.language=p.language
+    where p.id = p_manifest_id and b.is_current
   ), required_types as (
     select unnest(array[
       'translation_brief', 'pass1_docx', 'review_docx', 'translation_notes',
@@ -226,11 +315,12 @@ begin
   with required_languages as (
     select jsonb_array_elements_text(v_languages) as language
   ), latest_packages as (
-    select distinct on (language) language, status,
-      is_authoritative_package_manifest(id) as authoritative
-    from package_manifests
-    where order_id = p_order_id
-    order by language, created_at desc, id desc
+    select distinct on (p.language) p.language, p.status,
+      is_authoritative_package_manifest(p.id) as authoritative
+    from package_manifests p
+    join order_language_builds b on b.id=p.build_id and b.order_id=p.order_id and b.language=p.language
+    where p.order_id = p_order_id and b.is_current
+    order by p.language, p.created_at desc, p.id desc
   )
   select count(*) into v_missing_or_failed
   from required_languages r
@@ -257,8 +347,8 @@ revoke all on function resolve_order_package_gate(uuid) from public;
 grant execute on function resolve_order_package_gate(uuid) to service_role;
 
 create or replace function begin_hardened_delivery(p_order_id uuid)
-returns void language plpgsql security definer set search_path = public as $$
-declare v_languages jsonb; v_missing integer;
+returns uuid language plpgsql security definer set search_path = public as $$
+declare v_languages jsonb; v_missing integer; v_builds jsonb; v_event_key text; v_event_id uuid;
 begin
   select languages into v_languages from orders
   where id = p_order_id and status in ('ready_for_review', 'delivery_pending') for update;
@@ -268,15 +358,26 @@ begin
   end if;
   with required_languages as (select jsonb_array_elements_text(v_languages) language),
   latest as (
-    select distinct on (language) language, status,
-      is_authoritative_package_manifest(id) as authoritative from package_manifests
-    where order_id = p_order_id order by language, created_at desc, id desc
+    select distinct on (p.language) p.language, p.status,
+      is_authoritative_package_manifest(p.id) as authoritative from package_manifests p
+    join order_language_builds b on b.id=p.build_id and b.order_id=p.order_id and b.language=p.language
+    where p.order_id = p_order_id and b.is_current order by p.language, p.created_at desc, p.id desc
   )
   select count(*) into v_missing from required_languages r left join latest p using(language)
   where p.language is null or p.status <> 'pass' or p.authoritative is not true;
   if v_missing <> 0 then raise exception 'package_state_changed'; end if;
+  select jsonb_object_agg(language,build_id order by language) into v_builds
+    from order_language_builds where order_id=p_order_id and is_current;
+  v_event_key := encode(digest(p_order_id::text || ':' || v_builds::text, 'sha256'),'hex');
+  insert into delivery_events(order_id,event_key,package_builds,state)
+    values(p_order_id,v_event_key,v_builds,'pending')
+    on conflict(event_key) do update set event_key=excluded.event_key
+    returning id into v_event_id;
+  update order_language_builds set state='approved'
+    where order_id=p_order_id and is_current;
   update orders set status = 'delivery_pending', delivery_started_at = coalesce(delivery_started_at, now()), completed_at = null
   where id = p_order_id;
+  return v_event_id;
 end;
 $$;
 revoke all on function begin_hardened_delivery(uuid) from public;

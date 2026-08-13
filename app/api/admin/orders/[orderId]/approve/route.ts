@@ -7,6 +7,7 @@ import fs from 'fs'
 import path from 'path'
 import { assemblePackageManifest, evaluatePackageManifest } from '@/lib/package-manifest'
 import { HARDENED_V1_ENABLED } from '@/lib/pipeline-capabilities'
+import { HARDENED_EXTERNAL_DELIVERY_ENABLED } from '@/lib/hardened-delivery-capability'
 
 let resend: Resend | null = null
 function getResend() {
@@ -59,15 +60,21 @@ export async function POST(
     if (['ready_for_review', 'delivery_pending'].includes(order.status)) {
       if (!HARDENED_V1_ENABLED) return NextResponse.json({ error: 'Hardened package capability is disabled' }, { status: 409 })
       for (const language of languages) {
+        const { data: currentBuild } = await getSupabaseAdmin().from('order_language_builds')
+          .select('id').eq('order_id', orderId).eq('language', language).eq('is_current', true).maybeSingle()
+        if (!currentBuild) return NextResponse.json({ error: `Current build unavailable for ${language}` }, { status: 409 })
         const { data: row } = await getSupabaseAdmin().from('package_manifests')
           .select('build_id, status').eq('order_id', orderId).eq('language', language)
-          .order('created_at', { ascending: false }).limit(1).maybeSingle()
+          .eq('build_id', currentBuild.id).maybeSingle()
         if (!row || row.status !== 'pass') return NextResponse.json({ error: `Package is not passed for ${language}` }, { status: 409 })
         const authoritative = await assemblePackageManifest({ supabase: getSupabaseAdmin(), orderId, language, buildId: row.build_id })
         if (evaluatePackageManifest(authoritative).status !== 'pass') return NextResponse.json({ error: `Package changed or is incomplete for ${language}` }, { status: 409 })
       }
       const { error: deliveryError } = await getSupabaseAdmin().rpc('begin_hardened_delivery', { p_order_id: orderId })
       if (deliveryError) return NextResponse.json({ error: 'Package state changed before approval' }, { status: 409 })
+      if (!HARDENED_EXTERNAL_DELIVERY_ENABLED) {
+        return NextResponse.json({ success: true, approved: true, externalDelivery: 'pending_disabled', emailSent: false }, { status: 202 })
+      }
     }
     const downloadLinks = languages.map((lang: string) => ({
       language: LANGUAGE_NAMES[lang] || lang,
@@ -169,13 +176,20 @@ export async function POST(
     `
 
     // Send the exact same email to the customer
-    const { error: sendError } = await getResend().emails.send({
+    const { error: sendError, data: sendData } = await getResend().emails.send({
       from: 'BookLingua <orders@booklingua.io>',
       to: order.email,
       subject: `Your translations are ready: ${order.book_title} 🎉`,
       html: customerEmailHtml,
     })
     if (sendError) throw new Error('Customer delivery email failed')
+
+    if (order.status !== 'pending_review') {
+      const { error: eventError } = await getSupabaseAdmin().from('delivery_events')
+        .update({ state: 'sent', provider_message_id: sendData?.id || null, sent_at: new Date().toISOString(), attempt_count: 1 })
+        .eq('order_id', orderId).eq('state', 'pending')
+      if (eventError) throw new Error('Delivery event finalization failed')
+    }
 
     // Mark order as completed
     const expectedStatus = order.status === 'pending_review' ? 'pending_review' : 'delivery_pending'

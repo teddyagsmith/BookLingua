@@ -6,6 +6,12 @@ export async function resolvePackageGate(
   supabase: SupabaseClient,
   input: { orderId: string; language: string; buildId: string },
 ): Promise<PackageManifestV1> {
+  const { data: currentBuild, error: buildError } = await supabase.from('order_language_builds')
+    .select('id').eq('order_id', input.orderId).eq('language', input.language)
+    .eq('is_current', true).maybeSingle()
+  if (buildError || !currentBuild || currentBuild.id !== input.buildId) {
+    throw new Error('Package build is not the authoritative current build')
+  }
   const manifest = await assemblePackageManifest({ supabase, ...input })
   const evaluated = evaluatePackageManifest(manifest)
   const row = {

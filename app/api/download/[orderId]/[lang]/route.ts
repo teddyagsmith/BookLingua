@@ -674,9 +674,12 @@ export async function GET(
         : effectiveFormat === '.epub' ? 'final_epub' : 'final_docx'
     let storedArtifact: any = null
     if (HARDENED_V1_ENABLED && (order.status === 'ready_for_review' || (order.status === 'completed' && Boolean(order.source_linked_at)))) {
+      const { data: currentBuild } = await getSupabaseAdmin().from('order_language_builds')
+        .select('id').eq('order_id', orderId).eq('language', lang).eq('is_current', true).maybeSingle()
+      if (!currentBuild) return NextResponse.json({ error: 'Current validated build unavailable' }, { status: 409 })
       const { data: packageRow } = await getSupabaseAdmin().from('package_manifests')
         .select('build_id, manifest').eq('order_id', orderId).eq('language', lang).eq('status', 'pass')
-        .order('created_at', { ascending: false }).limit(1).maybeSingle()
+        .eq('build_id', currentBuild.id).maybeSingle()
       if (!packageRow?.manifest) return NextResponse.json({ error: 'Validated package artifact unavailable' }, { status: 409 })
       let manifestArtifact
       try { manifestArtifact = selectManifestArtifact(packageRow.manifest, artifactType) }

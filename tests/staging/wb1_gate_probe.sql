@@ -12,6 +12,9 @@ create or replace function pg_temp.make_package(p_order uuid,p_lang text,p_build
 returns void language plpgsql as $$
 declare v_report uuid := gen_random_uuid(); v_type text; v_artifacts jsonb;
 begin
+  if not exists(select 1 from order_language_builds where id=p_build) then
+    perform begin_order_language_build(p_order,p_lang,p_build);
+  end if;
   insert into validation_reports(id,order_id,language,build_id,stage,validator_version,passed)
   values(v_report,p_order,p_lang,p_build,'package','1.0',p_pass);
   foreach v_type in array array['translation_brief','pass1_docx','review_docx','translation_notes',
@@ -63,7 +66,24 @@ insert into gate_results values('three languages, ES missing','gate_failed',
   resolve_order_package_gate('61000000-0000-0000-0000-000000000002'),
   resolve_order_package_gate('61000000-0000-0000-0000-000000000002')='gate_failed');
 
+-- A stale PASS can never override a newer current FAIL.
+select pg_temp.make_order('61000000-0000-0000-0000-000000000003','["fr"]');
+select pg_temp.make_package('61000000-0000-0000-0000-000000000003','fr','62000000-0000-0000-0000-000000000021',true);
+select pg_temp.make_package('61000000-0000-0000-0000-000000000003','fr','62000000-0000-0000-0000-000000000022',false);
+insert into gate_results values('stale PASS, current FAIL','gate_failed',
+  resolve_order_package_gate('61000000-0000-0000-0000-000000000003'),
+  resolve_order_package_gate('61000000-0000-0000-0000-000000000003')='gate_failed');
+
+-- A stale FAIL can never invalidate a newer current PASS.
+select pg_temp.make_order('61000000-0000-0000-0000-000000000004','["fr"]');
+select pg_temp.make_package('61000000-0000-0000-0000-000000000004','fr','62000000-0000-0000-0000-000000000031',false);
+select pg_temp.make_package('61000000-0000-0000-0000-000000000004','fr','62000000-0000-0000-0000-000000000032',true);
+insert into gate_results values('stale FAIL, current PASS','ready_for_review',
+  resolve_order_package_gate('61000000-0000-0000-0000-000000000004'),
+  resolve_order_package_gate('61000000-0000-0000-0000-000000000004')='ready_for_review');
+
 -- Wrong-language and fabricated latest PASS must fail authority.
+select * from begin_order_language_build('61000000-0000-0000-0000-000000000001','fr','62000000-0000-0000-0000-000000000099');
 insert into package_manifests(order_id,language,build_id,schema_version,status,manifest,created_at)
 values('61000000-0000-0000-0000-000000000001','fr','62000000-0000-0000-0000-000000000099',
  '1.0','pass',jsonb_build_object('orderId','61000000-0000-0000-0000-000000000001','language','de',
