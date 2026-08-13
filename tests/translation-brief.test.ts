@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { buildTranslationBrief, renderTranslationBriefPrompt } from '../lib/translation-brief'
+import { buildTranslationBrief, renderTranslationBriefPrompt, translationBriefFingerprint } from '../lib/translation-brief'
 
 test('brief is versioned per language and tied to the source fingerprint', () => {
   const brief = buildTranslationBrief({
@@ -28,4 +28,10 @@ test('the same immutable brief renders explicit instructions for both model pass
   assert.equal(pass1Prompt, pass2Prompt)
   assert.match(pass1Prompt, /Moonroot/)
   assert.match(pass1Prompt, /abc123/)
+})
+
+test('brief fingerprint is stable across PostgreSQL JSONB key reordering', () => {
+  const brief = buildTranslationBrief({ language: 'fr', sourceManifestFingerprint: 'source', approvedAt: '2026-08-13T00:00:00.000Z', decisions: [{ term: 'Moonroot', decision: 'keep' }] })
+  const reordered: any = { items: brief.items.map(item => ({ targetInstruction:item.targetInstruction, authorDecision:item.authorDecision, sourceTerm:item.sourceTerm, id:item.id })), approvalSource:brief.approvalSource, schemaVersion:brief.schemaVersion, approvedAt:brief.approvedAt, sourceManifestFingerprint:brief.sourceManifestFingerprint, revision:brief.revision, language:brief.language }
+  assert.equal(translationBriefFingerprint(reordered), translationBriefFingerprint(brief))
 })

@@ -1,6 +1,20 @@
 import AdmZip from 'adm-zip'
 import { extractDocxSegments, extractTxtSegments, Segment } from './extract-segments'
 import { SemanticDocumentV2, SemanticNodeV2, extractSourceChapterNumber } from './semantic-document'
+import path from 'path'
+
+function attributes(tag: string): Record<string, string> {
+  const result: Record<string, string> = {}
+  for (const match of Array.from(tag.matchAll(/([\w:-]+)\s*=\s*(["'])(.*?)\2/g))) result[match[1]] = match[3]
+  return result
+}
+
+function safeRelative(base: string, href: string): string {
+  const decoded = decodeURIComponent(href.split('#')[0]).replace(/\\/g, '/')
+  const resolved = path.posix.normalize(path.posix.join(base, decoded))
+  if (resolved.startsWith('../') || path.posix.isAbsolute(resolved)) throw new Error('EPUB manifest path escapes package root')
+  return resolved
+}
 
 function nodesFromSegments(input: {
   segments: Segment[]
@@ -60,28 +74,32 @@ export function parseSemanticEpub(buffer: Buffer, sourceHash: string): SemanticD
   const zip = new AdmZip(buffer)
   const entries = zip.getEntries()
   const container = entries.find(entry => entry.entryName === 'META-INF/container.xml')
-  const opfPath = container?.getData().toString('utf8').match(/full-path="([^"]+\.opf)"/)?.[1]
+  const rootfile = container?.getData().toString('utf8').match(/<rootfile\b[^>]*>/i)?.[0]
+  const opfPath = rootfile ? attributes(rootfile)['full-path'] : undefined
   if (!opfPath) throw new Error('EPUB OPF path missing')
   const opf = entries.find(entry => entry.entryName === opfPath)?.getData().toString('utf8')
   if (!opf) throw new Error('EPUB OPF missing')
   const opfDir = opfPath.includes('/') ? opfPath.slice(0, opfPath.lastIndexOf('/') + 1) : ''
   const manifest = new Map<string, string>()
-  for (const match of Array.from(opf.matchAll(/<item\s[^>]*id="([^"]+)"[^>]*href="([^"]+)"[^>]*>/g))) manifest.set(match[1], match[2])
-  const spine = Array.from(opf.matchAll(/<itemref\s[^>]*idref="([^"]+)"/g)).map(match => match[1])
+  for (const match of Array.from(opf.matchAll(/<item\b[^>]*>/gi))) {
+    const item = attributes(match[0]); if (item.id && item.href) manifest.set(item.id, item.href)
+  }
+  const spine = Array.from(opf.matchAll(/<itemref\b[^>]*>/gi)).map(match => attributes(match[0]).idref).filter(Boolean)
   if (!spine.length) throw new Error('EPUB spine missing')
 
   const segments: Segment[] = []
   const locations: string[] = []
   for (const idref of spine) {
-    const href = manifest.get(idref)?.split('#')[0]
+    const href = manifest.get(idref)
     if (!href) continue
-    const path = opfDir + href
-    const html = entries.find(entry => entry.entryName === path)?.getData().toString('utf8')
+    const contentPath = safeRelative(opfDir, href)
+    const html = entries.find(entry => entry.entryName === contentPath)?.getData().toString('utf8')
     if (!html) continue
     const parsed = htmlToSegments(html, segments.length)
     segments.push(...parsed)
-    locations.push(...parsed.map((_, index) => `${path}:block:${index}`))
+    locations.push(...parsed.map((_, index) => `${contentPath}:block:${index}`))
   }
+  if (!segments.length) throw new Error('EPUB spine contains no readable textual nodes')
   return nodesFromSegments({ segments, locations, sourceHash, sourceFormat: 'epub', parserConfidence: 0.95 })
 }
 

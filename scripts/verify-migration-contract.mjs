@@ -15,6 +15,7 @@ const required = [
   '202608120002_pipeline_hardening_state.sql',
   '202608120003_pipeline_hardening_briefs.sql',
   '202608120004_pipeline_hardening_cache.sql',
+  '202608120005_semantic_pipeline.sql',
 ]
 for (const file of required) if (!files.includes(file)) throw new Error(`Missing WB1 migration ${file}`)
 const baseline = path.join(root, 'supabase', 'bootstrap', '00000000000000_disposable_baseline.sql')

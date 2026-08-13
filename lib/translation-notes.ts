@@ -24,7 +24,7 @@ export function validateTranslationNotes(notes: TranslationNotesV1): string[] {
   if (notes.schemaVersion !== TRANSLATION_NOTES_SCHEMA_VERSION) errors.push('Unexpected translation-notes schema version')
   if (!notes.language.trim()) errors.push('Translation-notes language is missing')
   if (!notes.approach.trim()) errors.push('Translation-notes approach is missing')
-  if (!notes.sections.length) errors.push('Translation notes contain no sections')
+  // An empty section list is truthful when no notable decisions were recorded.
   if (notes.sections.some(section => !section.id || !section.title || !section.entries.length)) errors.push('Translation-notes section is incomplete')
   if (notes.sections.some(section => section.entries.some(entry => !entry.source || !entry.target || !entry.reason))) errors.push('Translation-note entry is incomplete')
   return errors

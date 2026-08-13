@@ -47,6 +47,17 @@ export async function storeImmutableArtifact(input: {
     validation_report_id: input.validationReportId || null,
     validation_status: input.validationStatus,
   }).select('id').single()
+  if (recordError?.code === '23505') {
+    const { data: existing, error: existingError } = await input.supabase.from('artifacts')
+      .select('id,sha256,size_bytes,storage_path,validation_report_id,validation_status')
+      .eq('order_id',input.orderId).eq('language',input.language).eq('build_id',input.buildId).eq('artifact_type',input.type).single()
+    if (existingError || !existing || existing.sha256 !== sha256 || Number(existing.size_bytes) !== input.buffer.length
+      || existing.storage_path !== storagePath || existing.validation_report_id !== (input.validationReportId || null)
+      || existing.validation_status !== input.validationStatus) throw new Error('Artifact retry differs from immutable persisted artifact')
+    return { id: existing.id, buildId: input.buildId, type: input.type, required: true, filename: input.filename,
+      storageBucket: ARTIFACT_BUCKET, storagePath, sha256, sizeBytes: input.buffer.length,
+      schemaVersion: input.schemaVersion, validationStatus: input.validationStatus, validationReportId: input.validationReportId }
+  }
   if (recordError) throw new Error(`Artifact metadata insert failed: ${recordError.message}`)
 
   return {

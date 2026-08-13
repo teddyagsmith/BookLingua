@@ -11,6 +11,8 @@ import { extractCulturalTerms, storeCulturalTerms, loadGlossaryPrompt } from './
 import { recordTerminalFailure } from './pipeline-events'
 import { assertTranslationBriefForSource, loadTranslationBrief, renderTranslationBriefPrompt, translationBriefFingerprint } from './translation-brief'
 import { HARDENED_V1_ENABLED } from './pipeline-capabilities'
+import { SEMANTIC_V2_ENABLED } from './semantic-document'
+import { runSemanticPipeline } from './semantic-pipeline'
 
 const anthropic = new Anthropic({
   apiKey: process.env.ANTHROPIC_API_KEY,
@@ -258,6 +260,41 @@ export const translateBook = inngest.createFunction(
       }
     } else {
       fileContent = fileData.content
+    }
+
+    // semantic-v2 requires both environment capability and explicit per-order selection.
+    // Existing/legacy orders never enter this branch merely because staging enables the capability.
+    if (HARDENED_V1_ENABLED && SEMANTIC_V2_ENABLED && order.pipeline_version === 'semantic-v2') {
+      const source = originalBuffer || Buffer.from(fileContent, 'utf8')
+      const format = String(order.file_format || '.txt').replace(/^\./, '') as 'epub' | 'docx' | 'txt'
+      for (const language of languages) {
+        await step.run(`semantic-v2-${language}`, async () => {
+          const brief = await loadTranslationBrief(getSupabaseAdmin(), orderId, language)
+          if (!brief) throw new Error(`Approved translation brief missing for semantic-v2 ${language}`)
+          const notes = {
+            schemaVersion: '1.0' as const,
+            language,
+            approach: 'Author-approved terminology decisions applied consistently in both translation passes.',
+            sections: brief.items.length ? [{ id: 'author-decisions', title: 'Author-approved decisions', entries: brief.items.map(item => ({ source: item.sourceTerm, target: item.targetInstruction, reason: item.authorDecision })) }] : [],
+          }
+          const result = await runSemanticPipeline({
+            supabase: getSupabaseAdmin(), orderId, language, sourceFormat: format, source,
+            title: order.book_title, brief, notes, allowReviewedStructure: order.semantic_structure_approved === true,
+            translate: async (batch, context) => {
+              const response = await anthropic.messages.create({
+                model: 'claude-sonnet-4-5-20250929', max_tokens: 8192,
+                system: 'Return only valid JSON matching the supplied schema. Preserve every node id and order exactly. Translate all textual node values; never omit or add nodes.',
+                messages: [{ role: 'user', content: `${renderTranslationBriefPrompt(context.brief)}\nPass ${context.pass}; target language ${context.language}.\n${JSON.stringify(batch)}` }],
+              })
+              const text = response.content.find(block => block.type === 'text')
+              if (!text || text.type !== 'text') throw new Error('Semantic model returned no JSON text')
+              return JSON.parse(text.text.replace(/^```json\s*|\s*```$/g, ''))
+            },
+          })
+          return { buildId: result.buildId, status: result.manifest.status }
+        })
+      }
+      return { orderId, pipelineVersion: 'semantic-v2', languages }
     }
 
     // ── Step 2: Extract segment metadata (non-fatal) ──
