@@ -12,13 +12,13 @@ import { recordTerminalFailure } from './pipeline-events'
 import { assertTranslationBriefForSource, loadTranslationBrief, renderTranslationBriefPrompt, translationBriefFingerprint } from './translation-brief'
 import { HARDENED_V1_ENABLED } from './pipeline-capabilities'
 import { SEMANTIC_V2_ENABLED } from './semantic-document'
-import { runSemanticPipeline } from './semantic-pipeline'
+import { deterministicSemanticBuildId, runSemanticPipeline } from './semantic-pipeline'
 import { semanticV2AllowedForOrder } from './semantic-canary'
 import { toCanonicalLaunchPack } from './launch-strategy'
 import { launchMarket } from './launch-pack-schema'
 import { BOOKLINGUA_MODEL_CONFIG } from './model-config'
 import { finalizeSemanticOrder } from './semantic-finalization'
-import { cachedLaunchPack } from './launch-pack-cache'
+import { cachedLaunchPack, launchPackRequestIdentity } from './launch-pack-cache'
 import { recordModelTelemetry } from './model-telemetry'
 
 const anthropic = new Anthropic({
@@ -301,10 +301,17 @@ export const translateBook = inngest.createFunction(
           if ((order.upsells || []).includes('launch-pack')) {
             const market = launchMarket(language)
             const sourceFingerprint=crypto.createHash('sha256').update(source).digest('hex')
-            const cached=await cachedLaunchPack({supabase:getSupabaseAdmin(),orderId,language,sourceFingerprint,modelId:BOOKLINGUA_MODEL_CONFIG.launchPack,generate:async()=>{
+            const buildId=deterministicSemanticBuildId(orderId,language,sourceFingerprint,brief.revision)
+            const description=fileContent.slice(0,2500)
+            const cached=await cachedLaunchPack({supabase:getSupabaseAdmin(),identity:{
+              orderId,language,targetLanguage:market.language,targetMarket:market.market,sourceFingerprint,buildId,
+              briefRevision:brief.revision,briefSchemaVersion:brief.schemaVersion,briefFingerprint:translationBriefFingerprint(brief),bookTitle:order.book_title,
+              authorName:order.author_name,genre:order.genre,description,modelId:BOOKLINGUA_MODEL_CONFIG.launchPack,
+              schemaVersion:'2.0',entitled:true,
+            },generate:async identity=>{
               const strategy = await generateLaunchStrategy({ bookTitle: order.book_title, authorName: order.author_name, genre: order.genre, bookDescription: fileContent.slice(0, 2500), targetLanguage: market.language, targetMarket: market.market }, {
                 attempt: attempt + 1,
-                requestId: `${orderId}:${language}:launch-pack`,
+                requestId: launchPackRequestIdentity(identity),
                 onMetadata: async metadata => {
                   await recordModelTelemetry(getSupabaseAdmin(), { orderId, language, stage:'launch-pack', attempt:metadata.attempt,
                     requestIdentity:metadata.requestId, provider:metadata.provider, modelId:metadata.modelId,
@@ -320,13 +327,13 @@ export const translateBook = inngest.createFunction(
               return toCanonicalLaunchPack(strategy, language, true)
             }})
             if(cached.cached)await recordModelTelemetry(getSupabaseAdmin(),{orderId,language,stage:'launch-pack',attempt:1,
-              requestIdentity:`${orderId}:${language}:launch-pack:cache-hit`,provider:'anthropic',modelId:BOOKLINGUA_MODEL_CONFIG.launchPack,
+              requestIdentity:`${launchPackRequestIdentity(cached.identity)}:cache-hit`,provider:'anthropic',modelId:BOOKLINGUA_MODEL_CONFIG.launchPack,
               success:true,inputTokens:0,outputTokens:0,cacheStatus:'hit'})
             launchPack = Buffer.from(JSON.stringify(cached.pack))
           }
           const result = await runSemanticPipeline({
             supabase: getSupabaseAdmin(), orderId, language, sourceFormat: format, source,
-            title: order.book_title, brief, notes, allowReviewedStructure: order.semantic_structure_approved === true,
+            title: order.book_title, brief, notes, buildId: deterministicSemanticBuildId(orderId,language,crypto.createHash('sha256').update(source).digest('hex'),brief.revision), allowReviewedStructure: order.semantic_structure_approved === true,
             launchPack, dualFormat: (order.upsells || []).includes('dual-format'),
             translate: async (batch, context) => {
               let response: any

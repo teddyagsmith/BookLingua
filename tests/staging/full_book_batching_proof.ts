@@ -2,11 +2,11 @@ import fs from 'fs'
 import { createHash } from 'crypto'
 import Anthropic from '@anthropic-ai/sdk'
 import { createClient } from '@supabase/supabase-js'
-import { runSemanticPipeline, SemanticTranslator } from '../../lib/semantic-pipeline'
+import { deterministicSemanticBuildId, runSemanticPipeline, SemanticTranslator } from '../../lib/semantic-pipeline'
 import { parseSemanticEpub } from '../../lib/semantic-parser'
 import { buildTranslationBrief, renderTranslationBriefPrompt, translationBriefFingerprint } from '../../lib/translation-brief'
 import { BOOKLINGUA_MODEL_CONFIG } from '../../lib/model-config'
-import { cachedLaunchPack } from '../../lib/launch-pack-cache'
+import { cachedLaunchPack, launchPackRequestIdentity } from '../../lib/launch-pack-cache'
 import { generateLaunchStrategy, toCanonicalLaunchPack } from '../../lib/launch-strategy'
 import { launchMarket } from '../../lib/launch-pack-schema'
 import { recordModelTelemetry } from '../../lib/model-telemetry'
@@ -51,18 +51,22 @@ const translator:SemanticTranslator=async(batch,context)=>{
   }
 }
 
-async function launch(language:string){
-  return cachedLaunchPack({supabase:db,orderId,language,sourceFingerprint:sourceHash,modelId:BOOKLINGUA_MODEL_CONFIG.launchPack,generate:async()=>{
-    const market=launchMarket(language)
-    const strategy=await generateLaunchStrategy({bookTitle:'Bride of the Hollow King',authorName:'Synthetic staging proof',genre:'fantasy romance',bookDescription:sourceText.slice(0,2500),targetLanguage:market.language,targetMarket:market.market},{requestId:`${orderId}:${language}:launch-pack`,onMetadata:async metadata=>{await recordModelTelemetry(db,{orderId,language,stage:'launch-pack',attempt:await nextAttempt(metadata.requestId),requestIdentity:metadata.requestId,provider:metadata.provider,modelId:metadata.modelId,providerRequestId:metadata.providerRequestId,success:metadata.success,inputTokens:metadata.inputTokens,outputTokens:metadata.outputTokens,cacheStatus:metadata.success?'write':'miss',errorCode:metadata.errorCode})},createMessage:async params=>{const r=await anthropic.messages.create(params);usage.opus.calls++;usage.opus.inputTokens+=r.usage.input_tokens;usage.opus.outputTokens+=r.usage.output_tokens;return r}})
+async function launch(language:string,brief:any){
+  const market=launchMarket(language),description=sourceText.slice(0,2500)
+  return cachedLaunchPack({supabase:db,identity:{orderId,language,targetLanguage:market.language,targetMarket:market.market,
+    sourceFingerprint:sourceHash,buildId:deterministicSemanticBuildId(orderId,language,sourceHash,brief.revision),
+    briefRevision:brief.revision,briefSchemaVersion:brief.schemaVersion,briefFingerprint:translationBriefFingerprint(brief),
+    bookTitle:'Bride of the Hollow King',authorName:'Synthetic staging proof',genre:'fantasy romance',description,
+    modelId:BOOKLINGUA_MODEL_CONFIG.launchPack,schemaVersion:'2.0',entitled:true},generate:async identity=>{
+    const strategy=await generateLaunchStrategy({bookTitle:'Bride of the Hollow King',authorName:'Synthetic staging proof',genre:'fantasy romance',bookDescription:description,targetLanguage:market.language,targetMarket:market.market},{requestId:launchPackRequestIdentity(identity),onMetadata:async metadata=>{await recordModelTelemetry(db,{orderId,language,stage:'launch-pack',attempt:await nextAttempt(metadata.requestId),requestIdentity:metadata.requestId,provider:metadata.provider,modelId:metadata.modelId,providerRequestId:metadata.providerRequestId,success:metadata.success,inputTokens:metadata.inputTokens,outputTokens:metadata.outputTokens,cacheStatus:metadata.success?'write':'miss',errorCode:metadata.errorCode})},createMessage:async params=>{const r=await anthropic.messages.create(params);usage.opus.calls++;usage.opus.inputTokens+=r.usage.input_tokens;usage.opus.outputTokens+=r.usage.output_tokens;return r}})
     return toCanonicalLaunchPack(strategy,language,true)
   }})
 }
 
 async function pipeline(language:string){
   const brief=(await db.from('translation_briefs').select('brief').eq('order_id',orderId).eq('language',language).single()).data!.brief
-  const lp=await launch(language)
-  return runSemanticPipeline({supabase:db,orderId,language,sourceFormat:'epub',source,title:'Bride of the Hollow King',brief,notes:{schemaVersion:'1.0',language,approach:'Full-book synthetic staging proof.',sections:[]},allowReviewedStructure:true,launchPack:Buffer.from(JSON.stringify(lp.pack)),dualFormat:true,maxBatchOutputWords:700,maxBatchConcurrency:4,translate:translator})
+  const lp=await launch(language,brief)
+  return runSemanticPipeline({supabase:db,orderId,language,sourceFormat:'epub',source,title:'Bride of the Hollow King',brief,buildId:deterministicSemanticBuildId(orderId,language,sourceHash,brief.revision),notes:{schemaVersion:'1.0',language,approach:'Full-book synthetic staging proof.',sections:[]},allowReviewedStructure:true,launchPack:Buffer.from(JSON.stringify(lp.pack)),dualFormat:true,maxBatchOutputWords:700,maxBatchConcurrency:4,translate:translator})
 }
 
 async function main(){

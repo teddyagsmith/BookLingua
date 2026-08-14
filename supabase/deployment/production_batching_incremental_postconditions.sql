@@ -10,6 +10,12 @@ begin
       raise exception 'Immutable trigger missing: %', table_name;
     end if;
   end loop;
+  if not exists(
+    select 1 from information_schema.columns
+    where table_schema='public' and table_name='launch_pack_results'
+      and column_name in ('generation_input_fingerprint','build_id','brief_revision','brief_schema_version','brief_fingerprint')
+    group by table_schema,table_name having count(*)=5
+  ) then raise exception 'Launch Pack generation identity columns missing'; end if;
   if to_regprocedure('public.fail_active_order_builds(uuid,text,text,timestamp with time zone)') is null then
     raise exception 'Terminal cleanup RPC missing';
   end if;

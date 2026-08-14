@@ -3,7 +3,7 @@ import assert from 'node:assert/strict'
 import { extractLaunchPackText, generateLaunchStrategy, parseLaunchStrategyText, toCanonicalLaunchPack } from '../lib/launch-strategy'
 import { finalizeSemanticOrder } from '../lib/semantic-finalization'
 import { PackageArtifact, PackageManifestV1, requiredArtifactTypes } from '../lib/package-manifest'
-import { cachedLaunchPack, launchPackIdentity } from '../lib/launch-pack-cache'
+import { cachedLaunchPack, launchPackIdentity, launchPackRequestIdentity } from '../lib/launch-pack-cache'
 import { launchMarket } from '../lib/launch-pack-schema'
 
 const strategy = {
@@ -44,13 +44,43 @@ test('Launch Pack captures successful and failed attempt metadata', async () => 
 test('validated Launch Pack is generated once and reused on whole-job retry', async () => {
   const rows:any[]=[]
   const db:any={from(){let filters:any={};const chain:any={select:()=>chain,eq:(k:string,v:any)=>{filters[k]=v;return chain},maybeSingle:async()=>({data:rows.find(r=>Object.entries(filters).every(([k,v])=>r[k]===v))||null,error:null}),insert:async(row:any)=>{rows.push(row);return{error:null}}};return chain}}
-  const market=launchMarket('fr');let calls=0
-  const generate=async()=>{calls++;return {schemaVersion:'2.0',...market,backendKeywords:['1','2','3','4','5','6','7'],adKeywords:Array.from({length:20},(_,i)=>`a${i}`),categories:['a','b','c'],pricingRecommendation:{ebook:'€1',paperback:'€2',reasoning:'test'},bookDescription:'test',reviewStrategy:['test'],kdpUploadChecklist:['test']} as any}
-  const input={supabase:db,orderId:'o',language:'fr',sourceFingerprint:'source',modelId:'claude-opus-5',generate}
+  let calls=0
+  const generate=async()=>{calls++;const market=launchMarket('fr');return {schemaVersion:'2.0',...market,backendKeywords:['1','2','3','4','5','6','7'],adKeywords:Array.from({length:20},(_,i)=>`a${i}`),categories:['a','b','c'],pricingRecommendation:{ebook:'€1',paperback:'€2',reasoning:'test'},bookDescription:'test',reviewStrategy:['test'],kdpUploadChecklist:['test']} as any}
+  const identity={orderId:'o',language:'fr',targetLanguage:'French',targetMarket:'France',sourceFingerprint:'source',buildId:'build-1',briefRevision:1,briefSchemaVersion:'1.0',briefFingerprint:'brief',bookTitle:'Title',authorName:'Author',genre:'fantasy',description:'Description',modelId:'claude-opus-5',schemaVersion:'2.0',entitled:true}
+  const input={supabase:db,identity,generate}
   assert.equal((await cachedLaunchPack(input)).cached,false)
   assert.equal((await cachedLaunchPack(input)).cached,true)
   assert.equal(calls,1)
-  assert.notEqual(launchPackIdentity({...input,schemaVersion:'2.0',entitled:true}),launchPackIdentity({...input,sourceFingerprint:'changed',schemaVersion:'2.0',entitled:true}))
+  assert.equal(rows.length,1)
+  assert.equal(rows[0].generation_input_fingerprint,launchPackIdentity(identity))
+  assert.equal(rows[0].build_id,'build-1')
+  assert.equal(rows[0].brief_fingerprint,'brief')
+})
+
+test('Launch Pack cache and request identities bind every material generation input', async () => {
+  const rows:any[]=[]
+  const db:any={from(){let filters:any={};const chain:any={select:()=>chain,eq:(k:string,v:any)=>{filters[k]=v;return chain},maybeSingle:async()=>({data:rows.find(r=>Object.entries(filters).every(([k,v])=>r[k]===v))||null,error:null}),insert:async(row:any)=>{rows.push(row);return{error:null}}};return chain}}
+  const base={orderId:'o',language:'fr',targetLanguage:'French',targetMarket:'France',sourceFingerprint:'source',buildId:'build-1',briefRevision:1,briefSchemaVersion:'1.0',briefFingerprint:'brief',bookTitle:'Title',authorName:'Author',genre:'fantasy',description:'Description',modelId:'claude-opus-5',schemaVersion:'2.0',entitled:true}
+  const changes=[
+    {bookTitle:'Changed title'}, {authorName:'Changed author'}, {genre:'romance'}, {description:'Changed description'},
+    {targetMarket:'Canada'}, {targetLanguage:'Canadian French'}, {briefFingerprint:'changed-brief'},
+    {briefRevision:2}, {briefSchemaVersion:'2.0'}, {buildId:'build-2'}, {sourceFingerprint:'changed-source'},
+    {language:'fr-ca'},
+  ]
+  const identities=[base,...changes.map(change=>({...base,...change}))]
+  assert.equal(new Set(identities.map(launchPackIdentity)).size,identities.length)
+  assert.equal(new Set(identities.map(value=>launchPackRequestIdentity(launchPackIdentity(value)))).size,identities.length)
+
+  let calls=0
+  for(const identity of identities.slice(0,-1)){
+    const market=launchMarket('fr')
+    const result=await cachedLaunchPack({supabase:db,identity,generate:async()=>{calls++;return {schemaVersion:'2.0',...market,backendKeywords:['1','2','3','4','5','6','7'],adKeywords:Array.from({length:20},(_,i)=>`a${i}`),categories:['a','b','c'],pricingRecommendation:{ebook:'€1',paperback:'€2',reasoning:'test'},bookDescription:'test',reviewStrategy:['test'],kdpUploadChecklist:['test']} as any}})
+    assert.equal(result.cached,false)
+  }
+  assert.equal(calls,identities.length-1)
+  assert.equal(rows.length,identities.length-1)
+  const unchanged=await cachedLaunchPack({supabase:db,identity:base,generate:async()=>{throw new Error('unchanged input must reuse cache')}})
+  assert.equal(unchanged.cached,true)
 })
 
 function artifact(buildId: string, type: PackageArtifact['type']): PackageArtifact {
