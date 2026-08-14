@@ -3,9 +3,10 @@ import assert from 'node:assert/strict'
 import { existsSync, readFileSync } from 'fs'
 import { createHash } from 'crypto'
 import { join } from 'path'
+import AdmZip from 'adm-zip'
 import { LaunchPackV1, validateLaunchPack } from '../lib/launch-pack-schema'
 import { parseLegacyTranslationNotes, renderTranslationNotes, validateTranslationNotes } from '../lib/translation-notes'
-import { UPLOAD_GUIDE_ASSET_PATH, UPLOAD_GUIDE_SHA256 } from '../lib/upload-guide'
+import { UPLOAD_GUIDE_ASSET_PATH, UPLOAD_GUIDE_SHA256, UPLOAD_GUIDE_VERSION } from '../lib/upload-guide'
 
 function validLaunchPack(): LaunchPackV1 {
   return {
@@ -33,4 +34,12 @@ test('versioned upload guide asset exists with the recorded hash', () => {
   const path = join(process.cwd(), 'public', UPLOAD_GUIDE_ASSET_PATH.replace(/^\//, ''))
   assert.equal(existsSync(path), true)
   assert.equal(createHash('sha256').update(readFileSync(path)).digest('hex'), UPLOAD_GUIDE_SHA256)
+  assert.equal(UPLOAD_GUIDE_VERSION, '2.0')
+  const zip: any = new AdmZip(readFileSync(path)), entry = zip.getEntry('word/document.xml')
+  assert.ok(entry)
+  const xml = zip.readFile(entry)!.toString('utf8')
+  assert.match(xml, /Using Your Chapter Map/)
+  assert.match(xml, /Final Translation/)
+  assert.match(xml, /Translation Review/)
+  assert.match(xml, /Launch Pack/)
 })

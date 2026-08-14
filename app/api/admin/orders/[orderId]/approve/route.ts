@@ -8,6 +8,10 @@ import path from 'path'
 import { assemblePackageManifest, evaluatePackageManifest } from '@/lib/package-manifest'
 import { HARDENED_V1_ENABLED } from '@/lib/pipeline-capabilities'
 import { HARDENED_EXTERNAL_DELIVERY_ENABLED } from '@/lib/hardened-delivery-capability'
+import { customerDeliveryAllowed, customerLanguageName, resolveCustomerDeliveryOrigin } from '@/lib/customer-delivery'
+import { buildCustomerPortalUrl } from '@/lib/download-token'
+import { renderCustomerPackageEmail } from '@/lib/email-templates'
+import type { PackageManifestV1 } from '@/lib/package-manifest'
 
 let resend: Resend | null = null
 function getResend() {
@@ -57,6 +61,9 @@ export async function POST(
     }
 
     const languages = (order.languages as string[]) || []
+    const hardenedManifests: PackageManifestV1[] = []
+    let hardenedDeliveryEventId: string | null = null
+    let customerOrigin: string | null = null
     if (['ready_for_review', 'delivery_pending'].includes(order.status)) {
       if (!HARDENED_V1_ENABLED) return NextResponse.json({ error: 'Hardened package capability is disabled' }, { status: 409 })
       for (const language of languages) {
@@ -69,10 +76,16 @@ export async function POST(
         if (!row || row.status !== 'pass') return NextResponse.json({ error: `Package is not passed for ${language}` }, { status: 409 })
         const authoritative = await assemblePackageManifest({ supabase: getSupabaseAdmin(), orderId, language, buildId: row.build_id })
         if (evaluatePackageManifest(authoritative).status !== 'pass') return NextResponse.json({ error: `Package changed or is incomplete for ${language}` }, { status: 409 })
+        hardenedManifests.push(authoritative)
+      }
+      const deliveryPolicy=customerDeliveryAllowed(order.email)
+      if(deliveryPolicy.allowed){
+        try{customerOrigin=resolveCustomerDeliveryOrigin(undefined,deliveryPolicy.mode)}catch(error){return NextResponse.json({error:error instanceof Error?error.message:'Customer delivery origin is invalid'},{status:409})}
       }
       const { data: deliveryEventId, error: deliveryError } = await getSupabaseAdmin().rpc('begin_hardened_delivery', { p_order_id: orderId })
       if (deliveryError) return NextResponse.json({ error: 'Package state changed before approval' }, { status: 409 })
-      if (!HARDENED_EXTERNAL_DELIVERY_ENABLED) {
+      hardenedDeliveryEventId=deliveryEventId
+      if (!HARDENED_EXTERNAL_DELIVERY_ENABLED && !deliveryPolicy.allowed) {
         return NextResponse.json({ success: true, approved: true, externalDelivery: 'pending_disabled', emailSent: false }, { status: 202 })
       }
       ;(order as any).delivery_event_id = deliveryEventId
@@ -148,8 +161,8 @@ export async function POST(
     }
     // ── END MANDATORY QA GATE ──
 
-    // Fetch the pre-composed customer email from the files table
-    // This is the EXACT email Gilly reviewed — now sent to the customer
+    // Legacy orders retain their pre-composed delivery email. Hardened orders
+    // always render the dedicated customer experience from current packages.
     const { data: emailFile } = await getSupabaseAdmin()
       .from('files')
       .select('content')
@@ -157,7 +170,12 @@ export async function POST(
       .eq('type', 'customer_email')
       .maybeSingle()
 
-    const customerEmailHtml = emailFile?.content || `
+    const hardenedCustomerEmail=hardenedManifests.length?renderCustomerPackageEmail({
+      authorName:order.author_name,bookTitle:order.book_title,
+      languages:hardenedManifests.map(manifest=>customerLanguageName(manifest.language)),
+      downloadPageUrl:buildCustomerPortalUrl(orderId,customerOrigin!),
+    }):null
+    const customerEmailHtml = hardenedCustomerEmail?.html || emailFile?.content || `
       <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto;">
         <h1 style="color: #7c3aed;">Your translations are ready! 📚</h1>
         <p>Hi ${order.author_name || 'there'},</p>
@@ -177,12 +195,14 @@ export async function POST(
     `
 
     // Send the exact same email to the customer
+    const stagingPrefix=customerDeliveryAllowed(order.email).mode==='staging'?'[BOOKLINGUA STAGING TEST] ':''
     const { error: sendError, data: sendData } = await getResend().emails.send({
       from: 'BookLingua <orders@booklingua.io>',
-      to: order.email,
-      subject: `Your translations are ready: ${order.book_title} 🎉`,
+      to: [order.email],
+      subject: `${stagingPrefix}${hardenedCustomerEmail?.subject||`Your translations are ready: ${order.book_title} 🎉`}`,
       html: customerEmailHtml,
-    }, order.status === 'pending_review' ? undefined : { idempotencyKey: `delivery/${(order as any).delivery_event_id}` })
+      ...(hardenedCustomerEmail?{text:hardenedCustomerEmail.text}:{}),
+    }, order.status === 'pending_review' ? undefined : { idempotencyKey: `delivery/${hardenedDeliveryEventId}` })
     if (sendError) throw new Error('Customer delivery email failed')
 
     if (order.status !== 'pending_review') {

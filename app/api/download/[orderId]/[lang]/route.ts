@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getSupabaseAdmin } from '@/lib/supabase'
-import { verifyDownloadToken } from '@/lib/download-token'
+import { verifyDownloadToken, verifyCustomerArtifactToken } from '@/lib/download-token'
 import {
   Document,
   Paragraph,
@@ -15,6 +15,7 @@ import JSZip from 'jszip'
 import { HARDENED_V1_ENABLED } from '@/lib/pipeline-capabilities'
 import { selectManifestArtifact, verifyStoredArtifact } from '@/lib/hardened-artifact'
 import type { ArtifactType } from '@/lib/package-manifest'
+import { CUSTOMER_ARTIFACT_TYPES, customerArtifactFilename, customerContentDisposition } from '@/lib/customer-delivery'
 
 const LANG_NAMES: Record<string, string> = {
   'es-es':    'Spanish_Spain',
@@ -644,9 +645,14 @@ export async function GET(
 ) {
   const { orderId, lang } = params
   const token = request.nextUrl.searchParams.get('token')
+  const requestedArtifact = request.nextUrl.searchParams.get('artifact')
+  const customerScope = request.nextUrl.searchParams.get('scope') === 'customer'
   const type = (request.nextUrl.searchParams.get('type') || 'review') as 'review' | 'final' | 'pass1'
 
-  if (!token || !verifyDownloadToken(orderId, lang, token)) {
+  const validToken = token && (customerScope
+    ? Boolean(requestedArtifact) && CUSTOMER_ARTIFACT_TYPES.includes(requestedArtifact as any) && verifyCustomerArtifactToken(orderId,lang,requestedArtifact!,token)
+    : verifyDownloadToken(orderId, lang, token))
+  if (!validToken) {
     return NextResponse.json({ error: 'Invalid or missing download token' }, { status: 403 })
   }
 
@@ -659,6 +665,7 @@ export async function GET(
 
     if (!order) return NextResponse.json({ error: 'Order not found' }, { status: 404 })
     if (!['completed', 'pending_review', 'ready_for_review', 'delivery_pending'].includes(order.status)) return NextResponse.json({ error: 'Translation not yet approved for download' }, { status: 400 })
+    if (customerScope && !['completed','delivery_pending'].includes(order.status)) return NextResponse.json({ error: 'Translation not approved for customer delivery' }, { status: 403 })
 
     const fileFormat  = (order.file_format || '.docx').toLowerCase()
     const upsells     = (order.upsells || []) as string[]
@@ -670,7 +677,6 @@ export async function GET(
 
     // Hardened packages serve the exact immutable bytes that passed validation.
     // If no artifact table/row exists, legacy orders continue through the dynamic builder below.
-    const requestedArtifact = request.nextUrl.searchParams.get('artifact')
     const allowedArtifactTypes = new Set(['translation_brief','pass1_docx','review_docx','final_epub','final_docx','translation_notes','chapter_map_docx','chapter_map_csv','upload_guide','launch_pack'])
     if (requestedArtifact && !allowedArtifactTypes.has(requestedArtifact)) return NextResponse.json({ error: 'Unsupported artifact type' }, { status: 400 })
     const artifactType = (requestedArtifact || (type === 'pass1' ? 'pass1_docx'
@@ -708,9 +714,11 @@ export async function GET(
         : storedArtifact.filename.endsWith('.docx') ? 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
           : storedArtifact.filename.endsWith('.json') ? 'application/json'
             : storedArtifact.filename.endsWith('.csv') ? 'text/csv; charset=utf-8' : 'text/plain; charset=utf-8'
+      const responseFilename=customerScope?customerArtifactFilename(order.book_title,lang,storedArtifact.manifestArtifact):storedArtifact.filename.replace(/"/g, '')
       return new NextResponse(buffer, { headers: {
         'Content-Type': contentType,
-        'Content-Disposition': `attachment; filename="${storedArtifact.filename.replace(/"/g, '')}"`,
+        'Content-Disposition': customerScope?customerContentDisposition(responseFilename):`attachment; filename="${responseFilename}"`,
+        'Cache-Control':'private, no-store',
         'X-BookLingua-Artifact': 'stored-validated',
       } })
     }

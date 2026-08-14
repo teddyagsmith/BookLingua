@@ -1,4 +1,4 @@
-import { createHmac } from 'crypto'
+import { createHmac, timingSafeEqual } from 'crypto'
 
 /**
  * Signs + builds a one-click feedback rating URL.
@@ -70,3 +70,21 @@ export function buildArtifactDownloadUrl(orderId: string, lang: string, artifact
   const token = signDownloadToken(orderId, lang)
   return `${appUrl}/api/download/${orderId}/${lang}?token=${token}&artifact=${encodeURIComponent(artifact)}`
 }
+
+function scopedToken(material:string):string{
+  const secret=process.env.STRIPE_WEBHOOK_SECRET
+  if(!secret)throw new Error('Download signing secret is not configured')
+  return createHmac('sha256',secret).update(material).digest('base64url').slice(0,32)
+}
+
+function verifyScopedToken(token:string,expected:string):boolean{
+  if(token.length!==expected.length)return false
+  return timingSafeEqual(Buffer.from(token),Buffer.from(expected))
+}
+
+export function signCustomerPortalToken(orderId:string):string{return scopedToken(`customer-portal:${orderId}`)}
+export function verifyCustomerPortalToken(orderId:string,token:string):boolean{return verifyScopedToken(token,signCustomerPortalToken(orderId))}
+export function signCustomerArtifactToken(orderId:string,lang:string,artifact:string):string{return scopedToken(`customer-artifact:${orderId}:${lang}:${artifact}`)}
+export function verifyCustomerArtifactToken(orderId:string,lang:string,artifact:string,token:string):boolean{return verifyScopedToken(token,signCustomerArtifactToken(orderId,lang,artifact))}
+export function buildCustomerPortalUrl(orderId:string,origin:string):string{return `${origin}/download/${orderId}?token=${signCustomerPortalToken(orderId)}`}
+export function buildCustomerArtifactDownloadUrl(orderId:string,lang:string,artifact:string,origin:string):string{return `${origin}/api/download/${orderId}/${lang}?scope=customer&artifact=${encodeURIComponent(artifact)}&token=${signCustomerArtifactToken(orderId,lang,artifact)}`}
