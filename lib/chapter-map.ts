@@ -1,6 +1,7 @@
-import { Document, HeadingLevel, Packer, Paragraph, Table, TableCell, TableRow } from 'docx'
+import { AlignmentType, BorderStyle, Document, HeadingLevel, Packer, Paragraph, Table, TableCell, TableLayoutType, TableRow, TextRun, WidthType } from 'docx'
 import { SemanticDocumentV2 } from './semantic-document'
 import { deterministicDocx } from './deterministic-docx'
+import { BOOKLINGUA_CLEAN_BOOK_STYLE } from './formatting-policy'
 
 export interface ChapterMapRow {
   chapterId: string
@@ -12,7 +13,7 @@ export interface ChapterMapRow {
 }
 
 export function buildChapterMap(document: SemanticDocumentV2): ChapterMapRow[] {
-  const rows = document.nodes
+  const candidates = document.nodes
     .filter(node => node.type === 'heading' && node.headingLevel === 1 && node.chapterId)
     .map(node => ({
       chapterId: node.chapterId!,
@@ -22,6 +23,11 @@ export function buildChapterMap(document: SemanticDocumentV2): ChapterMapRow[] {
       translatedTitle: node.translatedText || '',
       status: node.translatedText ? 'mapped' as const : 'missing_translation' as const,
     }))
+  // Some source parsers associate front-matter H1s with the first numbered
+  // chapter. When the same chapter number appears twice, the later heading is
+  // the actual chapter boundary; omit the front-matter/title row.
+  const rows = candidates.filter((row,index) => !row.sourceChapterNumber
+    || !candidates.slice(index + 1).some(next => next.sourceChapterNumber === row.sourceChapterNumber))
   if (new Set(rows.map(row => row.chapterId)).size !== rows.length) throw new Error('Duplicate chapter ID in chapter map')
   return rows
 }
@@ -37,17 +43,25 @@ export function renderChapterMapCsv(rows: ChapterMapRow[]): string {
   ].join('\n')
 }
 
-export async function renderChapterMapDocx(rows: ChapterMapRow[]): Promise<Buffer> {
+export async function renderChapterMapDocx(rows: ChapterMapRow[], options: { bookTitle?: string; language?: string } = {}): Promise<Buffer> {
+  const width=(text:string)=>text==='Chapter'?1100:3950
+  const header=(text:string)=>new TableCell({shading:{fill:'EDE9FE'},width:{size:width(text),type:WidthType.DXA},children:[new Paragraph({alignment:AlignmentType.CENTER,children:[new TextRun({text,bold:true,color:'4C1D95'})]})]})
   const tableRows = [
-    new TableRow({ children: ['Source', 'Translation', 'Status'].map(text => new TableCell({ children: [new Paragraph({ text })] })) }),
+    new TableRow({ tableHeader:true, children: ['Chapter', 'Original heading', 'Translated heading'].map(header) }),
     ...rows.map(row => new TableRow({ children: [
-      new TableCell({ children: [new Paragraph(`${row.sourceChapterNumber || ''} ${row.sourceTitle}`.trim())] }),
-      new TableCell({ children: [new Paragraph(`${row.translatedChapterNumber || ''} ${row.translatedTitle}`.trim())] }),
-      new TableCell({ children: [new Paragraph(row.status)] }),
+      new TableCell({width:{size:1100,type:WidthType.DXA},children:[new Paragraph({alignment:AlignmentType.CENTER,children:[new TextRun({text:row.sourceChapterNumber||row.chapterId.replace(/^chapter-0*/,''),bold:true})]})]}),
+      new TableCell({width:{size:3950,type:WidthType.DXA},children:[new Paragraph(row.sourceTitle)]}),
+      new TableCell({width:{size:3950,type:WidthType.DXA},children:[new Paragraph(row.translatedTitle)]}),
     ] })),
   ]
-  return deterministicDocx(Buffer.from(await Packer.toBuffer(new Document({ sections: [{ children: [
-    new Paragraph({ text: 'BookLingua Chapter Map', heading: HeadingLevel.TITLE }),
-    new Table({ rows: tableRows }),
-  ] }] }))))
+  const title=options.bookTitle?`${options.bookTitle} — Chapter Map`:'BookLingua Chapter Map'
+  return deterministicDocx(Buffer.from(await Packer.toBuffer(new Document({
+    styles:{default:{document:{run:{font:BOOKLINGUA_CLEAN_BOOK_STYLE.bodyFont,size:BOOKLINGUA_CLEAN_BOOK_STYLE.bodySizeHalfPoints}}}},
+    sections: [{properties:{page:{margin:BOOKLINGUA_CLEAN_BOOK_STYLE.pageMarginsTwips}},children: [
+      new Paragraph({ text: title, heading: HeadingLevel.TITLE }),
+      ...(options.language?[new Paragraph({children:[new TextRun({text:options.language,italics:true,color:'555555'})]})]:[]),
+      new Paragraph({text:'Use this Chapter Map to match chapters in your original manuscript with their translated equivalents when editing or uploading your translated book.',spacing:{after:240}}),
+      new Table({ rows: tableRows, width:{size:9000,type:WidthType.DXA},columnWidths:[1100,3950,3950],layout:TableLayoutType.FIXED,borders:{top:{style:BorderStyle.SINGLE,size:2,color:'D1D5DB'},bottom:{style:BorderStyle.SINGLE,size:2,color:'D1D5DB'},left:{style:BorderStyle.SINGLE,size:2,color:'D1D5DB'},right:{style:BorderStyle.SINGLE,size:2,color:'D1D5DB'},insideHorizontal:{style:BorderStyle.SINGLE,size:1,color:'E5E7EB'},insideVertical:{style:BorderStyle.SINGLE,size:1,color:'E5E7EB'}} }),
+    ]}]
+  }))))
 }

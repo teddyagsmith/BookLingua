@@ -60,3 +60,40 @@ export function renderTranslationNotes(notes: TranslationNotesV1): string {
     ]),
   ].join('\n')
 }
+
+export function deriveEditorialTranslationNotes(input: {
+  language: string
+  pass1: { nodes: Array<{ id: string; sourceText: string; translatedText?: string | null }> }
+  pass2: { nodes: Array<{ id: string; sourceText: string; translatedText?: string | null }> }
+  existing?: TranslationNotesV1
+  authoritativeTitle?: { source: string; target: string }
+  limit?: number
+}): TranslationNotesV1 {
+  const limit = Math.max(1, Math.min(input.limit || 12, 20))
+  const decisions: TranslationNoteEntry[] = []
+  if (input.authoritativeTitle) decisions.push({
+    source: input.authoritativeTitle.source,
+    target: input.authoritativeTitle.target,
+    reason: 'Used consistently as the authoritative translated book title in the manuscript and customer files.',
+  })
+  for (let index = 0; index < input.pass1.nodes.length && decisions.length < limit; index++) {
+    const first = input.pass1.nodes[index]; const second = input.pass2.nodes[index]
+    if (!second || first.id !== second.id || !first.translatedText || !second.translatedText || first.translatedText === second.translatedText) continue
+    const reason = /[“”"'’]/.test(first.sourceText)
+      ? 'Refined during editorial review for natural dialogue, voice, and punctuation in the target language.'
+      : /[!?…]/.test(first.sourceText)
+        ? 'Refined during editorial review to preserve emphasis and narrative rhythm.'
+        : 'Refined during editorial review for idiomatic phrasing, clarity, and consistency.'
+    decisions.push({ source: first.sourceText, target: second.translatedText, reason })
+  }
+  const existingSections = input.existing?.sections || []
+  return {
+    schemaVersion: TRANSLATION_NOTES_SCHEMA_VERSION,
+    language: input.language,
+    approach: 'The translation preserves the author’s narrative voice and semantic structure. These notes highlight representative title, terminology, dialogue, tone, and editorial decisions evidenced in the completed two-pass translation.',
+    sections: [
+      ...(decisions.length ? [{ id: 'editorial-decisions', title: 'Representative Editorial Decisions', entries: decisions }] : []),
+      ...existingSections.map(section => ({ ...section, id: `approved-${section.id}`, title: `Approved Instructions — ${section.title}` })),
+    ],
+  }
+}

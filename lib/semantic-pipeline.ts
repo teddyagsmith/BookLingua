@@ -5,12 +5,13 @@ import { SupabaseClient } from '@supabase/supabase-js'
 import { parseSemanticDocx, parseSemanticEpub, parseSemanticTxt } from './semantic-parser'
 import { evaluateSemanticEligibility, SemanticDocumentV2 } from './semantic-document'
 import { createNodeTranslationInput, nodeBatchFingerprint, NodeTranslationInput, NodeTranslationOutput, validateAndMergeNodeOutput } from './node-translation-contract'
-import { buildSemanticDocx, buildSemanticEpub, buildSemanticEpubFromDocument, buildSemanticReviewDocx } from './semantic-artifacts'
+import { buildFinalSemanticDocx, buildSemanticDocx, buildSemanticEpub, buildSemanticEpubFromDocument, buildSemanticReviewDocx } from './semantic-artifacts'
 import { buildChapterMap, renderChapterMapCsv, renderChapterMapDocx } from './chapter-map'
 import { validateArtifact } from './artifact-validation-v2'
 import { storeImmutableArtifact } from './artifact-store'
 import { resolvePackageGate } from './package-gate'
-import { renderTranslationNotes, TranslationNotesV1, validateTranslationNotes } from './translation-notes'
+import { deriveEditorialTranslationNotes, renderTranslationNotes, TranslationNotesV1, validateTranslationNotes } from './translation-notes'
+import { enforceAuthoritativeTranslatedTitle } from './authoritative-title'
 import { TranslationBriefV1, assertTranslationBriefForSource, translationBriefFingerprint } from './translation-brief'
 import { ArtifactType } from './package-manifest'
 import { UPLOAD_GUIDE_ASSET_PATH, UPLOAD_GUIDE_SHA256 } from './upload-guide'
@@ -200,7 +201,9 @@ export async function runSemanticPipeline(input: SemanticPipelineInput) {
   const pass1 = { ...sourceDocument, nodes: await runBatchedPass(input, sourceDocument.nodes, 1) }
   assertSourceAwareDuplicateParity(sourceDocument.nodes, pass1.nodes)
   await persistSemantic(input.supabase, { orderId: input.orderId, language: input.language, buildId, pass: 'pass1', document: pass1, eligibility: eligibility.status })
-  const pass2 = { ...pass1, nodes: await runBatchedPass(input, pass1.nodes, 2) }
+  const rawPass2 = { ...pass1, nodes: await runBatchedPass(input, pass1.nodes, 2) }
+  const titleResult = enforceAuthoritativeTranslatedTitle(rawPass2, input.title)
+  const pass2 = titleResult.document
   assertSourceAwareDuplicateParity(sourceDocument.nodes, pass2.nodes)
   await persistSemantic(input.supabase, { orderId: input.orderId, language: input.language, buildId, pass: 'pass2', document: pass2, eligibility: eligibility.status })
 
@@ -215,15 +218,16 @@ export async function runSemanticPipeline(input: SemanticPipelineInput) {
   }
 
   await storeValidated(input, buildId, 'translation_brief', 'translation-brief.json', Buffer.from(JSON.stringify(input.brief, null, 2)))
-  await storeValidated(input, buildId, 'pass1_docx', `${input.title} - ${input.language} - Pass 1.docx`, await buildSemanticDocx(pass1, input.title, 'pass1'), 'docx', true)
-  await storeValidated(input, buildId, 'review_docx', `${input.title} - ${input.language} - Review.docx`, await buildSemanticReviewDocx(pass1, pass2, input.title), 'docx', true)
+  await storeValidated(input, buildId, 'pass1_docx', `${input.title} - ${input.language} - Pass 1.docx`, await buildSemanticDocx(pass1, titleResult.title, 'pass1'), 'docx', true)
+  await storeValidated(input, buildId, 'review_docx', `${input.title} - ${input.language} - Review.docx`, await buildSemanticReviewDocx(pass1, pass2, titleResult.title), 'docx', true)
   if (input.sourceFormat === 'epub' || input.dualFormat) await storeValidated(input, buildId, 'final_epub', `${input.title} - ${input.language} - Final.epub`, input.sourceFormat === 'epub' ? buildSemanticEpub(input.source, pass2) : buildSemanticEpubFromDocument(pass2, input.title), 'epub', true)
-  if (input.sourceFormat !== 'epub' || input.dualFormat) await storeValidated(input, buildId, 'final_docx', `${input.title} - ${input.language} - Final.docx`, await buildSemanticDocx(pass2, input.title, 'final'), 'docx', true)
+  if (input.sourceFormat !== 'epub' || input.dualFormat) await storeValidated(input, buildId, 'final_docx', `${input.title} - ${input.language} - Final.docx`, await buildFinalSemanticDocx(input.source, pass2, titleResult.title), 'docx', true)
   const map = buildChapterMap(pass2)
   if (map.some(row => row.status !== 'mapped')) throw new Error('Chapter map is incomplete')
   await storeValidated(input, buildId, 'chapter_map_csv', 'chapter-map.csv', Buffer.from(renderChapterMapCsv(map)))
-  await storeValidated(input, buildId, 'chapter_map_docx', 'chapter-map.docx', await renderChapterMapDocx(map), 'docx')
-  await storeValidated(input, buildId, 'translation_notes', 'translation-notes.txt', Buffer.from(renderTranslationNotes(input.notes)))
+  await storeValidated(input, buildId, 'chapter_map_docx', 'chapter-map.docx', await renderChapterMapDocx(map, { bookTitle: input.title, language: input.language }), 'docx')
+  const notes = deriveEditorialTranslationNotes({ language: input.language, pass1, pass2, existing: input.notes, authoritativeTitle: { source: input.title, target: titleResult.title } })
+  await storeValidated(input, buildId, 'translation_notes', 'translation-notes.txt', Buffer.from(renderTranslationNotes(notes)))
   const guidePath = path.join(process.cwd(), 'public', UPLOAD_GUIDE_ASSET_PATH.replace(/^\//, ''))
   const guide = await readFile(guidePath)
   if (createHash('sha256').update(guide).digest('hex') !== UPLOAD_GUIDE_SHA256) throw new Error('Pinned upload guide hash mismatch')
