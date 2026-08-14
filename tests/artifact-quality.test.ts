@@ -2,25 +2,64 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import AdmZip from 'adm-zip'
 import { Document, HeadingLevel, Packer, Paragraph, TextRun } from 'docx'
-import { authoritativeTranslatedTitle, enforceAuthoritativeTranslatedTitle } from '../lib/authoritative-title'
+import { applyTitleAuthority, resolveTitleAuthority } from '../lib/authoritative-title'
 import { assessSourceFormatting } from '../lib/formatting-policy'
-import { buildFinalSemanticDocx, buildSemanticDocxPreservingSource, buildSemanticReviewDocx, wordLevelDiff } from '../lib/semantic-artifacts'
+import { buildFinalSemanticDocx, buildSemanticDocxPreservingSource, buildSemanticEpub, buildSemanticReviewDocx, wordLevelDiff } from '../lib/semantic-artifacts'
 import { deriveEditorialTranslationNotes, validateTranslationNotes } from '../lib/translation-notes'
 import { parseSemanticDocx, parseSemanticTxt } from '../lib/semantic-parser'
 
-function document(nodes: Array<{ sourceText: string; translatedText: string }>): any {
-  return { schemaVersion: '2.0', sourceHash: 'source', sourceFormat: 'epub', parserConfidence: 1, nodes: nodes.map((node,index)=>({ id:`node-${index}`, chapterId:'chapter-1', type:index?'paragraph':'heading', headingLevel:index?null:1, sourceChapterNumber:null, order:index, sourceLocation:`book.xhtml:block:${index}`,...node })) }
+function document(nodes: Array<{ sourceText: string; translatedText: string }>,sourceFormat:'epub'|'docx'|'txt'='epub'): any {
+  return { schemaVersion: '2.0', sourceHash: 'source', sourceFormat, parserConfidence: 1, nodes: nodes.map((node,index)=>({ id:`node-${index}`, chapterId:'chapter-1', type:index?'paragraph':'heading', headingLevel:index?null:1, sourceChapterNumber:null, order:index, sourceLocation:`OEBPS/book.xhtml:block:${index}`,...node })) }
 }
 
-test('authoritative title comes from the exact semantic title node and is enforced in title references', () => {
+function epub(title:string,h1='Chapter 1'):Buffer{
+  const zip:any=new AdmZip();zip.addFile('mimetype',Buffer.from('application/epub+zip'));zip.addFile('META-INF/container.xml',Buffer.from('<container><rootfiles><rootfile full-path="OEBPS/content.opf"/></rootfiles></container>'))
+  zip.addFile('OEBPS/content.opf',Buffer.from(`<package xmlns:dc="http://purl.org/dc/elements/1.1/"><metadata><dc:title>${title}</dc:title></metadata><manifest><item id="book" href="book.xhtml" media-type="application/xhtml+xml"/></manifest><spine><itemref idref="book"/></spine></package>`))
+  zip.addFile('OEBPS/book.xhtml',Buffer.from(`<html><body><h1>${h1}</h1></body></html>`));return zip.toBuffer()
+}
+
+test('existing exact semantic title node remains authoritative for French and German', () => {
   const input=document([
     {sourceText:'Bride of the Hollow King',translatedText:"L’Épouse du Roi Vide"},
     {sourceText:'Did you love Bride of the Hollow King?',translatedText:'Vous avez aimé La Mariée du Roi Creux ?'},
   ])
-  assert.equal(authoritativeTranslatedTitle(input,'Bride of the Hollow King'),"L’Épouse du Roi Vide")
-  const result=enforceAuthoritativeTranslatedTitle(input,'Bride of the Hollow King')
+  const authority=resolveTitleAuthority({document:input,checkoutTitle:'Bride of the Hollow King',source:epub('Bride of the Hollow King','Bride of the Hollow King')})
+  assert.equal(authority.translatedValue,"L’Épouse du Roi Vide")
+  const result=applyTitleAuthority(input,'Bride of the Hollow King',authority)
   assert.match(result.document.nodes[1].translatedText!,/L’Épouse du Roi Vide/)
   assert.doesNotMatch(result.document.nodes[1].translatedText!,/Mariée du Roi Creux/)
+  const german=document([{sourceText:'Bride of the Hollow King',translatedText:'Braut des Hohlen Königs'}])
+  assert.equal(resolveTitleAuthority({document:german,checkoutTitle:'Bride of the Hollow King',source:epub('Bride of the Hollow King')}).translatedValue,'Braut des Hohlen Königs')
+})
+
+test('metadata-only EPUB preserves its title and never treats first H1 Chapter 1 as title',()=>{
+  const source=epub('Bride of the Hollow King','Chapter 1'),doc=document([{sourceText:'Chapter 1',translatedText:'Chapitre 1'}])
+  const authority=resolveTitleAuthority({document:doc,checkoutTitle:'Bride of the Hollow King',source})
+  assert.equal(authority.sourceKind,'epub_metadata');assert.equal(authority.effectiveValue,'Bride of the Hollow King');assert.equal(authority.translatedValue,undefined);assert.equal(authority.warning?.code,'TITLE_TRANSLATION_UNAVAILABLE')
+  const output:any=new AdmZip(buildSemanticEpub(source,doc,authority)),opf=output.getEntry('OEBPS/content.opf').getData().toString('utf8')
+  assert.match(opf,/<dc:title>Bride of the Hollow King<\/dc:title>/);assert.doesNotMatch(opf,/<dc:title>Chapitre 1<\/dc:title>/)
+})
+
+test('safe title matching accepts subtitle, punctuation and apostrophe variation without fuzzy heading guesses',()=>{
+  for(const [checkout,source,target] of [
+    ['Bride of the Hollow King','Bride of the Hollow King: A Gothic Romance','L’Épouse du Roi Vide : une romance gothique'],
+    ['Bride of the Hollow King','Bride of the Hollow King!','L’Épouse du Roi Vide !'],
+    ["King's Bride",'King’s Bride','La Fiancée du Roi'],
+  ]){
+    const doc=document([{sourceText:source,translatedText:target}]),authority=resolveTitleAuthority({document:doc,checkoutTitle:checkout,source:epub(checkout)})
+    assert.equal(authority.sourceKind,'semantic_title_node');assert.equal(authority.translatedValue,target)
+  }
+  const chapter=document([{sourceText:'Chapter 1',translatedText:'Chapitre 1'}]),authority=resolveTitleAuthority({document:chapter,checkoutTitle:'Bride of the Hollow King',source:epub('Bride of the Hollow King')})
+  assert.notEqual(authority.sourceKind,'semantic_title_node')
+})
+
+test('DOCX subtitle variation can be authoritative while absent title safely falls back to original metadata',async()=>{
+  const packed=Buffer.from(await Packer.toBuffer(new Document({sections:[{children:[new Paragraph('Chapter 1')]}]}))),zip:any=new AdmZip(packed)
+  zip.updateFile('docProps/core.xml',Buffer.from(zip.getEntry('docProps/core.xml').getData().toString('utf8').replace('</cp:coreProperties>','<dc:title>Bride of the Hollow King</dc:title></cp:coreProperties>')))
+  const source=zip.toBuffer(),subtitle=document([{sourceText:'Bride of the Hollow King — A Novel',translatedText:'Braut des Hohlen Königs — Ein Roman'}],'docx')
+  assert.equal(resolveTitleAuthority({document:subtitle,checkoutTitle:'Bride of the Hollow King',source}).translatedValue,'Braut des Hohlen Königs — Ein Roman')
+  const absent=document([{sourceText:'Chapter 1',translatedText:'Kapitel 1'}],'docx'),fallback=resolveTitleAuthority({document:absent,checkoutTitle:'Bride of the Hollow King',source})
+  assert.equal(fallback.sourceKind,'docx_metadata');assert.equal(fallback.effectiveValue,'Bride of the Hollow King');assert.equal(fallback.fallbackUsed,true)
 })
 
 test('word-level review diff does not duplicate the whole changed paragraph', async () => {

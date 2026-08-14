@@ -3,6 +3,7 @@ import { AlignmentType, Document, HeadingLevel, Packer, Paragraph, TextRun } fro
 import { SemanticDocumentV2, SemanticNodeV2, validateSemanticDocument } from './semantic-document'
 import { deterministicDocx } from './deterministic-docx'
 import { BOOKLINGUA_CLEAN_BOOK_STYLE } from './formatting-policy'
+import { TitleAuthority } from './authoritative-title'
 
 function heading(level: number | null): typeof HeadingLevel[keyof typeof HeadingLevel] {
   return level === 1 ? HeadingLevel.HEADING_1 : level === 2 ? HeadingLevel.HEADING_2 : level === 3 ? HeadingLevel.HEADING_3 : HeadingLevel.HEADING_4
@@ -169,7 +170,7 @@ function replaceTextPreservingInline(inner: string, translated: string): string 
   return tokens.join('')
 }
 
-export function buildSemanticEpub(source: Buffer, document: SemanticDocumentV2): Buffer {
+export function buildSemanticEpub(source: Buffer, document: SemanticDocumentV2, titleAuthority?: TitleAuthority): Buffer {
   assertTranslated(document)
   if (document.sourceFormat !== 'epub') throw new Error('EPUB output requires an EPUB semantic source')
   const zip: any = new AdmZip(source)
@@ -200,9 +201,8 @@ export function buildSemanticEpub(source: Buffer, document: SemanticDocumentV2):
     for (const [sourceText, translatedText] of Array.from(headingMap.entries())) xml = xml.split(`>${sourceText}<`).join(`>${escapeXml(translatedText)}<`)
     zip.updateFile(entry.entryName, Buffer.from(xml))
   }
-  const titleNode = document.nodes.find(node => node.type === 'heading' && node.headingLevel === 1 && node.translatedText?.trim())
-  if (titleNode) for (const entry of zip.getEntries().filter((e: any) => /\.opf$/i.test(e.entryName))) {
-    const xml = entry.getData().toString('utf8').replace(/<dc:title(?:\s[^>]*)?>[\s\S]*?<\/dc:title>/i, (match: string) => match.replace(/>[^<]*</, `>${escapeXml(titleNode.translatedText!)}<`))
+  if (titleAuthority?.translatedValue) for (const entry of zip.getEntries().filter((e: any) => /\.opf$/i.test(e.entryName))) {
+    const xml = entry.getData().toString('utf8').replace(/<dc:title(?:\s[^>]*)?>[\s\S]*?<\/dc:title>/i, (match: string) => match.replace(/>[^<]*</, `>${escapeXml(titleAuthority.translatedValue!)}<`))
     zip.updateFile(entry.entryName, Buffer.from(xml))
   }
   // Repack instead of serializing the mutated source archive directly. Some
