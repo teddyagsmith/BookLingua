@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import Image from 'next/image'
 import Link from 'next/link'
+import ResourcesMenu from '@/components/ResourcesMenu'
 
 const serifFont = { fontFamily: "'EB Garamond', Georgia, serif" }
 
@@ -766,9 +767,7 @@ export default function ExamplesPage() {
           <Logo size="lg" />
         </Link>
         <div className="flex items-center gap-3 sm:gap-6">
-          <Link href="/blog" className="text-gray-600 hover:text-brand-dark font-medium transition-colors hidden sm:block">
-            Guides
-          </Link>
+          <ResourcesMenu />
           <Link href="/publishers" className="text-gray-600 hover:text-brand-dark font-medium transition-colors hidden sm:block">
             Publishers
           </Link>

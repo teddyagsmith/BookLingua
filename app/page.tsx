@@ -3,6 +3,7 @@
 import { useState, useCallback, useRef, useEffect } from 'react'
 import Image from 'next/image'
 import EmailSignupPopup from '@/components/EmailSignupPopup'
+import ResourcesMenu from '@/components/ResourcesMenu'
 
 // GA4 event helper for CTA buttons
 function trackStartTranslation(location: string) {
@@ -631,9 +632,7 @@ export default function Home() {
               <Logo size="lg" />
             </div>
             <div className="flex items-center gap-3 sm:gap-6">
-              <a href="/blog" className="text-gray-600 hover:text-brand-dark font-medium transition-colors hidden sm:block">
-                Guides
-              </a>
+              <ResourcesMenu />
               <a href="/examples" className="text-gray-600 hover:text-brand-dark font-medium transition-colors hidden sm:block">
                 Examples
               </a>
@@ -919,7 +918,7 @@ export default function Home() {
         </section>
 
         {/* Pricing */}
-        <section className="py-24 bg-gradient-to-b from-white to-cream">
+        <section id="pricing" className="py-24 bg-gradient-to-b from-white to-cream scroll-mt-8">
           <div className="max-w-7xl mx-auto px-8">
             <div className="text-center mb-16">
               <h2 className="text-4xl font-bold text-gray-900 mb-4" style={serifFont}>Simple, transparent pricing</h2>

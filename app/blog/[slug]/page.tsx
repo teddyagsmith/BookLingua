@@ -3,9 +3,10 @@ import Link from 'next/link'
 import Image from 'next/image'
 import { notFound } from 'next/navigation'
 import { MDXRemote } from 'next-mdx-remote/rsc'
-import { getPostBySlug, getAllSlugs } from '@/lib/posts'
+import { getPostBySlug, getAllSlugs, getAllPosts, postCategoryLabels } from '@/lib/posts'
 import { mdxComponents } from '@/components/mdx-components'
 import NewsletterPopup from '@/components/NewsletterPopup'
+import ResourcesMenu from '@/components/ResourcesMenu'
 import rehypeSlug from 'rehype-slug'
 
 const siteUrl = 'https://booklingua.io'
@@ -79,6 +80,10 @@ export default function BlogPostPage({ params }: BlogPostPageProps) {
     month: 'long',
     year: 'numeric',
   })
+  const categoryLabel = postCategoryLabels[post.category]
+  const relatedPosts = getAllPosts()
+    .filter((candidate) => candidate.slug !== post.slug && candidate.category === post.category)
+    .slice(0, 3)
 
   const jsonLd = {
     '@context': 'https://schema.org',
@@ -123,9 +128,7 @@ export default function BlogPostPage({ params }: BlogPostPageProps) {
           <Logo size="lg" />
         </Link>
         <div className="flex items-center gap-3 sm:gap-6">
-          <Link href="/blog" className="text-gray-600 hover:text-brand-dark font-medium transition-colors hidden sm:block">
-            Guides
-          </Link>
+          <ResourcesMenu />
           <Link href="/examples" className="text-gray-600 hover:text-brand-dark font-medium transition-colors hidden sm:block">
             Examples
           </Link>
@@ -152,7 +155,13 @@ export default function BlogPostPage({ params }: BlogPostPageProps) {
           <li>→</li>
           <li>
             <Link href="/blog" className="hover:text-brand-dark transition-colors">
-              Guides
+              Resources
+            </Link>
+          </li>
+          <li>→</li>
+          <li>
+            <Link href={`/blog?category=${post.category}`} className="hover:text-brand-dark transition-colors">
+              {categoryLabel}
             </Link>
           </li>
           <li>→</li>
@@ -166,7 +175,7 @@ export default function BlogPostPage({ params }: BlogPostPageProps) {
       <article className="max-w-3xl mx-auto px-8 py-12">
         <header className="mb-10">
           <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wide bg-brand-light text-brand-dark mb-4">
-            {post.category}
+            {categoryLabel}
           </span>
           <h1
             className="text-4xl md:text-5xl font-bold text-gray-900 leading-tight mb-6"
@@ -214,6 +223,23 @@ export default function BlogPostPage({ params }: BlogPostPageProps) {
           title="Want more guides like this?"
           description="Get practical translation and book-launch tips from BookLingua. One email when it matters."
         />
+
+        {relatedPosts.length > 0 && (
+          <aside className="mt-16 border-t border-[#EBE6F4] pt-12" aria-labelledby="related-resources">
+            <h2 id="related-resources" className="text-3xl font-bold text-gray-900 mb-6" style={serifFont}>
+              More {categoryLabel}
+            </h2>
+            <div className="grid gap-4 sm:grid-cols-2">
+              {relatedPosts.map((related) => (
+                <Link key={related.slug} href={`/blog/${related.slug}`} className="group rounded-2xl border border-[#EBE6F4] bg-white p-5 hover:shadow-md transition-all">
+                  <span className="text-xs font-bold uppercase tracking-wide text-brand-dark">{postCategoryLabels[related.category]}</span>
+                  <h3 className="mt-2 text-lg font-bold text-gray-900 group-hover:text-brand-dark transition-colors" style={serifFont}>{related.title}</h3>
+                  <p className="mt-2 text-sm text-gray-600 line-clamp-2">{related.description}</p>
+                </Link>
+              ))}
+            </div>
+          </aside>
+        )}
       </article>
 
       {/* CTA */}

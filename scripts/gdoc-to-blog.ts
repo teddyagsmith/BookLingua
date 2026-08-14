@@ -19,6 +19,7 @@
  *   npx ts-node -P tsconfig.scripts.json scripts/gdoc-to-blog.ts
  *   npx ts-node -P tsconfig.scripts.json scripts/gdoc-to-blog.ts --dry-run
  *   npx ts-node -P tsconfig.scripts.json scripts/gdoc-to-blog.ts --slug my-custom-slug
+ *   npx ts-node -P tsconfig.scripts.json scripts/gdoc-to-blog.ts --category using-booklingua
  */
 
 import { google } from 'googleapis'
@@ -381,6 +382,7 @@ async function convertDocToMdx(
   auth: any,
   docId: string,
   slug: string,
+  category: 'translation-advice' | 'using-booklingua',
   dryRun: boolean
 ): Promise<string> {
   const res  = await docs.documents.get({ documentId: docId })
@@ -576,6 +578,7 @@ async function convertDocToMdx(
     `date: "${date}"`,
     `author: "${DEFAULT_AUTHOR}"`,
     `slug: "${slug}"`,
+    `category: "${category}"`,
     '---',
     '',
   ].join('\n')
@@ -606,6 +609,10 @@ async function main() {
   const dryRun  = args.includes('--dry-run')
   const forceSlug = (() => { const i = args.indexOf('--slug'); return i !== -1 ? args[i+1] : null })()
   const onlyDocId = (() => { const i = args.indexOf('--doc-id'); return i !== -1 ? args[i+1] : null })()
+  const categoryArg = (() => { const i = args.indexOf('--category'); return i !== -1 ? args[i+1] : 'translation-advice' })()
+  if (categoryArg !== 'translation-advice' && categoryArg !== 'using-booklingua') {
+    throw new Error('Invalid --category. Use "translation-advice" or "using-booklingua".')
+  }
 
   const { drive, docs, auth } = await getClients()
 
@@ -643,7 +650,7 @@ async function main() {
     console.log(`Processing: "${docName}" → slug: "${slug}"`)
 
     try {
-      await convertDocToMdx(docs, drive, auth, docId, slug, dryRun)
+      await convertDocToMdx(docs, drive, auth, docId, slug, categoryArg, dryRun)
 
       if (!dryRun) {
         await moveFile(drive, docId, readyFolderId, publishedFolderId)

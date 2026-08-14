@@ -10,13 +10,24 @@ export interface BlogPost {
   description: string
   date: string
   author: string
-  category: 'blog' | 'guide'
+  category: PostCategory
   tags: string[]
   keywords: string[]
   image?: string
   youtube?: string
   content: string
   readingTime: string
+}
+
+export type PostCategory = 'translation-advice' | 'using-booklingua'
+
+export const postCategoryLabels: Record<PostCategory, string> = {
+  'translation-advice': 'Translation Advice',
+  'using-booklingua': 'Using BookLingua',
+}
+
+export function isPostCategory(value: string | undefined): value is PostCategory {
+  return value === 'translation-advice' || value === 'using-booklingua'
 }
 
 export function getAllPosts(): BlogPost[] {
@@ -38,7 +49,7 @@ export function getAllPosts(): BlogPost[] {
       description: data.description || '',
       date: data.date ? new Date(data.date).toISOString() : new Date().toISOString(),
       author: data.author || 'BookLingua',
-      category: data.category === 'guide' ? 'guide' : 'blog',
+      category: isPostCategory(data.category) ? data.category : 'translation-advice',
       tags: Array.isArray(data.tags) ? data.tags : [],
       keywords: Array.isArray(data.keywords) ? data.keywords : [],
       image: data.image,
