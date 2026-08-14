@@ -1,7 +1,7 @@
 import AdmZip from 'adm-zip'
 import path from 'path'
 
-export const ARTIFACT_VALIDATOR_VERSION = '1.1'
+export const ARTIFACT_VALIDATOR_VERSION = '1.2'
 export type ArtifactKind = 'epub' | 'docx'
 export interface ArtifactValidationIssue { code: string; message: string; location?: string }
 export interface ArtifactValidationResult {
@@ -92,7 +92,7 @@ function docxParagraphs(xml: string): Array<{ text: string; style: string }> {
   }).filter(p => p.text)
 }
 
-export function validateArtifact(buffer: Buffer, kind: ArtifactKind): ArtifactValidationResult {
+export function validateArtifact(buffer: Buffer, kind: ArtifactKind, options: { semanticDuplicateParityValidated?: boolean } = {}): ArtifactValidationResult {
   const errors: ArtifactValidationIssue[] = []; const warnings: ArtifactValidationIssue[] = []
   const headings: string[] = []; const navigationHeadings: string[] = []; const paragraphs: string[] = []; const allText: string[] = []
   let contentFiles = 0
@@ -154,8 +154,10 @@ export function validateArtifact(buffer: Buffer, kind: ArtifactKind): ArtifactVa
   if (duplicateHeading) errors.push({ code: 'DUPLICATE_HEADING', message: `Duplicate major heading: ${duplicateHeading}` })
   const numbers = chapterNumbers(headings); const duplicateNumber = numbers.find((n, i) => numbers.indexOf(n) !== i)
   if (duplicateNumber) errors.push({ code: 'DUPLICATE_CHAPTER_NUMBER', message: `Duplicate chapter number: ${duplicateNumber}` })
-  const duplicateContent = duplicateSubstantialParagraphs(paragraphs)[0]
-  if (duplicateContent) errors.push({ code: 'DUPLICATE_CONTENT', message: `Substantial duplicate content detected: ${duplicateContent}…` })
+  if (!options.semanticDuplicateParityValidated) {
+    const duplicateContent = duplicateSubstantialParagraphs(paragraphs)[0]
+    if (duplicateContent) errors.push({ code: 'DUPLICATE_CONTENT', message: `Substantial duplicate content detected: ${duplicateContent}…` })
+  }
   return { validatorVersion: ARTIFACT_VALIDATOR_VERSION, kind, passed: !errors.length, errors, warnings, metrics: { contentFiles, headings, navigationHeadings, chapterNumbers: numbers, textCharacters: joined.length } }
 }
 
