@@ -2,17 +2,18 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import AdmZip from 'adm-zip'
 import { renderCustomerLaunchPackDocx,renderCustomerTranslationNotesDocx,renderCustomerUploadGuideDocx } from '../lib/customer-delivery-docx'
+import { researchFields } from './launch-pack-fixture'
 
 function documentXml(bytes:Buffer):string{const zip:any=new AdmZip(bytes);return zip.readAsText('word/document.xml')}
 function allWordXml(bytes:Buffer):string{const zip:any=new AdmZip(bytes);return zip.getEntries().filter((entry:any)=>/^word\/.*\.xml$/.test(entry.entryName)).map((entry:any)=>zip.readAsText(entry.entryName)).join('\n')}
 
 test('Launch Pack JSON deterministically renders as a human-readable DOCX',async()=>{
-  const source=Buffer.from(JSON.stringify({schemaVersion:'2.0',locale:'fr',language:'French',market:'France',amazonDomain:'amazon.fr',currency:'EUR',backendKeywords:Array.from({length:7},(_,i)=>`mot-clé français ${i}`),adKeywords:Array.from({length:20},(_,i)=>`recherche française ${i}`),categories:['Romantasy française','Romance fantastique','Fantasy sombre'],pricingRecommendation:{ebook:'4,99 €',paperback:'14,99 €',reasoning:'RAISON FRANÇAISE INTERNE'},bookDescription:'Une description gothique en français.',reviewStrategy:['STRATÉGIE FRANÇAISE INTERNE'],kdpUploadChecklist:['ÉTAPE FRANÇAISE INTERNE']}))
+  const source=Buffer.from(JSON.stringify({schemaVersion:'3.0',locale:'fr',language:'French',market:'France',amazonDomain:'amazon.fr',currency:'EUR',backendKeywords:Array.from({length:7},(_,i)=>`mot-clé français ${i}`),adKeywords:Array.from({length:20},(_,i)=>`recherche française ${i}`),categories:['Romantasy française','Romance fantastique','Fantasy sombre'],pricingRecommendation:{ebook:'4,99 €',paperback:'14,99 €',reasoning:'RAISON FRANÇAISE INTERNE'},bookDescription:'Une description gothique en français.',reviewStrategy:['STRATÉGIE FRANÇAISE INTERNE'],kdpUploadChecklist:['ÉTAPE FRANÇAISE INTERNE'],...researchFields}))
   const first=await renderCustomerLaunchPackDocx(source,'Bride of the Hollow King',"L'Épouse du Roi Vide"),second=await renderCustomerLaunchPackDocx(source,'Bride of the Hollow King',"L'Épouse du Roi Vide")
   assert.deepEqual(first,second)
   const xml=allWordXml(first)
   for(const expected of ['L&apos;Épouse du Roi Vide','Une description gothique en français.','mot-clé français 0','Romance fantastique','READY TO COPY INTO YOUR AMAZON LISTING','Book Description','Amazon Keywords','Suggested Categories','Pricing','validated launch-price recommendations','Recruit advance readers','KDP Upload Checklist','Set the book language to French','All explanations and instructions are in English','Translate your book in hours, not months'])assert.ok(xml.includes(expected),expected)
-  for(const forbidden of ['RAISON FRANÇAISE INTERNE','STRATÉGIE FRANÇAISE INTERNE','ÉTAPE FRANÇAISE INTERNE','w:pageBreakBefore','w:type="page"'])assert.ok(!xml.includes(forbidden),forbidden)
+  for(const forbidden of ['RAISON FRANÇAISE INTERNE','STRATÉGIE FRANÇAISE INTERNE','ÉTAPE FRANÇAISE INTERNE','w:pageBreakBefore'])assert.ok(!xml.includes(forbidden),forbidden)
   for(const forbidden of ['schemaVersion','backendKeywords','request_identity'])assert.doesNotMatch(xml,new RegExp(forbidden,'i'))
   assert.doesNotMatch(xml,/<w:t[^>]*>[^<]*model/i)
 })

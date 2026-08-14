@@ -15,7 +15,7 @@ import { SEMANTIC_V2_ENABLED } from './semantic-document'
 import { deterministicSemanticBuildId, runSemanticPipeline } from './semantic-pipeline'
 import { semanticV2AllowedForOrder } from './semantic-canary'
 import { toCanonicalLaunchPack } from './launch-strategy'
-import { launchMarket } from './launch-pack-schema'
+import { LAUNCH_PACK_SCHEMA_VERSION, launchMarket } from './launch-pack-schema'
 import { BOOKLINGUA_MODEL_CONFIG } from './model-config'
 import { finalizeSemanticOrder } from './semantic-finalization'
 import { cachedLaunchPack, launchPackRequestIdentity } from './launch-pack-cache'
@@ -307,7 +307,7 @@ export const translateBook = inngest.createFunction(
               orderId,language,targetLanguage:market.language,targetMarket:market.market,sourceFingerprint,buildId,
               briefRevision:brief.revision,briefSchemaVersion:brief.schemaVersion,briefFingerprint:translationBriefFingerprint(brief),bookTitle:order.book_title,
               authorName:order.author_name,genre:order.genre,description,modelId:BOOKLINGUA_MODEL_CONFIG.launchPack,
-              schemaVersion:'2.0',entitled:true,
+              schemaVersion:LAUNCH_PACK_SCHEMA_VERSION,entitled:true,researchFingerprint:'launch-pack-research-contract-v3',
             },generate:async identity=>{
               const strategy = await generateLaunchStrategy({ bookTitle: order.book_title, authorName: order.author_name, genre: order.genre, bookDescription: fileContent.slice(0, 2500), targetLanguage: market.language, targetMarket: market.market }, {
                 attempt: attempt + 1,

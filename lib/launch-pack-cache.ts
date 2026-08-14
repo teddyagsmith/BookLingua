@@ -2,7 +2,7 @@ import { createHash } from 'crypto'
 import { SupabaseClient } from '@supabase/supabase-js'
 import { LaunchPackV1, validateLaunchPack } from './launch-pack-schema'
 
-export const LAUNCH_PACK_TEMPLATE_VERSION = 'launch-pack-v2'
+export const LAUNCH_PACK_TEMPLATE_VERSION = 'launch-pack-research-v3'
 
 function canonicalJson(value:unknown):string{
   if(Array.isArray(value))return `[${value.map(canonicalJson).join(',')}]`
@@ -27,6 +27,7 @@ export interface LaunchPackGenerationIdentityInput {
   modelId: string
   schemaVersion: string
   entitled: boolean
+  researchFingerprint: string
 }
 
 function uuidFromHash(value: string): string {
@@ -54,6 +55,7 @@ export function launchPackIdentity(input: LaunchPackGenerationIdentityInput): st
     schemaVersion: input.schemaVersion,
     templateVersion: LAUNCH_PACK_TEMPLATE_VERSION,
     entitled: input.entitled,
+    researchFingerprint: input.researchFingerprint,
   })).digest('hex')
 }
 

@@ -75,6 +75,15 @@ test('word-level review diff does not duplicate the whole changed paragraph', as
   assert.equal((xml.match(/Elle/g)||[]).length,1)
 })
 
+test('review diff keeps bilingual title replacements coherent and suppresses typography-only noise',()=>{
+  const title=wordLevelDiff('Bride of the Hollow King ?',"L'Épouse du Roi Vide ?")
+  assert.equal(title.filter(token=>token.kind==='delete').map(token=>token.text).join(''),'Bride of the Hollow King ?')
+  assert.equal(title.filter(token=>token.kind==='insert').map(token=>token.text).join(''),"L'Épouse du Roi Vide ?")
+  assert.ok(title.findIndex(token=>token.kind==='delete')<title.findIndex(token=>token.kind==='insert'))
+  const apostrophe=wordLevelDiff("Il s'adoucit et parle d'entre eux.",'Il s’adoucit et parle d’entre eux.')
+  assert.deepEqual(apostrophe,[{text:'Il s’adoucit et parle d’entre eux.',kind:'same'}])
+})
+
 test('formatting policy preserves sound structured sources and falls back for weak input', () => {
   assert.equal(assessSourceFormatting({sourceFormat:'epub',parserConfidence:1,hasHeadings:true,hasPresentationMetadata:true}).disposition,'preserve')
   assert.equal(assessSourceFormatting({sourceFormat:'docx',parserConfidence:.85,hasHeadings:true,hasPresentationMetadata:false}).disposition,'preserve-and-normalize')

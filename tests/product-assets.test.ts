@@ -7,15 +7,16 @@ import AdmZip from 'adm-zip'
 import { LaunchPackV1, validateLaunchPack } from '../lib/launch-pack-schema'
 import { parseLegacyTranslationNotes, renderTranslationNotes, validateTranslationNotes } from '../lib/translation-notes'
 import { UPLOAD_GUIDE_ASSET_PATH, UPLOAD_GUIDE_SHA256, UPLOAD_GUIDE_VERSION } from '../lib/upload-guide'
+import { researchFields } from './launch-pack-fixture'
 
 function validLaunchPack(): LaunchPackV1 {
   return {
-    schemaVersion: '2.0', locale: 'fr', language: 'French', market: 'France', amazonDomain: 'amazon.fr', currency: 'EUR',
+    schemaVersion: '3.0', locale: 'fr', language: 'French', market: 'France', amazonDomain: 'amazon.fr', currency: 'EUR',
     backendKeywords: Array.from({ length: 7 }, (_, index) => `mot clé ${index + 1}`),
     adKeywords: Array.from({ length: 20 }, (_, index) => `publicité ${index + 1}`),
     categories: ['Catégorie A', 'Catégorie B', 'Catégorie C'],
     pricingRecommendation: { ebook: '4,99 €', paperback: '12,99 €', reasoning: 'Synthetic market rationale.' },
-    bookDescription: 'Synthetic French description.', reviewStrategy: ['Synthetic review tactic.'], kdpUploadChecklist: ['Synthetic upload step.'],
+    bookDescription: 'Synthetic French description.', reviewStrategy: ['Synthetic review tactic.'], kdpUploadChecklist: ['Synthetic upload step.'],...researchFields,
   }
 }
 

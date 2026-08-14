@@ -14,6 +14,7 @@ interface LaunchStrategyInput {
   bookDescription: string // First ~500 words of the book or description
   targetLanguage: string
   targetMarket: string // e.g., "Spain/Latin America", "France", "Germany", "Brazil/Portugal"
+  researchDossier?: string
 }
 
 export interface LaunchStrategyOutput {
@@ -28,6 +29,14 @@ export interface LaunchStrategyOutput {
   bookDescription: string // Translated + optimized for that market
   reviewStrategy: string[]
   kdpUploadChecklist: string[]
+  opportunities: LaunchPackV1['opportunities']
+  topOpportunities: LaunchPackV1['topOpportunities']
+  launchPlan30Day: LaunchPackV1['launchPlan30Day']
+  marketingHooks: LaunchPackV1['marketingHooks']
+  socialContentIdeas: LaunchPackV1['socialContentIdeas']
+  amazonAdsStrategy: LaunchPackV1['amazonAdsStrategy']
+  discountPromotion: LaunchPackV1['discountPromotion']
+  research: LaunchPackV1['research']
 }
 
 export interface LaunchPackExecutionMetadata {
@@ -54,7 +63,9 @@ export function extractLaunchPackText(content: Array<{ type: string; text?: stri
 }
 
 export function parseLaunchStrategyText(raw: string): LaunchStrategyOutput {
-  const cleaned = raw.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim()
+  const unfenced = raw.replace(/```(?:json)?\s*/gi, '').trim()
+  const start=unfenced.indexOf('{'),end=unfenced.lastIndexOf('}')
+  const cleaned=start>=0&&end>start?unfenced.slice(start,end+1):unfenced
   if (!cleaned) throw new Error('Launch Pack model returned empty text')
   try {
     return JSON.parse(cleaned) as LaunchStrategyOutput
@@ -92,7 +103,7 @@ export async function generateLaunchStrategy(
     model: BOOKLINGUA_MODEL_CONFIG.launchPack,
     // Opus may spend part of this budget on thinking blocks before emitting the
     // canonical JSON text block. 4,000 truncated valid Launch Packs in staging.
-    max_tokens: 8192,
+    max_tokens: 24576,
     messages: [
       {
         role: 'user',
@@ -104,7 +115,12 @@ Author: ${input.authorName}
 Genre: ${input.genre}
 Book Content/Description: ${input.bookDescription}
 
-Generate the following in JSON format:
+Use the verified research dossier below as evidence. Never invent a URL, audience size, price, submission route, or promotion permission. If a fact is not established, say "Not publicly stated".
+
+VERIFIED RESEARCH DOSSIER:
+${input.researchDossier || 'No live dossier supplied; identify uncertainty explicitly and do not fabricate current facts.'}
+
+Generate the following in JSON format. All author-facing explanations and instructions MUST be English. Only copy-ready marketplace fields are in ${input.targetLanguage}.
 
 {
   "backendKeywords": [
@@ -168,11 +184,21 @@ Generate the following in JSON format:
     // - Pricing strategy across markets
     // - Pre-order considerations
     // - Launch timing recommendations for ${input.targetMarket}
-  ]
+  ],
+  "opportunities": [{"name":"","url":"https://...","type":"deal_site|reviewer_blog|reader_community|social_creator|media|event|platform","audience":"","fit":"","cost":"","promotionAllowed":"","contactRoute":"","priority":"High|Medium|Low"}],
+  "topOpportunities": [{"rank":1,"opportunity":"","url":"https://...","whyItFits":"","effort":"Low|Medium|High","likelyCost":"Free|€|€€|€€€","recommendedAction":""}],
+  "launchPlan30Day": {"minimumViable":[""],"pushHarder":[""],"phases":[{"timing":"4 weeks before launch","actions":[""]},{"timing":"2 weeks before launch","actions":[""]},{"timing":"Launch week","actions":[""]},{"timing":"Weeks 2–4","actions":[""]}]},
+  "marketingHooks": [{"hook":"","readerAppeal":"","frenchPromotionalLine":""}],
+  "socialContentIdeas": [{"concept":"","explanation":"","frenchCaption":"","hashtags":["#..."],"format":"Reel|TikTok|Static|Carousel"}],
+  "amazonAdsStrategy": {"startingStrategy":"","comparableTargets":[""],"targetingIdeas":[""],"metaPositioning":""},
+  "discountPromotion": [{"option":"","availability":"","restriction":"","recommendedAction":""}],
+  "research": {"completedAt":"2026-08-14","sources":[{"name":"","url":"https://...","note":"what was verified"}]}
 }
 
 IMPORTANT: 
-- All text content must be in ${input.targetLanguage}
+- Explanations/instructions are English; copy-ready material is ${input.targetLanguage}
+- Include at least 12 strong verified opportunities, exactly 10 ranked opportunities, 5+ hooks, 8-12 social concepts, and 10+ cited sources
+- Keep every field concise enough that the complete JSON fits the response; quality and specificity matter more than long prose
 - Backend keywords must each be under 50 characters
 - Be specific to ${input.targetMarket} market, not generic advice
 - Consider cultural nuances and local reading preferences

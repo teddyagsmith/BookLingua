@@ -1,4 +1,4 @@
-export const LAUNCH_PACK_SCHEMA_VERSION = '2.0'
+export const LAUNCH_PACK_SCHEMA_VERSION = '3.0'
 
 export const LAUNCH_MARKETS = {
   'es-es': { language: 'Spanish (Spain)', market: 'Spain', amazonDomain: 'amazon.es', currency: 'EUR' },
@@ -24,6 +24,14 @@ export interface LaunchPackV1 {
   bookDescription: string
   reviewStrategy: string[]
   kdpUploadChecklist: string[]
+  opportunities: Array<{ name:string; url:string; type:string; audience:string; fit:string; cost:string; promotionAllowed:string; contactRoute:string; priority:'High'|'Medium'|'Low' }>
+  topOpportunities: Array<{ rank:number; opportunity:string; url:string; whyItFits:string; effort:'Low'|'Medium'|'High'; likelyCost:string; recommendedAction:string }>
+  launchPlan30Day: { minimumViable:string[]; pushHarder:string[]; phases:Array<{ timing:string; actions:string[] }> }
+  marketingHooks: Array<{ hook:string; readerAppeal:string; frenchPromotionalLine:string }>
+  socialContentIdeas: Array<{ concept:string; explanation:string; frenchCaption:string; hashtags:string[]; format:string }>
+  amazonAdsStrategy: { startingStrategy:string; comparableTargets:string[]; targetingIdeas:string[]; metaPositioning:string }
+  discountPromotion: Array<{ option:string; availability:string; restriction:string; recommendedAction:string }>
+  research: { completedAt:string; sources:Array<{ name:string; url:string; note:string }> }
 }
 
 export function launchMarket(locale: string) {
@@ -47,5 +55,11 @@ export function validateLaunchPack(input: { pack: LaunchPackV1; expectedLocale: 
   if (!input.pack.pricingRecommendation.ebook || !input.pack.pricingRecommendation.paperback || !input.pack.pricingRecommendation.reasoning) errors.push('Launch Pack pricing recommendation is incomplete')
   if (!input.pack.reviewStrategy.length) errors.push('Launch Pack review strategy is empty')
   if (!input.pack.kdpUploadChecklist.length) errors.push('Launch Pack KDP checklist is empty')
+  if (!Array.isArray(input.pack.opportunities) || input.pack.opportunities.length < 12) errors.push('Launch Pack must contain at least 12 researched opportunities')
+  if (!Array.isArray(input.pack.topOpportunities) || input.pack.topOpportunities.length !== 10) errors.push('Launch Pack must contain exactly 10 ranked opportunities')
+  if (!input.pack.launchPlan30Day?.minimumViable?.length || input.pack.launchPlan30Day.phases.length < 4) errors.push('Launch Pack 30-day plan is incomplete')
+  if (!Array.isArray(input.pack.marketingHooks) || input.pack.marketingHooks.length < 5) errors.push('Launch Pack must contain at least 5 book-specific hooks')
+  if (!Array.isArray(input.pack.socialContentIdeas) || input.pack.socialContentIdeas.length < 8 || input.pack.socialContentIdeas.length > 12) errors.push('Launch Pack must contain 8-12 social concepts')
+  if (!input.pack.research?.completedAt || input.pack.research.sources.length < 10 || input.pack.research.sources.some(source => !/^https:\/\//.test(source.url))) errors.push('Launch Pack research sources are incomplete')
   return errors
 }

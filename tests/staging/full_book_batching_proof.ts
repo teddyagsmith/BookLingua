@@ -57,7 +57,7 @@ async function launch(language:string,brief:any){
     sourceFingerprint:sourceHash,buildId:deterministicSemanticBuildId(orderId,language,sourceHash,brief.revision),
     briefRevision:brief.revision,briefSchemaVersion:brief.schemaVersion,briefFingerprint:translationBriefFingerprint(brief),
     bookTitle:'Bride of the Hollow King',authorName:'Synthetic staging proof',genre:'fantasy romance',description,
-    modelId:BOOKLINGUA_MODEL_CONFIG.launchPack,schemaVersion:'2.0',entitled:true},generate:async identity=>{
+    modelId:BOOKLINGUA_MODEL_CONFIG.launchPack,schemaVersion:'3.0',entitled:true,researchFingerprint:'launch-pack-research-contract-v3'},generate:async identity=>{
     const strategy=await generateLaunchStrategy({bookTitle:'Bride of the Hollow King',authorName:'Synthetic staging proof',genre:'fantasy romance',bookDescription:description,targetLanguage:market.language,targetMarket:market.market},{requestId:launchPackRequestIdentity(identity),onMetadata:async metadata=>{await recordModelTelemetry(db,{orderId,language,stage:'launch-pack',attempt:await nextAttempt(metadata.requestId),requestIdentity:metadata.requestId,provider:metadata.provider,modelId:metadata.modelId,providerRequestId:metadata.providerRequestId,success:metadata.success,inputTokens:metadata.inputTokens,outputTokens:metadata.outputTokens,cacheStatus:metadata.success?'write':'miss',errorCode:metadata.errorCode})},createMessage:async params=>{const r=await anthropic.messages.create(params);usage.opus.calls++;usage.opus.inputTokens+=r.usage.input_tokens;usage.opus.outputTokens+=r.usage.output_tokens;return r}})
     return toCanonicalLaunchPack(strategy,language,true)
   }})

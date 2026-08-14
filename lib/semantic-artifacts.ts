@@ -63,8 +63,12 @@ export async function buildSemanticDocx(document: SemanticDocumentV2, title: str
 type DiffToken = { text: string; kind: 'same' | 'delete' | 'insert' }
 
 export function wordLevelDiff(before: string, after: string): DiffToken[] {
+  const typography=(value:string)=>value.normalize('NFC').replace(/[’‘]/g,"'").replace(/[“”]/g,'"').replace(/\u00a0/g,' ')
+  if(typography(before)===typography(after))return [{text:after,kind:'same'}]
   const a = before.match(/\s+|[^\s]+/g) || []
   const b = after.match(/\s+|[^\s]+/g) || []
+  const meaningfulA=new Set(a.filter(token=>/[A-Za-zÀ-ÿ0-9]/.test(token)).map(token=>token.toLocaleLowerCase()))
+  if(!b.some(token=>meaningfulA.has(token.toLocaleLowerCase())))return [{text:before,kind:'delete'},{text:after,kind:'insert'}]
   if (a.length * b.length > 250_000) {
     let prefix = 0; while (prefix < a.length && prefix < b.length && a[prefix] === b[prefix]) prefix++
     let suffix = 0; while (suffix < a.length - prefix && suffix < b.length - prefix && a[a.length - 1 - suffix] === b[b.length - 1 - suffix]) suffix++
@@ -80,7 +84,8 @@ export function wordLevelDiff(before: string, after: string): DiffToken[] {
   const result: DiffToken[] = []; let i = 0; let j = 0
   while (i < a.length || j < b.length) {
     if (i < a.length && j < b.length && a[i] === b[j]) { result.push({ text: a[i++], kind: 'same' }); j++ }
-    else if (j < b.length && (i === a.length || matrix[i][j + 1] >= matrix[i + 1][j])) result.push({ text: b[j++], kind: 'insert' })
+    else if (i < a.length && j < b.length && matrix[i][j + 1] === matrix[i + 1][j]) result.push({ text: a[i++], kind: 'delete' })
+    else if (j < b.length && (i === a.length || matrix[i][j + 1] > matrix[i + 1][j])) result.push({ text: b[j++], kind: 'insert' })
     else result.push({ text: a[i++], kind: 'delete' })
   }
   return result
