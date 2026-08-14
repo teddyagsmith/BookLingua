@@ -4,6 +4,7 @@ import { useState, useCallback, useRef, useEffect } from 'react'
 import Image from 'next/image'
 import EmailSignupPopup from '@/components/EmailSignupPopup'
 import ResourcesMenu from '@/components/ResourcesMenu'
+import SiteFooter from '@/components/SiteFooter'
 
 // GA4 event helper for CTA buttons
 function trackStartTranslation(location: string) {
@@ -1181,23 +1182,12 @@ export default function Home() {
         </section>
 
         {/* Footer */}
-        <footer className="bg-gray-900 text-gray-400">
+        <div className="bg-gray-900 text-gray-400">
           {/* Newsletter signup strip */}
           <FooterSignup serifFont={serifFont} />
 
-          <div className="max-w-7xl mx-auto px-8 py-10 text-center border-t border-gray-800">
-            <div className="flex items-center justify-center gap-3 mb-4">
-              <Logo size="md" />
-            </div>
-            <p className="mb-2">
-              Questions? Email us at{' '}
-              <a href="mailto:hello@booklingua.io" className="text-amber-400 hover:text-amber-300 transition-colors">
-                hello@booklingua.io
-              </a>
-            </p>
-            <p>© 2026 BookLingua. All rights reserved.</p>
-          </div>
-        </footer>
+          <SiteFooter />
+        </div>
       </div>
     )
   }

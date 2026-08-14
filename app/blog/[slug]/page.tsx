@@ -7,6 +7,7 @@ import { getPostBySlug, getAllSlugs, getAllPosts, postCategoryLabels } from '@/l
 import { mdxComponents } from '@/components/mdx-components'
 import NewsletterPopup from '@/components/NewsletterPopup'
 import ResourcesMenu from '@/components/ResourcesMenu'
+import SiteFooter from '@/components/SiteFooter'
 import rehypeSlug from 'rehype-slug'
 
 const siteUrl = 'https://booklingua.io'
@@ -264,14 +265,7 @@ export default function BlogPostPage({ params }: BlogPostPageProps) {
       </section>
 
       {/* Footer */}
-      <footer className="bg-gray-900 text-gray-400 py-12">
-        <div className="max-w-7xl mx-auto px-8 text-center">
-          <div className="flex items-center justify-center gap-3 mb-4">
-            <Logo size="md" />
-          </div>
-          <p className="mb-2">© 2026 BookLingua. All rights reserved.</p>
-        </div>
-      </footer>
+      <SiteFooter />
     </div>
   )
 }

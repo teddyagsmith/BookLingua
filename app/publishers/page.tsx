@@ -1,6 +1,7 @@
 import Image from 'next/image'
 import Link from 'next/link'
 import ResourcesMenu from '@/components/ResourcesMenu'
+import SiteFooter from '@/components/SiteFooter'
 
 const serifFont = { fontFamily: "'EB Garamond', Georgia, serif" }
 
@@ -226,14 +227,7 @@ export default function PublishersPage() {
       </section>
 
       {/* Footer */}
-      <footer className="bg-gray-900 text-gray-400 py-12">
-        <div className="max-w-7xl mx-auto px-8 text-center">
-          <div className="flex items-center justify-center gap-3 mb-4">
-            <Logo size="md" />
-          </div>
-          <p>© 2026 BookLingua. All rights reserved.</p>
-        </div>
-      </footer>
+      <SiteFooter />
     </div>
   )
 }

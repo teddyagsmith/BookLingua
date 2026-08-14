@@ -2,6 +2,7 @@ import { Metadata } from 'next'
 import Link from 'next/link'
 import Image from 'next/image'
 import ResourcesMenu from '@/components/ResourcesMenu'
+import SiteFooter from '@/components/SiteFooter'
 import { getAllPosts, isPostCategory, postCategoryLabels, PostCategory } from '@/lib/posts'
 
 const siteUrl = 'https://booklingua.io'
@@ -164,7 +165,7 @@ export default function BlogPage({ searchParams }: BlogPageProps) {
           <Link href="/" className="inline-flex items-center gap-2 px-8 py-4 bg-white text-brand-dark rounded-2xl font-bold text-lg shadow-xl hover:shadow-2xl hover:-translate-y-0.5 transition-all">Start Translating <span>→</span></Link>
         </div>
       </section>
-      <footer className="bg-gray-900 text-gray-400 py-12"><div className="max-w-7xl mx-auto px-8 text-center"><div className="flex items-center justify-center gap-3 mb-4"><Logo /></div><p>© 2026 BookLingua. All rights reserved.</p></div></footer>
+      <SiteFooter />
     </div>
   )
 }
