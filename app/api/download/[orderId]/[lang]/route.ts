@@ -16,6 +16,7 @@ import { HARDENED_V1_ENABLED } from '@/lib/pipeline-capabilities'
 import { selectManifestArtifact, verifyStoredArtifact } from '@/lib/hardened-artifact'
 import type { ArtifactType } from '@/lib/package-manifest'
 import { CUSTOMER_ARTIFACT_TYPES, customerArtifactFilename, customerContentDisposition } from '@/lib/customer-delivery'
+import { renderCustomerLaunchPackDocx, renderCustomerTranslationNotesDocx } from '@/lib/customer-delivery-docx'
 
 const LANG_NAMES: Record<string, string> = {
   'es-es':    'Spanish_Spain',
@@ -710,12 +711,17 @@ export async function GET(
       catch {
         return NextResponse.json({ error: 'Stored artifact integrity check failed' }, { status: 409 })
       }
-      const contentType = storedArtifact.filename.endsWith('.epub') ? 'application/epub+zip'
+      let responseBuffer:Buffer<ArrayBufferLike>=buffer
+      if(customerScope&&artifactType==='launch_pack')responseBuffer=await renderCustomerLaunchPackDocx(buffer,order.book_title)
+      if(customerScope&&artifactType==='translation_notes')responseBuffer=await renderCustomerTranslationNotesDocx(buffer,order.book_title,LANG_DISPLAY[lang]||lang)
+      const customerDocx=customerScope&&(artifactType==='launch_pack'||artifactType==='translation_notes')
+      const contentType = customerDocx ? 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+        : storedArtifact.filename.endsWith('.epub') ? 'application/epub+zip'
         : storedArtifact.filename.endsWith('.docx') ? 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
           : storedArtifact.filename.endsWith('.json') ? 'application/json'
             : storedArtifact.filename.endsWith('.csv') ? 'text/csv; charset=utf-8' : 'text/plain; charset=utf-8'
       const responseFilename=customerScope?customerArtifactFilename(order.book_title,lang,storedArtifact.manifestArtifact):storedArtifact.filename.replace(/"/g, '')
-      return new NextResponse(buffer, { headers: {
+      return new NextResponse(new Uint8Array(responseBuffer), { headers: {
         'Content-Type': contentType,
         'Content-Disposition': customerScope?customerContentDisposition(responseFilename):`attachment; filename="${responseFilename}"`,
         'Cache-Control':'private, no-store',

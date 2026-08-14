@@ -1,5 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
+import {readFileSync} from 'node:fs'
 import { PackageArtifact,PackageManifestV1 } from '../lib/package-manifest'
 import { CUSTOMER_ARTIFACT_TYPES,customerArtifactFilename,customerContentDisposition,customerDeliveryAllowed,customerVisibleArtifacts,resolveCustomerDeliveryOrigin,sanitizeCustomerFilenamePart } from '../lib/customer-delivery'
 import { buildCustomerArtifactDownloadUrl,buildCustomerPortalUrl,verifyCustomerArtifactToken,verifyCustomerPortalToken } from '../lib/download-token'
@@ -15,13 +16,14 @@ test('customer artifact selection exposes only the intended author package',()=>
   assert.deepEqual(items.map(item=>item.filename),[
     'Bride of the Hollow King - Final - FR.docx','Bride of the Hollow King - Final - FR.epub',
     'Bride of the Hollow King - Review - FR.docx','Bride of the Hollow King - Chapters - FR.docx',
-    'Bride of the Hollow King - Notes - FR.txt','Bride of the Hollow King - Launch Pack - FR.json',
+    'Bride of the Hollow King - Notes - FR.docx','Bride of the Hollow King - Launch Pack - FR.docx',
   ])
 })
 
 test('customer filenames use exact labels/codes, actual extensions, and safe readable titles',()=>{
   assert.equal(customerArtifactFilename('Bride: Hollow/King','de',artifact('final_docx')),'Bride Hollow King - Final - DE.docx')
-  assert.equal(customerArtifactFilename('Bride','de',artifact('translation_notes','notes.txt')),'Bride - Notes - DE.txt')
+  assert.equal(customerArtifactFilename('Bride','de',artifact('translation_notes','notes.txt')),'Bride - Notes - DE.docx')
+  assert.equal(customerArtifactFilename('Bride','de',artifact('launch_pack','pack.json')),'Bride - Launch Pack - DE.docx')
   assert.equal(sanitizeCustomerFilenamePart('../ Unsafe: Book?. '),'Unsafe Book')
   assert.throws(()=>customerArtifactFilename('Bride','fr',artifact('pass1_docx')),/Internal artifact/)
   assert.match(customerContentDisposition('Épouse - Final - FR.docx'),/filename\*=UTF-8''/)
@@ -43,7 +45,9 @@ test('delivery origin rejects missing, credentialed, and production-local origin
   assert.throws(()=>resolveCustomerDeliveryOrigin('https://user:pass@example.test','production'),/bare/)
   assert.throws(()=>resolveCustomerDeliveryOrigin('http://127.0.0.1:3000','production'),/public HTTPS/)
   assert.equal(resolveCustomerDeliveryOrigin('https://booklingua.io','production'),'https://booklingua.io')
-  assert.equal(resolveCustomerDeliveryOrigin('http://127.0.0.1:3000','staging'),'http://127.0.0.1:3000')
+  assert.throws(()=>resolveCustomerDeliveryOrigin('http://127.0.0.1:3000','staging'),/public HTTPS/)
+  assert.throws(()=>resolveCustomerDeliveryOrigin('https://192.168.1.5','staging'),/public HTTPS/)
+  assert.equal(resolveCustomerDeliveryOrigin('https://preview.example.test','staging'),'https://preview.example.test')
   assert.equal(resolveCustomerDeliveryOrigin('http://127.0.0.1:3000','test'),'http://127.0.0.1:3000')
 })
 
@@ -63,6 +67,14 @@ test('global external delivery always enforces production origin rules',()=>{
 
 test('customer email is friendly and contains no internal QA vocabulary',()=>{
   const email=renderCustomerPackageEmail({authorName:'Teddy',bookTitle:'Bride of the Hollow King',languages:['French','German'],downloadPageUrl:'https://booklingua.test/download/order?token=safe'})
-  assert.match(email.html,/Download your translations/);assert.match(email.html,/Chapter Map/);assert.match(email.html,/Upload Guide/)
+  assert.match(email.html,/View &amp; download your files/);assert.match(email.html,/Your <strong>French and German<\/strong> translations of/);assert.match(email.html,/Chapters/);assert.match(email.html,/Upload Guide/)
   for(const forbidden of ['sha256','build ID','semantic node','final_docx','PASS','package manifest'])assert.doesNotMatch(email.html,new RegExp(forbidden,'i'))
+  assert.match(renderCustomerPackageEmail({authorName:'Teddy',bookTitle:'Bride',languages:['French','German','Italian'],downloadPageUrl:'https://preview.example.test'}).text,/French, German, and Italian translations of Bride/)
+})
+
+test('preview resend is staging-only, exact-recipient, provider-idempotent and ledger-free',()=>{
+  const source=readFileSync('app/api/admin/orders/[orderId]/preview-delivery/route.ts','utf8')
+  assert.match(source,/BOOKLINGUA_DELIVERY_ENV!=='staging'/);assert.match(source,/BOOKLINGUA_ALLOW_PREVIEW_DELIVERY!=='enabled'/)
+  assert.match(source,/BOOKLINGUA_STAGING_DELIVERY_RECIPIENT/);assert.match(source,/delivery-preview-v3/)
+  assert.doesNotMatch(source,/from\('delivery_events'\)|begin_hardened_delivery/)
 })

@@ -18,11 +18,11 @@ const LANGUAGE_NAMES: Record<string,string> = {
 }
 
 const PRESENTATION: Record<CustomerArtifactType,{label:string;fileType:string;description:string}> = {
-  final_docx:{label:'Final Translation — Word',fileType:'Final',description:'Your clean, editable translated manuscript.'},
-  final_epub:{label:'Final Translation — EPUB',fileType:'Final',description:'Your translated ebook file, ready for final checking and upload.'},
-  review_docx:{label:'Translation Review',fileType:'Review',description:'See the changes made during BookLingua’s review pass.'},
-  chapter_map_docx:{label:'Chapter Map',fileType:'Chapters',description:'Match chapters in your English manuscript to the translated edition.'},
-  translation_notes:{label:'Translation Notes',fileType:'Notes',description:'Useful notes and decisions from the translation process.'},
+  final_docx:{label:'Final — DOCX',fileType:'Final',description:'Your clean, editable translated manuscript.'},
+  final_epub:{label:'Final — EPUB',fileType:'Final',description:'Your translated ebook file, ready for final checking and upload.'},
+  review_docx:{label:'Review',fileType:'Review',description:'See the changes made during BookLingua’s review pass.'},
+  chapter_map_docx:{label:'Chapters',fileType:'Chapters',description:'Match chapters in your English manuscript to the translated edition.'},
+  translation_notes:{label:'Notes',fileType:'Notes',description:'Useful notes and decisions from the translation process.'},
   launch_pack:{label:'Launch Pack',fileType:'Launch Pack',description:'Launch and marketing material prepared for the target-language market.'},
 }
 
@@ -35,10 +35,9 @@ export function sanitizeCustomerFilenamePart(value:string):string{
 }
 
 function artifactExtension(artifact:PackageArtifact):string{
+  if(artifact.type==='translation_notes'||artifact.type==='launch_pack')return 'docx'
   const match=artifact.filename.match(/\.([A-Za-z0-9]+)$/)
   if(match)return match[1].toLowerCase()
-  if(artifact.type==='translation_notes')return 'txt'
-  if(artifact.type==='launch_pack')return 'json'
   throw new Error(`Customer artifact extension unavailable for ${artifact.type}`)
 }
 
@@ -65,13 +64,14 @@ export function customerVisibleArtifacts(bookTitle:string,manifest:PackageManife
     .map(artifact=>({...PRESENTATION[artifact.type],artifact,type:artifact.type,filename:customerArtifactFilename(bookTitle,manifest.language,artifact)}))
 }
 
-export function resolveCustomerDeliveryOrigin(value=process.env.NEXT_PUBLIC_APP_URL,environment=process.env.HARDENED_EXTERNAL_DELIVERY==='enabled'?'production':process.env.BOOKLINGUA_DELIVERY_ENV||process.env.NODE_ENV):string{
+export function resolveCustomerDeliveryOrigin(value=process.env.BOOKLINGUA_PUBLIC_APP_ORIGIN||process.env.NEXT_PUBLIC_APP_URL,environment=process.env.HARDENED_EXTERNAL_DELIVERY==='enabled'?'production':process.env.BOOKLINGUA_DELIVERY_ENV||process.env.NODE_ENV):string{
   if(!value)throw new Error('Customer delivery origin is not configured')
   let url:URL
   try{url=new URL(value)}catch{throw new Error('Customer delivery origin is invalid')}
   if(!['http:','https:'].includes(url.protocol)||url.username||url.password||url.pathname!=='/'||url.search||url.hash)throw new Error('Customer delivery origin must be a bare HTTP(S) origin')
-  const loopback=['localhost','127.0.0.1','::1'].includes(url.hostname)
-  if(environment==='production'&&(url.protocol!=='https:'||loopback))throw new Error('Production customer delivery requires a public HTTPS origin')
+  const hostname=url.hostname.toLowerCase(),ipv4=hostname.match(/^(\d+)\.(\d+)\.(\d+)\.(\d+)$/)?.slice(1).map(Number)
+  const privateOnly=['localhost','127.0.0.1','::1','0.0.0.0'].includes(hostname)||hostname.endsWith('.local')||Boolean(ipv4&&(ipv4[0]===10||ipv4[0]===127||ipv4[0]===169&&ipv4[1]===254||ipv4[0]===192&&ipv4[1]===168||ipv4[0]===172&&ipv4[1]>=16&&ipv4[1]<=31))
+  if(['production','staging'].includes(environment||'')&&(url.protocol!=='https:'||privateOnly))throw new Error('External customer delivery requires a public HTTPS origin')
   return url.origin
 }
 
