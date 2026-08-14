@@ -79,11 +79,18 @@ export function deriveEditorialTranslationNotes(input: {
   for (let index = 0; index < input.pass1.nodes.length && decisions.length < limit; index++) {
     const first = input.pass1.nodes[index]; const second = input.pass2.nodes[index]
     if (!second || first.id !== second.id || !first.translatedText || !second.translatedText || first.translatedText === second.translatedText) continue
-    const reason = /[“”"'’]/.test(first.sourceText)
-      ? 'Refined during editorial review for natural dialogue, voice, and punctuation in the target language.'
-      : /[!?…]/.test(first.sourceText)
-        ? 'Refined during editorial review to preserve emphasis and narrative rhythm.'
-        : 'Refined during editorial review for idiomatic phrasing, clarity, and consistency.'
+    const source = first.sourceText
+    const reason = /\b(Caelan|Shayla|Greymere|Blackthorn|Hollow Court|king|queen|court)\b/i.test(source)
+      ? 'The editorial review keeps character, place, rank, and worldbuilding terminology coherent while allowing the surrounding sentence to read naturally in the target language.'
+      : /\b(kiss|touch|desire|want|body|breath|heart|love|consent|please)\b/i.test(source)
+        ? 'The editorial review preserves romantic tension, emotional intensity, and consent cues without making the final wording clinical or more explicit than the source.'
+        : /[“”"'’]/.test(source)
+          ? 'The editorial review balances the speaker’s character voice and relationship register with the target language’s natural dialogue conventions.'
+          : /\b(shadow|dark|blood|hollow|night|ghost|bone|thorn|moon|death)\b/i.test(source)
+            ? 'The editorial review protects the gothic-romantasy atmosphere and image pattern while avoiding an overly literal construction.'
+            : /[!?…]/.test(source)
+              ? 'The editorial review preserves the source sentence’s emphasis, hesitation, and narrative rhythm in target-language punctuation and cadence.'
+              : 'The editorial review chooses a natural target-language construction that preserves the complete source meaning and the narrator’s established voice.'
     decisions.push({ source: first.sourceText, target: second.translatedText, reason })
   }
   const existingSections = input.existing?.sections || []

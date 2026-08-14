@@ -67,7 +67,7 @@ test('global external delivery always enforces production origin rules',()=>{
 
 test('customer email is friendly and contains no internal QA vocabulary',()=>{
   const email=renderCustomerPackageEmail({authorName:'Teddy',bookTitle:'Bride of the Hollow King',languages:['French','German'],downloadPageUrl:'https://booklingua.test/download/order?token=safe'})
-  assert.match(email.html,/View &amp; download your files/);assert.match(email.html,/Your <strong>French and German<\/strong> translations of/);assert.match(email.html,/Chapters/);assert.match(email.html,/Upload Guide/)
+  assert.match(email.html,/View &amp; download your files/);assert.match(email.html,/Your <strong>French and German<\/strong> translations of/);assert.match(email.html,/Chapters/);assert.match(email.html,/How to Use Your Translations \+ Upload Guide/);assert.equal(email.templateVersion,'customer-delivery-v4')
   for(const forbidden of ['sha256','build ID','semantic node','final_docx','PASS','package manifest'])assert.doesNotMatch(email.html,new RegExp(forbidden,'i'))
   assert.match(renderCustomerPackageEmail({authorName:'Teddy',bookTitle:'Bride',languages:['French','German','Italian'],downloadPageUrl:'https://preview.example.test'}).text,/French, German, and Italian translations of Bride/)
 })

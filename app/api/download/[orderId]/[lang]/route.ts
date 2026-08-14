@@ -16,7 +16,7 @@ import { HARDENED_V1_ENABLED } from '@/lib/pipeline-capabilities'
 import { selectManifestArtifact, verifyStoredArtifact } from '@/lib/hardened-artifact'
 import type { ArtifactType } from '@/lib/package-manifest'
 import { CUSTOMER_ARTIFACT_TYPES, customerArtifactFilename, customerContentDisposition } from '@/lib/customer-delivery'
-import { renderCustomerLaunchPackDocx, renderCustomerTranslationNotesDocx } from '@/lib/customer-delivery-docx'
+import { extractAuthoritativeTranslatedTitle, renderCustomerLaunchPackDocx, renderCustomerTranslationNotesDocx } from '@/lib/customer-delivery-docx'
 
 const LANG_NAMES: Record<string, string> = {
   'es-es':    'Spanish_Spain',
@@ -700,7 +700,7 @@ export async function GET(
         .eq('id', manifestArtifact.id).eq('order_id', orderId).eq('language', lang)
         .eq('build_id', packageRow.build_id).eq('artifact_type', artifactType).eq('validation_status', 'pass').maybeSingle()
       if (!data) return NextResponse.json({ error: 'Artifact validation is not authoritative' }, { status: 409 })
-      storedArtifact = { ...data, manifestArtifact }
+      storedArtifact = { ...data, manifestArtifact, packageManifest:packageRow.manifest }
     }
     if (storedArtifact) {
       const { data: storedBytes, error: storedError } = await getSupabaseAdmin().storage
@@ -712,7 +712,24 @@ export async function GET(
         return NextResponse.json({ error: 'Stored artifact integrity check failed' }, { status: 409 })
       }
       let responseBuffer:Buffer<ArrayBufferLike>=buffer
-      if(customerScope&&artifactType==='launch_pack')responseBuffer=await renderCustomerLaunchPackDocx(buffer,order.book_title)
+      if(customerScope&&artifactType==='launch_pack'){
+        let translatedTitle:string|undefined
+        try{
+          const notesManifest=selectManifestArtifact(storedArtifact.packageManifest,'translation_notes')
+          const {data:notesRow}=await getSupabaseAdmin().from('artifacts')
+            .select('id, order_id, language, build_id, artifact_type, storage_bucket, storage_path, filename, sha256, size_bytes, validation_status, validation_report_id, validation_reports(passed)')
+            .eq('id',notesManifest.id).eq('order_id',orderId).eq('language',lang).eq('build_id',storedArtifact.build_id).eq('artifact_type','translation_notes').eq('validation_status','pass').maybeSingle()
+          if(notesRow){
+            const {data:notesBlob}=await getSupabaseAdmin().storage.from(notesRow.storage_bucket).download(notesRow.storage_path)
+            if(notesBlob){
+              const notesBytes=Buffer.from(await notesBlob.arrayBuffer())
+              verifyStoredArtifact({manifestArtifact:notesManifest,record:notesRow,orderId,language:lang,buildId:storedArtifact.build_id,type:'translation_notes',bytes:notesBytes})
+              translatedTitle=extractAuthoritativeTranslatedTitle(notesBytes,order.book_title)||undefined
+            }
+          }
+        }catch{/* Preserve the validated original title rather than trust an unverified fallback. */}
+        responseBuffer=await renderCustomerLaunchPackDocx(buffer,order.book_title,translatedTitle)
+      }
       if(customerScope&&artifactType==='translation_notes')responseBuffer=await renderCustomerTranslationNotesDocx(buffer,order.book_title,LANG_DISPLAY[lang]||lang)
       const customerDocx=customerScope&&(artifactType==='launch_pack'||artifactType==='translation_notes')
       const contentType = customerDocx ? 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'

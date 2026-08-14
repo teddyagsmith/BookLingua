@@ -44,14 +44,15 @@ export function renderChapterMapCsv(rows: ChapterMapRow[]): string {
 }
 
 export async function renderChapterMapDocx(rows: ChapterMapRow[], options: { bookTitle?: string; language?: string } = {}): Promise<Buffer> {
-  const width=(text:string)=>text==='Chapter'?1100:3950
-  const header=(text:string)=>new TableCell({shading:{fill:'EDE9FE'},width:{size:width(text),type:WidthType.DXA},children:[new Paragraph({alignment:AlignmentType.CENTER,children:[new TextRun({text,bold:true,color:'4C1D95'})]})]})
+  rows=options.bookTitle?rows.filter(row=>row.sourceTitle.trim()!==options.bookTitle!.trim()):rows
+  const width=(text:string)=>text==='Chapter'?1600:3700
+  const header=(text:string)=>new TableCell({shading:{fill:'EDE9FE'},width:{size:width(text),type:WidthType.DXA},margins:{top:80,bottom:80,left:100,right:100},children:[new Paragraph({alignment:AlignmentType.CENTER,children:[new TextRun({text,bold:true,color:'4C1D95',size:18})]})]})
   const tableRows = [
     new TableRow({ tableHeader:true, children: ['Chapter', 'Original heading', 'Translated heading'].map(header) }),
     ...rows.map(row => new TableRow({ children: [
-      new TableCell({width:{size:1100,type:WidthType.DXA},children:[new Paragraph({alignment:AlignmentType.CENTER,children:[new TextRun({text:row.sourceChapterNumber||row.chapterId.replace(/^chapter-0*/,''),bold:true})]})]}),
-      new TableCell({width:{size:3950,type:WidthType.DXA},children:[new Paragraph(row.sourceTitle)]}),
-      new TableCell({width:{size:3950,type:WidthType.DXA},children:[new Paragraph(row.translatedTitle)]}),
+      new TableCell({width:{size:1600,type:WidthType.DXA},margins:{left:90,right:90},children:[new Paragraph({alignment:AlignmentType.CENTER,children:[new TextRun({text:row.sourceChapterNumber||row.chapterId.replace(/^chapter-0*/,''),bold:true})]})]}),
+      new TableCell({width:{size:3700,type:WidthType.DXA},margins:{left:90,right:90},children:[new Paragraph(row.sourceTitle)]}),
+      new TableCell({width:{size:3700,type:WidthType.DXA},margins:{left:90,right:90},children:[new Paragraph(row.translatedTitle)]}),
     ] })),
   ]
   const title=options.bookTitle?`${options.bookTitle} — Chapter Map`:'BookLingua Chapter Map'
@@ -61,7 +62,7 @@ export async function renderChapterMapDocx(rows: ChapterMapRow[], options: { boo
       new Paragraph({ text: title, heading: HeadingLevel.TITLE }),
       ...(options.language?[new Paragraph({children:[new TextRun({text:options.language,italics:true,color:'555555'})]})]:[]),
       new Paragraph({text:'Use this Chapter Map to match chapters in your original manuscript with their translated equivalents when editing or uploading your translated book.',spacing:{after:240}}),
-      new Table({ rows: tableRows, width:{size:9000,type:WidthType.DXA},columnWidths:[1100,3950,3950],layout:TableLayoutType.FIXED,borders:{top:{style:BorderStyle.SINGLE,size:2,color:'D1D5DB'},bottom:{style:BorderStyle.SINGLE,size:2,color:'D1D5DB'},left:{style:BorderStyle.SINGLE,size:2,color:'D1D5DB'},right:{style:BorderStyle.SINGLE,size:2,color:'D1D5DB'},insideHorizontal:{style:BorderStyle.SINGLE,size:1,color:'E5E7EB'},insideVertical:{style:BorderStyle.SINGLE,size:1,color:'E5E7EB'}} }),
+      new Table({ rows: tableRows, width:{size:9000,type:WidthType.DXA},columnWidths:[1600,3700,3700],layout:TableLayoutType.FIXED,borders:{top:{style:BorderStyle.SINGLE,size:2,color:'D1D5DB'},bottom:{style:BorderStyle.SINGLE,size:2,color:'D1D5DB'},left:{style:BorderStyle.SINGLE,size:2,color:'D1D5DB'},right:{style:BorderStyle.SINGLE,size:2,color:'D1D5DB'},insideHorizontal:{style:BorderStyle.SINGLE,size:1,color:'E5E7EB'},insideVertical:{style:BorderStyle.SINGLE,size:1,color:'E5E7EB'}} }),
     ]}]
   }))))
 }
