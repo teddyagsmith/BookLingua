@@ -1,0 +1,3 @@
+supabase/deployment/production_customer_package_v1_preconditions.sql
+supabase/migrations/202608150001_customer_package_v1_cutover.sql
+supabase/deployment/production_customer_package_v1_postconditions.sql

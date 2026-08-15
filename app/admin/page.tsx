@@ -44,6 +44,8 @@ type Stats = {
   abandonedCount: number
 }
 
+type InspectionLink = { language: string; label: string; url: string }
+
 const STATUS_COLORS: Record<string, string> = {
   completed: 'bg-green-100 text-green-800',
   processing: 'bg-blue-100 text-blue-800',
@@ -55,6 +57,16 @@ const STATUS_COLORS: Record<string, string> = {
   gate_failed: 'bg-red-200 text-red-950',
   ready_for_review: 'bg-emerald-100 text-emerald-900',
   delivery_pending: 'bg-blue-100 text-blue-900',
+}
+
+const STATUS_LABELS: Record<string, string> = {
+  processing: 'Processing',
+  failed: 'Failed',
+  gate_failed: 'Failed',
+  qa_blocked: 'Failed',
+  ready_for_review: 'Ready for review',
+  delivery_pending: 'Approved / sending',
+  completed: 'Approved / delivered',
 }
 
 const LANG_NAMES: Record<string, string> = {
@@ -88,13 +100,18 @@ export default function AdminPage() {
   const [lastRefresh, setLastRefresh] = useState<Date | null>(null)
   const [actionLoading, setActionLoading] = useState<string | null>(null)
   const [actionMsg, setActionMsg] = useState<Record<string, string>>({})
+  const [inspectionLinks, setInspectionLinks] = useState<Record<string, InspectionLink[]>>({})
 
-  const handleApprove = async (orderId: string) => {
+  const handleApprove = async (order: Order) => {
+    const languages = (Array.isArray(order.languages) ? order.languages : []).map(language => LANG_NAMES[language] || language.toUpperCase())
+    if (!window.confirm(`Approve & Send to Customer?\n\nCustomer: ${order.email}\nLanguages: ${languages.join(', ')}\n\nThis sends the validated current package now.`)) return
+    const orderId = order.id
     setActionLoading(orderId)
     try {
       const res = await fetch(`/api/admin/orders/${orderId}/approve`, {
         method: 'POST',
-        headers: { 'x-admin-password': password },
+        headers: { 'x-admin-password': password, 'content-type': 'application/json' },
+        body: JSON.stringify({ expectedRecipient: order.email, expectedLanguages: order.languages }),
       })
       const data = await res.json()
       if (data.success) {
@@ -105,6 +122,20 @@ export default function AdminPage() {
       }
     } catch {
       setActionMsg(m => ({ ...m, [orderId]: '❌ Request failed' }))
+    } finally {
+      setActionLoading(null)
+    }
+  }
+
+  const handleInspect = async (orderId: string) => {
+    setActionLoading(orderId)
+    try {
+      const res = await fetch(`/api/admin/orders/${orderId}/package`, { headers: { 'x-admin-password': password } })
+      const data = await res.json()
+      if (!res.ok) setActionMsg(m => ({ ...m, [orderId]: `❌ ${data.error}` }))
+      else setInspectionLinks(m => ({ ...m, [orderId]: data.artifacts }))
+    } catch {
+      setActionMsg(m => ({ ...m, [orderId]: '❌ Package inspection failed' }))
     } finally {
       setActionLoading(null)
     }
@@ -438,7 +469,7 @@ export default function AdminPage() {
                     </td>
                     <td className="px-4 py-3">
                       <span className={`px-2 py-1 rounded-full text-xs font-medium ${STATUS_COLORS[o.status] || 'bg-gray-100 text-gray-600'}`}>
-                        {o.status}
+                        {STATUS_LABELS[o.status] || o.status}
                       </span>
                     </td>
                     <td className="px-4 py-3 text-right text-gray-600">{o.word_count?.toLocaleString()}</td>
@@ -470,12 +501,19 @@ export default function AdminPage() {
                         ) : (
                           <div className="flex items-center gap-2">
                             <button
-                              onClick={() => handleApprove(o.id)}
+                              onClick={() => handleApprove(o)}
                               disabled={actionLoading === o.id}
                               className="px-3 py-1.5 bg-green-600 text-white rounded-lg text-sm font-medium hover:bg-green-700 disabled:opacity-50"
                             >
-                              {actionLoading === o.id ? '…' : '✅ Approve & send to customer'}
+                              {actionLoading === o.id ? '…' : '✅ Approve & Send to Customer'}
                             </button>
+                            {o.status === 'ready_for_review' && <button
+                              onClick={() => handleInspect(o.id)}
+                              disabled={actionLoading === o.id}
+                              className="px-3 py-1.5 bg-violet-100 text-violet-800 rounded-lg text-sm font-medium hover:bg-violet-200 disabled:opacity-50"
+                            >
+                              Inspect customer package
+                            </button>}
                             <button
                               onClick={() => handleFlag(o.id)}
                               disabled={actionLoading === o.id}
@@ -485,6 +523,9 @@ export default function AdminPage() {
                             </button>
                           </div>
                         )}
+                        {inspectionLinks[o.id]?.length > 0 && <div className="mt-2 flex flex-wrap gap-2">
+                          {inspectionLinks[o.id].map(link => <a key={`${link.language}-${link.label}`} href={link.url} target="_blank" rel="noreferrer" className="text-xs text-violet-700 underline">{link.language}: {link.label}</a>)}
+                        </div>}
                       </td>
                     </tr>
                   )}
@@ -512,7 +553,7 @@ export default function AdminPage() {
                     <p className="text-gray-400 text-xs truncate">{o.email}</p>
                   </div>
                   <span className={`px-2 py-1 rounded-full text-xs font-medium shrink-0 ${STATUS_COLORS[o.status] || 'bg-gray-100 text-gray-600'}`}>
-                    {o.status}
+                    {STATUS_LABELS[o.status] || o.status}
                   </span>
                 </div>
                 <div className="flex items-center gap-3 text-sm">
@@ -539,12 +580,17 @@ export default function AdminPage() {
                     ) : (
                       <div className="flex gap-2">
                         <button
-                          onClick={() => handleApprove(o.id)}
+                          onClick={() => handleApprove(o)}
                           disabled={actionLoading === o.id}
                           className="flex-1 py-2 bg-green-600 text-white rounded-lg text-sm font-medium hover:bg-green-700 disabled:opacity-50"
                         >
-                          {actionLoading === o.id ? '…' : '✅ Approve & send'}
+                          {actionLoading === o.id ? '…' : '✅ Approve & Send'}
                         </button>
+                        {o.status === 'ready_for_review' && <button
+                          onClick={() => handleInspect(o.id)}
+                          disabled={actionLoading === o.id}
+                          className="px-4 py-2 bg-violet-100 text-violet-800 rounded-lg text-sm font-medium hover:bg-violet-200 disabled:opacity-50"
+                        >Inspect</button>}
                         <button
                           onClick={() => handleFlag(o.id)}
                           disabled={actionLoading === o.id}
@@ -554,6 +600,9 @@ export default function AdminPage() {
                         </button>
                       </div>
                     )}
+                    {inspectionLinks[o.id]?.length > 0 && <div className="mt-2 flex flex-wrap gap-2">
+                      {inspectionLinks[o.id].map(link => <a key={`${link.language}-${link.label}`} href={link.url} target="_blank" rel="noreferrer" className="text-xs text-violet-700 underline">{link.language}: {link.label}</a>)}
+                    </div>}
                   </div>
                 )}
               </div>

@@ -7,6 +7,7 @@ import { verifyUploadIdentity } from '@/lib/upload-identity'
 import { HARDENED_V1_ENABLED } from '@/lib/pipeline-capabilities'
 import { assertHardenedUploadReady } from '@/lib/hardened-upload'
 import { Resend } from 'resend'
+import { newOrderPipelineFields } from '@/lib/customer-package-version'
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
   apiVersion: '2023-10-16',
@@ -283,6 +284,7 @@ export async function POST(request: NextRequest) {
         special_instructions: specialInstructions || null,
         amount_paid: 0,
         status: 'pending',
+        ...newOrderPipelineFields(),
       }
 
       const { data: order, error: orderError } = await getSupabaseAdmin()

@@ -6,6 +6,7 @@ import { inngest } from '@/lib/inngest'
 import { linkSourceUploadToOrder } from '@/lib/link-source-upload'
 import { verifyUploadIdentity } from '@/lib/upload-identity'
 import { HARDENED_V1_ENABLED } from '@/lib/pipeline-capabilities'
+import { newOrderPipelineFields } from '@/lib/customer-package-version'
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
   apiVersion: '2023-10-16',
@@ -92,6 +93,7 @@ export async function POST(request: NextRequest) {
         special_instructions: specialInstructions || null,
         amount_paid: session.amount_total! / 100,
         status: 'pending',
+        ...newOrderPipelineFields(),
       }).select().single()
       order = result.data
       orderError = result.error

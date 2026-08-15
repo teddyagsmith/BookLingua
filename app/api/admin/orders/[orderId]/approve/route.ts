@@ -56,6 +56,13 @@ export async function POST(
     if (error || !order) {
       return NextResponse.json({ error: 'Order not found' }, { status: 404 })
     }
+    const confirmation = await request.json().catch(() => null) as { expectedRecipient?: string; expectedLanguages?: string[] } | null
+    const orderLanguages = ((order.languages as string[]) || []).slice().sort()
+    const expectedLanguages = (confirmation?.expectedLanguages || []).slice().sort()
+    if (confirmation?.expectedRecipient?.trim().toLowerCase() !== order.email.trim().toLowerCase()
+      || JSON.stringify(expectedLanguages) !== JSON.stringify(orderLanguages)) {
+      return NextResponse.json({ error: 'Approval confirmation no longer matches the current customer or languages' }, { status: 409 })
+    }
     if (!['pending_review', 'ready_for_review', 'delivery_pending'].includes(order.status)) {
       return NextResponse.json({ error: 'Order is not pending review' }, { status: 400 })
     }
