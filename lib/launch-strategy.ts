@@ -125,6 +125,8 @@ MANUSCRIPT FACT-GROUNDING CONTRACT:
 - Do not infer plausible romantasy details. Omit unsupported specifics.
 - A direct quotation must appear verbatim in AUTHORITATIVE MANUSCRIPT FACTS. Otherwise write original promotional copy without quotation marks and never present it as a line from the book.
 - Do not state comparative or performance claims (for example "highest-saved", "highest-upside", "major income line", precise conversion assumptions, or claims about creator behaviour) unless the VERIFIED RESEARCH DOSSIER explicitly supports them. Prefer "worth testing", "a strong candidate", "potentially useful", or "commonly used" when evidence is limited.
+- If comparative performance is not explicitly evidenced, remove the performance claim entirely. Explain instead why the idea suits this specific book using only the manuscript facts (for example, its imagery, setting, premise, tone, or format).
+- Never prefix author-facing instructions with "English:" or another implementation label. Write the instruction directly in English. Labels are reserved for copy-ready marketplace text, such as "FRENCH COPY — READY TO USE".
 
 Use the verified research dossier below as evidence. Never invent a URL, audience size, price, submission route, or promotion permission. If a fact is not established, say "Not publicly stated".
 
