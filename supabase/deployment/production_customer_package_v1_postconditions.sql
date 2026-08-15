@@ -23,16 +23,26 @@ begin
 end $$;
 
 set local role anon;
-do $$ begin
-  if (select count(*) from public.pipeline_cutovers) <> 0 then
+do $$ declare visible_rows bigint := 0; begin
+  begin
+    select count(*) into visible_rows from public.pipeline_cutovers;
+  exception when insufficient_privilege then
+    visible_rows := 0;
+  end;
+  if visible_rows <> 0 then
     raise exception 'Anonymous role can read pipeline cutover rows';
   end if;
 end $$;
 reset role;
 
 set local role authenticated;
-do $$ begin
-  if (select count(*) from public.pipeline_cutovers) <> 0 then
+do $$ declare visible_rows bigint := 0; begin
+  begin
+    select count(*) into visible_rows from public.pipeline_cutovers;
+  exception when insufficient_privilege then
+    visible_rows := 0;
+  end;
+  if visible_rows <> 0 then
     raise exception 'Authenticated role can read pipeline cutover rows';
   end if;
 end $$;

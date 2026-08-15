@@ -74,6 +74,7 @@ test('Customer Package V1 postconditions probe effective RLS access instead of t
   assert.doesNotMatch(postconditions, /has_table_privilege/i)
   assert.match(postconditions, /c\.relrowsecurity/)
   assert.match(postconditions, /pg_policy/)
+  assert.equal((postconditions.match(/exception when insufficient_privilege/g) || []).length, 2)
   for (const role of ['anon','authenticated','service_role']) assert.match(postconditions, new RegExp(`set local role ${role}`))
   assert.match(probe, /create policy customer_package_v1_unsafe_anon/)
   assert.match(probe, /disable row level security/)
