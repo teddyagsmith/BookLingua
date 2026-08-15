@@ -59,3 +59,11 @@ test('cutover migration records the package version without mutating existing or
   assert.match(migration, /create table if not exists pipeline_cutovers/)
   assert.doesNotMatch(migration, /update\s+orders/i)
 })
+
+test('batching postconditions cannot shadow information_schema table_name', () => {
+  const postconditions = read('supabase/deployment/production_batching_incremental_postconditions.sql')
+  assert.doesNotMatch(postconditions, /declare\s+table_name\s+text/i)
+  assert.match(postconditions, /declare\s+checked_table_name\s+text/i)
+  assert.match(postconditions, /information_schema\.columns\s+c[\s\S]*c\.table_name='launch_pack_results'/i)
+  assert.match(postconditions, /group by c\.table_schema,c\.table_name having count\(\*\)=5/i)
+})
