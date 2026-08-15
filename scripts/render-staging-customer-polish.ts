@@ -2,6 +2,7 @@ import { mkdir, readFile, writeFile } from 'fs/promises'
 import path from 'path'
 import { renderCustomerLaunchPackDocx, renderCustomerTranslationNotesDocx, renderCustomerUploadGuideDocx } from '../lib/customer-delivery-docx'
 import { deriveEditorialTranslationNotes, renderTranslationNotes, TranslationNoteEntry, TranslationNotesV1 } from '../lib/translation-notes'
+import { buildChapterMap, renderChapterMapDocx } from '../lib/chapter-map'
 
 async function main(){
 const root=process.argv[2]
@@ -35,6 +36,7 @@ for(const language of ['fr','de']){
   await writeFile(path.join(bundle,`Bride of the Hollow King - Notes - ${language.toUpperCase()}.docx`),await renderCustomerTranslationNotesDocx(Buffer.from(renderTranslationNotes(notes)),'Bride of the Hollow King',notes.language))
   const pack=await readFile(path.join(authoritative,`${language}-launch_pack.json`))
   await writeFile(path.join(bundle,`Bride of the Hollow King - Launch Pack - ${language.toUpperCase()}.docx`),await renderCustomerLaunchPackDocx(pack,'Bride of the Hollow King',titleNode.translatedText))
+  await writeFile(path.join(bundle,`Bride of the Hollow King - Chapters - ${language.toUpperCase()}.docx`),await renderChapterMapDocx(buildChapterMap(pass2),{bookTitle:'Bride of the Hollow King',language:notes.language}))
 }
 
 await writeFile(path.join(bundle,'BookLingua - How to Use Your Translations + Upload Guide.docx'),await renderCustomerUploadGuideDocx())

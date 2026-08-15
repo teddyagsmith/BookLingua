@@ -1,4 +1,6 @@
-import { AlignmentType, BorderStyle, Document, ExternalHyperlink, Footer, HeadingLevel, PageBreak, PageNumber, Packer, Paragraph, ShadingType, Table, TableCell, TableLayoutType, TableRow, TextRun, WidthType } from 'docx'
+import { AlignmentType, BorderStyle, Document, ExternalHyperlink, Footer, HeadingLevel, ImageRun, PageBreak, PageNumber, Packer, Paragraph, ShadingType, Table, TableCell, TableLayoutType, TableRow, TextRun, WidthType } from 'docx'
+import { readFileSync } from 'fs'
+import path from 'path'
 import { deterministicDocx } from './deterministic-docx'
 import { LaunchPackV1, validateLaunchPack } from './launch-pack-schema'
 import { BOOKLINGUA_CLEAN_BOOK_STYLE } from './formatting-policy'
@@ -14,7 +16,10 @@ const numbered=(text:string,index:number)=>new Paragraph({children:[body(`${inde
 const cell=(children:Paragraph[],options:{fill?:string;width?:number;columnSpan?:number}={})=>new TableCell({columnSpan:options.columnSpan,shading:options.fill?{fill:options.fill,type:ShadingType.CLEAR}:undefined,width:options.width?{size:options.width,type:WidthType.DXA}:undefined,margins:{top:120,bottom:120,left:140,right:140},children})
 const table=(rows:TableRow[],columnWidths:number[])=>new Table({rows,width:{size:columnWidths.reduce((sum,value)=>sum+value,0),type:WidthType.DXA},columnWidths,layout:TableLayoutType.FIXED,borders:{top:{style:BorderStyle.SINGLE,size:2,color:BORDER},bottom:{style:BorderStyle.SINGLE,size:2,color:BORDER},left:{style:BorderStyle.SINGLE,size:2,color:BORDER},right:{style:BorderStyle.SINGLE,size:2,color:BORDER},insideHorizontal:{style:BorderStyle.SINGLE,size:1,color:BORDER},insideVertical:{style:BorderStyle.SINGLE,size:1,color:BORDER}}})
 
-const brandLine=()=>new Paragraph({children:[body('BOOK',{bold:true,color:DARK,size:28}),body('LINGUA',{bold:true,color:PURPLE,size:28})],spacing:{after:220}})
+// Document-optimised derivative of the official site logo (same artwork,
+// resized only so each DOCX does not carry a multi-megabyte source image).
+const LOGO=readFileSync(path.join(process.cwd(),'public','logo-doc.png'))
+const brandLine=()=>new Paragraph({children:[new ImageRun({data:LOGO,transformation:{width:150,height:32},altText:{title:'BookLingua',description:'BookLingua logo',name:'BookLingua logo'}})],spacing:{after:220}})
 const footer=()=>new Footer({children:[new Paragraph({alignment:AlignmentType.CENTER,children:[body('BookLingua · Translate your book in hours, not months',{color:'6B7280',size:18}),body('   ·   ',{color:'9CA3AF',size:18}),new TextRun({children:[PageNumber.CURRENT],color:'6B7280',size:18})]})]})
 
 async function pack(children:(Paragraph|Table)[],withFooter=false):Promise<Buffer>{
@@ -54,8 +59,18 @@ export async function renderCustomerLaunchPackDocx(bytes:Buffer,bookTitle:string
   const pricingRows=[new TableRow({tableHeader:true,cantSplit:true,children:['Format','Recommended launch price'].map(label=>cell([paragraph(label,{bold:true,color:DARK,after:0})],{fill:LAVENDER,width:4500}))}),new TableRow({cantSplit:true,children:[cell([paragraph('Ebook',{bold:true,after:0})]),cell([paragraph(launchPack.pricingRecommendation.ebook,{bold:true,color:PURPLE,after:0})])]}),new TableRow({cantSplit:true,children:[cell([paragraph('Paperback',{bold:true,after:0})]),cell([paragraph(launchPack.pricingRecommendation.paperback,{bold:true,color:PURPLE,after:0})])]})]
   const topOpportunityRows=[new TableRow({tableHeader:true,children:['# / Opportunity','Why it fits','Effort / Cost','Next action'].map(label=>cell([paragraph(label,{bold:true,color:DARK,after:0})],{fill:LAVENDER,width:2250}))}),...launchPack.topOpportunities.map(item=>new TableRow({cantSplit:true,children:[cell([paragraph(`${item.rank}. ${item.opportunity}`,{bold:true,after:50}),link('Open',item.url)],{width:2250}),cell([paragraph(item.whyItFits,{after:0})],{width:2250}),cell([paragraph(`${item.effort} / ${item.likelyCost}`,{after:0})],{width:2250}),cell([paragraph(item.recommendedAction,{after:0})],{width:2250})]}))]
   const outreachRows=[new TableRow({tableHeader:true,children:['Opportunity','Type / Fit','Cost / Permission','Priority / URL'].map(label=>cell([paragraph(label,{bold:true,color:DARK,after:0})],{fill:LAVENDER,width:2250}))}),...launchPack.opportunities.map(item=>new TableRow({cantSplit:true,children:[cell([paragraph(item.name,{bold:true,after:0})],{width:2250}),cell([paragraph(`${item.type}: ${item.fit}`,{after:0})],{width:2250}),cell([paragraph(`${item.cost}; ${item.promotionAllowed}`,{after:0})],{width:2250}),cell([paragraph(item.priority,{bold:true,after:50}),link('Open',item.url)],{width:2250})]}))]
+  const priorities=launchPack.topOpportunities.slice(0,3)
+  const bestHook=launchPack.marketingHooks[0]?.frenchPromotionalLine||launchPack.marketingHooks[0]?.hook||''
   return pack([
     brandLine(),paragraph(`YOUR ${launchPack.language.toUpperCase()} LAUNCH PACK`,{bold:true,color:PURPLE,after:260}),heading(title,HeadingLevel.TITLE),paragraph(marketLine,{color:GRAY,after:260}),paragraph(`Everything you need to position, list and launch your translated book in ${launchPack.market}.`,{after:300}),
+    pageBreak(),heading('Your Launch at a Glance',HeadingLevel.TITLE),paragraph('A focused plan you can understand in under two minutes.',{color:GRAY}),
+    heading('If you only do three things'),...priorities.map(item=>bullet(`${item.opportunity}: ${item.recommendedAction}`)),
+    heading('Minimum viable launch'),...launchPack.launchPlan30Day.minimumViable.slice(0,7).map(bullet),
+    heading('Recommended positioning'),paragraph(launchPack.amazonAdsStrategy.metaPositioning),
+    heading('Recommended launch price'),paragraph(`Ebook: ${launchPack.pricingRecommendation.ebook} · Paperback: ${launchPack.pricingRecommendation.paperback}`),
+    heading('Best promotional angle'),paragraph(bestHook,{italics:true}),
+    heading('Where to focus'),...priorities.map(item=>bullet(item.opportunity)),
+    pageBreak(),
     heading('Book Description'),paragraph(`Copy this market-ready ${launchPack.language} description into the description field for ${launchPack.amazonDomain}.`,{color:GRAY}),descriptionBox,
     heading('Amazon Keywords'),paragraph('Seven backend keyword fields, ready to copy into your listing.',{color:GRAY}),table(keywordRows,[700,8300]),
     heading('Advertising Keywords'),paragraph('Validated search terms grouped for easier campaign setup.',{color:GRAY}),table(adRows,[3000,3000,3000]),
@@ -76,7 +91,7 @@ export async function renderCustomerLaunchPackDocx(bytes:Buffer,bookTitle:string
     ...launchPack.launchPlan30Day.phases.flatMap(phase=>[heading(phase.timing),...phase.actions.map(bullet)]),
     heading('If you want to push harder'),...launchPack.launchPlan30Day.pushHarder.map(bullet),
     pageBreak(),heading('Book-Specific Marketing Hooks',HeadingLevel.TITLE),
-    ...launchPack.marketingHooks.flatMap(item=>[heading(item.hook),paragraph(item.readerAppeal),table([new TableRow({children:[cell([paragraph('FRENCH COPY — READY TO USE',{bold:true,color:PURPLE}),paragraph(item.frenchPromotionalLine)],{fill:PALE,width:9000})]})],[9000])]),
+    ...launchPack.marketingHooks.flatMap(item=>[heading(item.hook),paragraph(item.readerAppeal),table([new TableRow({cantSplit:true,children:[cell([paragraph(`${launchPack.language.toUpperCase()} COPY — READY TO USE`,{bold:true,color:PURPLE}),paragraph(item.frenchPromotionalLine)],{fill:PALE,width:9000})]})],[9000])]),
     pageBreak(),heading('Social Content Ideas',HeadingLevel.TITLE),
     ...launchPack.socialContentIdeas.flatMap(item=>[heading(`${item.concept} · ${item.format}`),paragraph(item.explanation),paragraph(item.frenchCaption,{italics:true}),paragraph(item.hashtags.join(' '),{color:PURPLE})]),
     pageBreak(),heading('Amazon Ads & Meta Positioning',HeadingLevel.TITLE),paragraph(launchPack.amazonAdsStrategy.startingStrategy),

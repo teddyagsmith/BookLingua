@@ -1,4 +1,6 @@
-import { AlignmentType, BorderStyle, Document, HeadingLevel, Packer, Paragraph, Table, TableCell, TableLayoutType, TableRow, TextRun, WidthType } from 'docx'
+import { AlignmentType, BorderStyle, Document, HeadingLevel, ImageRun, Packer, Paragraph, Table, TableCell, TableLayoutType, TableRow, TextRun, WidthType } from 'docx'
+import { readFileSync } from 'fs'
+import path from 'path'
 import { SemanticDocumentV2 } from './semantic-document'
 import { deterministicDocx } from './deterministic-docx'
 import { BOOKLINGUA_CLEAN_BOOK_STYLE } from './formatting-policy'
@@ -59,6 +61,7 @@ export async function renderChapterMapDocx(rows: ChapterMapRow[], options: { boo
   return deterministicDocx(Buffer.from(await Packer.toBuffer(new Document({
     styles:{default:{document:{run:{font:BOOKLINGUA_CLEAN_BOOK_STYLE.bodyFont,size:BOOKLINGUA_CLEAN_BOOK_STYLE.bodySizeHalfPoints}}}},
     sections: [{properties:{page:{margin:BOOKLINGUA_CLEAN_BOOK_STYLE.pageMarginsTwips}},children: [
+      new Paragraph({children:[new ImageRun({data:readFileSync(path.join(process.cwd(),'public','logo-doc.png')),transformation:{width:150,height:32},altText:{title:'BookLingua',description:'BookLingua logo',name:'BookLingua logo'}})],spacing:{after:220}}),
       new Paragraph({ text: title, heading: HeadingLevel.TITLE }),
       ...(options.language?[new Paragraph({children:[new TextRun({text:options.language,italics:true,color:'555555'})]})]:[]),
       new Paragraph({text:'Use this Chapter Map to match chapters in your original manuscript with their translated equivalents when editing or uploading your translated book.',spacing:{after:240}}),

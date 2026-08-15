@@ -15,6 +15,7 @@ interface LaunchStrategyInput {
   targetLanguage: string
   targetMarket: string // e.g., "Spain/Latin America", "France", "Germany", "Brazil/Portugal"
   researchDossier?: string
+  manuscriptFacts?: string
 }
 
 export interface LaunchStrategyOutput {
@@ -115,6 +116,16 @@ Author: ${input.authorName}
 Genre: ${input.genre}
 Book Content/Description: ${input.bookDescription}
 
+AUTHORITATIVE MANUSCRIPT FACTS (the only permitted source for claims about the book):
+${input.manuscriptFacts || input.bookDescription}
+
+MANUSCRIPT FACT-GROUNDING CONTRACT:
+- Market research may be creative and wide-ranging. Manuscript research may not.
+- Every statement about characters, names, plot events, time periods, relationships, tropes, spice, content warnings, setting, worldbuilding, quotations, or promises made by the book must be directly supported by AUTHORITATIVE MANUSCRIPT FACTS above.
+- Do not infer plausible romantasy details. Omit unsupported specifics.
+- A direct quotation must appear verbatim in AUTHORITATIVE MANUSCRIPT FACTS. Otherwise write original promotional copy without quotation marks and never present it as a line from the book.
+- Do not state comparative or performance claims (for example "highest-saved", "highest-upside", "major income line", precise conversion assumptions, or claims about creator behaviour) unless the VERIFIED RESEARCH DOSSIER explicitly supports them. Prefer "worth testing", "a strong candidate", "potentially useful", or "commonly used" when evidence is limited.
+
 Use the verified research dossier below as evidence. Never invent a URL, audience size, price, submission route, or promotion permission. If a fact is not established, say "Not publicly stated".
 
 VERIFIED RESEARCH DOSSIER:
@@ -188,8 +199,8 @@ Generate the following in JSON format. All author-facing explanations and instru
   "opportunities": [{"name":"","url":"https://...","type":"deal_site|reviewer_blog|reader_community|social_creator|media|event|platform","audience":"","fit":"","cost":"","promotionAllowed":"","contactRoute":"","priority":"High|Medium|Low"}],
   "topOpportunities": [{"rank":1,"opportunity":"","url":"https://...","whyItFits":"","effort":"Low|Medium|High","likelyCost":"Free|€|€€|€€€","recommendedAction":""}],
   "launchPlan30Day": {"minimumViable":[""],"pushHarder":[""],"phases":[{"timing":"4 weeks before launch","actions":[""]},{"timing":"2 weeks before launch","actions":[""]},{"timing":"Launch week","actions":[""]},{"timing":"Weeks 2–4","actions":[""]}]},
-  "marketingHooks": [{"hook":"","readerAppeal":"","frenchPromotionalLine":""}],
-  "socialContentIdeas": [{"concept":"","explanation":"","frenchCaption":"","hashtags":["#..."],"format":"Reel|TikTok|Static|Carousel"}],
+  "marketingHooks": [{"hook":"","readerAppeal":"","frenchPromotionalLine":"copy-ready promotional line in ${input.targetLanguage}; despite the legacy field name this is never necessarily French"}],
+  "socialContentIdeas": [{"concept":"","explanation":"","frenchCaption":"copy-ready caption in ${input.targetLanguage}; despite the legacy field name this is never necessarily French","hashtags":["#..."],"format":"Reel|TikTok|Static|Carousel"}],
   "amazonAdsStrategy": {"startingStrategy":"","comparableTargets":[""],"targetingIdeas":[""],"metaPositioning":""},
   "discountPromotion": [{"option":"","availability":"","restriction":"","recommendedAction":""}],
   "research": {"completedAt":"2026-08-14","sources":[{"name":"","url":"https://...","note":"what was verified"}]}
