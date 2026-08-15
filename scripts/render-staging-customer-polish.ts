@@ -22,13 +22,14 @@ for(const language of ['fr','de']){
   const pass2=records.find(item=>item.language===language&&item.pass==='pass2')!.document
   const titleNode=pass2.nodes.find((node:any)=>node.sourceText.trim()==='Bride of the Hollow King')
   if(!titleNode?.translatedText)throw new Error(`${language} authoritative title unavailable`)
-  const derived=deriveEditorialTranslationNotes({language:language==='fr'?'French':'German',pass1,pass2,authoritativeTitle:{source:'Bride of the Hollow King',target:titleNode.translatedText},limit:2})
+  const derived=deriveEditorialTranslationNotes({language:language==='fr'?'French':'German',pass1,pass2,authoritativeTitle:{source:'Bride of the Hollow King',target:titleNode.translatedText},limit:1})
   const broader=[
     evidence(pass2,/My name is Caelan/,`The character name Caelan is retained while the surrounding introduction follows ${language==='fr'?'French guillemet and dialogue':'German quotation and dialogue'} conventions.`),
     evidence(pass2,/I knew I was Shayla Ashbourne/,`Shayla Ashbourne and Greymere remain stable proper names, anchoring character and place identity across the translated edition.`),
     evidence(pass2,/King of the Hollow Court/,language==='de'?'Hollow Court becomes Hohler Hof, with the inflected form Hohlen Hofes used naturally in context; royal rank and place name remain a coherent German fantasy term.':'Cour Creuse is used consistently for Hollow Court, preserving the courtly meaning and the novel’s hollow/emptiness motif.'),
     evidence(pass2,/Lord of the Blackthorn Wood/,language==='de'?'Blackthorn Wood becomes Schwarzdornwald and Thorn Throne becomes Dornenthron: natural German compounds that preserve the shared thorn imagery across the worldbuilding.':'Bois de Blackthorn and Trône d’Épines keep the recurring thorn imagery legible while treating the proper-name system consistently.'),
     evidence(pass2,/“No,” I whispered/,language==='de'?'German low quotation marks and natural dialogue punctuation are used consistently, while the intimate first-person cadence remains direct.':'French guillemets and dialogue punctuation are applied without flattening the narrator’s hesitation and rising panic.'),
+    evidence(pass2,/Your Majesty/,language==='de'?'The formal royal address Your Majesty is rendered as Eure Majestät, preserving court hierarchy and the direct form of address in natural German.':'The formal royal address Your Majesty becomes Votre Majesté, preserving court hierarchy and the direct form of address in idiomatic French.'),
     evidence(pass2,/For several breaths, I did not move/,`The sensory, gothic register is carried through concrete images—dead leaves, damp earth, black branches and held breath—rather than replaced with generic fantasy language.`),
     evidence(pass2,/ruined wedding dress/,`The ruined wedding dress and blackthorn embroidery are translated as recurring visual motifs, preserving the contrast between romance, ritual and threat.`),
     evidence(pass2,/kiss|desire|body|breath|touch/i,`Romantic and bodily language retains the source level of intimacy and tension without becoming more clinical or more explicit in translation.`),

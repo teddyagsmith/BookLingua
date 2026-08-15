@@ -6,11 +6,12 @@ import { LaunchPackV1, validateLaunchPack } from './launch-pack-schema'
 import { BOOKLINGUA_CLEAN_BOOK_STYLE } from './formatting-policy'
 
 const PURPLE='6D28D9',DARK='312E81',LAVENDER='F3E8FF',PALE='FAF7FF',GRAY='4B5563',BORDER='DDD6FE'
-const body=(text:string,options:{bold?:boolean;italics?:boolean;color?:string;size?:number}={})=>new TextRun({text,font:'Aptos',size:options.size||22,bold:options.bold,italics:options.italics,color:options.color||'1F2937'})
+const body=(text:string,options:{bold?:boolean;italics?:boolean;color?:string;size?:number}={})=>new TextRun({text,font:'Georgia',size:options.size||22,bold:options.bold,italics:options.italics,color:options.color||'1F2937'})
 const paragraph=(text:string,options:{after?:number;before?:number;alignment?:typeof AlignmentType[keyof typeof AlignmentType];bold?:boolean;italics?:boolean;color?:string}={})=>new Paragraph({alignment:options.alignment,keepLines:true,children:[body(text,options)],spacing:{before:options.before||0,after:options.after??140,line:300}})
 const heading=(text:string,level:typeof HeadingLevel[keyof typeof HeadingLevel]=HeadingLevel.HEADING_1)=>new Paragraph({heading:level,keepNext:true,keepLines:true,children:[body(text,{bold:true,color:level===HeadingLevel.TITLE?DARK:PURPLE,size:level===HeadingLevel.TITLE?38:28})],spacing:{before:level===HeadingLevel.TITLE?0:280,after:140}})
 const bullet=(text:string)=>new Paragraph({keepLines:true,children:[body(text)],bullet:{level:0},spacing:{after:100,line:286}})
 const link=(label:string,url:string)=>new Paragraph({children:[new ExternalHyperlink({link:url,children:[new TextRun({text:label,color:'2563EB',underline:{}})]})],spacing:{after:80}})
+const sourceLink=(label:string,url:string)=>new Paragraph({children:[new ExternalHyperlink({link:url,children:[new TextRun({text:label,font:'Georgia',color:'2563EB',underline:{}})]})],spacing:{after:30}})
 const pageBreak=()=>new Paragraph({children:[new PageBreak()]})
 const numbered=(text:string,index:number)=>new Paragraph({children:[body(`${index + 1}. `,{bold:true,color:PURPLE}),body(text)],spacing:{after:120,line:286},indent:{left:240,hanging:240}})
 const cell=(children:Paragraph[],options:{fill?:string;width?:number;columnSpan?:number}={})=>new TableCell({columnSpan:options.columnSpan,shading:options.fill?{fill:options.fill,type:ShadingType.CLEAR}:undefined,width:options.width?{size:options.width,type:WidthType.DXA}:undefined,margins:{top:120,bottom:120,left:140,right:140},children})
@@ -20,14 +21,15 @@ const table=(rows:TableRow[],columnWidths:number[])=>new Table({rows,width:{size
 // resized only so each DOCX does not carry a multi-megabyte source image).
 const LOGO=readFileSync(path.join(process.cwd(),'public','logo-doc-hq.png'))
 // 35 mm wide at 96 px/in; height follows the cropped artwork's native ratio.
-const LOGO_WIDTH=528,LOGO_HEIGHT=Math.round(LOGO_WIDTH*370/1080)
+const LOGO_WIDTH=144,LOGO_HEIGHT=Math.round(LOGO_WIDTH*370/1080)
 const brandLine=()=>new Paragraph({alignment:AlignmentType.CENTER,children:[new ImageRun({data:LOGO,transformation:{width:LOGO_WIDTH,height:LOGO_HEIGHT},altText:{title:'BookLingua',description:'BookLingua logo',name:'BookLingua logo'}})],spacing:{after:260}})
+const brandDivider=()=>new Paragraph({alignment:AlignmentType.CENTER,children:[body(' ',{size:4})],border:{bottom:{style:BorderStyle.SINGLE,size:8,color:PURPLE,space:1}},spacing:{before:0,after:260},indent:{left:2700,right:2700}})
 const centeredHeading=(text:string,level:typeof HeadingLevel[keyof typeof HeadingLevel]=HeadingLevel.HEADING_1)=>new Paragraph({heading:level,alignment:AlignmentType.CENTER,keepNext:true,keepLines:true,children:[body(text,{bold:true,color:level===HeadingLevel.TITLE?DARK:PURPLE,size:level===HeadingLevel.TITLE?38:28})],spacing:{before:level===HeadingLevel.TITLE?0:280,after:140}})
 const footer=()=>new Footer({children:[new Paragraph({alignment:AlignmentType.CENTER,children:[body('BookLingua · Translate your book in hours, not months',{color:'6B7280',size:18}),body('   ·   ',{color:'9CA3AF',size:18}),new TextRun({children:[PageNumber.CURRENT],color:'6B7280',size:18})]})]})
 
 async function pack(children:(Paragraph|Table)[],withFooter=false):Promise<Buffer>{
   return deterministicDocx(Buffer.from(await Packer.toBuffer(new Document({
-    styles:{default:{document:{run:{font:'Aptos',size:22},paragraph:{spacing:{line:300}}}}},
+    styles:{default:{document:{run:{font:'Georgia',size:22},paragraph:{spacing:{line:300}}}}},
     sections:[{properties:{page:{margin:BOOKLINGUA_CLEAN_BOOK_STYLE.pageMarginsTwips}},footers:withFooter?{default:footer()}:undefined,children}],
   }))))
 }
@@ -56,6 +58,19 @@ export async function renderCustomerLaunchPackDocx(bytes:Buffer,bookTitle:string
     .replace(/,?\s*the dominant German BookTok grammar,?/i,', a familiar short-video format,')
     .replace(/Love-interest cards drive the strongest comment activity[^.]*\.?/i,'Love-interest cards suit this book because its romantic tension gives readers a clear character question to discuss.')
     .replace(/Print reveals perform strongly on French Bookstagram[^.]*\.?/i,'A print reveal suits this book because the cover, gothic setting and translated edition provide a clear visual focus.')
+    .replace(/Slow pan over torn fabric\/lace with the premise delivered in three text beats\s*[—-]\s*highest-clarity way to communicate the hook in under 8 seconds\.?/i,"A slow pan over torn fabric or lace lets the ruined-dress and forgotten-fiancé hook unfold clearly in a short video.")
+    .replace(/French romantasy readers shop by trope list; a clean static card is highly saveable and shareable in DMs\.?/i,'A clean trope card suits this book because its arranged marriage, dangerous fae king, cursed court and stolen-memory elements can be understood at a glance.')
+    .replace(/Balances the marketing so the heroine reads as an investigator, not a prize\s*[—-]\s*a recurring French reader critique of the genre\.?/i,'Keeps the heroine framed as an active investigator rather than a passive prize, matching her role in this book.')
+    .replace(/German romantasy readers respond strongly to ['‘]Wer war er\?['’] premises that promise a mystery inside the romance\.?/i,'The forgotten-fiancé question creates a clear curiosity gap inside this book’s romance.')
+    .replace(/Social proof is decisive for German indie buyers\.?/i,'With permission, attributed reader quotes give the carousel a clear, credible focus.')
+    .replace(/Romantasy is the format['’]s core genre;\s*/i,'')
+    .replace(/Highly searchable and shareable\.?/i,'The supported tropes can be read quickly in this format.')
+    .replace(/Static bookstagram staple:/i,'Static visual concept:')
+    .replace(/Easiest asset to hand to ARC readers as a style reference\.?/i,'It can also serve as a consistent visual reference for ARC outreach.')
+    .replace(/pin the strongest video/i,'pin the video that performs best after reviewing your own results')
+    .replace(/rotating the strongest hooks/i,'rotating the hook set and retaining the ideas that earn a response after measurement')
+    .replace(/The only channel in the dossier explicitly built to connect self-published authors with French reviewers, bloggers and BookTubers\s*[—-]\s*the fastest legitimate way to build a French-language review base for an unknown romantasy author\.?/i,'A French press-service channel explicitly built to connect self-published authors with reviewers, bloggers and BookTubers; it is directly relevant to building a French-language review base for this book.')
+    .replace(/The largest German-language reader community in the dossier; German romantasy readers routinely check a title there before buying, so an empty page is a visible gap\.?/i,'A German-language reader community where a complete book page can give this title a clear discovery presence.')
     .trim()
   const marketLine=`${launchPack.market} · ${launchPack.amazonDomain}`
   const descriptionBox=table([new TableRow({cantSplit:true,children:[cell([
@@ -69,16 +84,22 @@ export async function renderCustomerLaunchPackDocx(bytes:Buffer,bookTitle:string
   const categoryRows=[new TableRow({tableHeader:true,cantSplit:true,children:['Priority','Suggested category'].map((label,index)=>cell([paragraph(label,{bold:true,color:DARK,after:0})],{fill:LAVENDER,width:index?7600:1400}))}),...launchPack.categories.map((category,index)=>new TableRow({cantSplit:true,children:[cell([paragraph(String(index+1),{bold:true,color:PURPLE,alignment:AlignmentType.CENTER,after:0})],{width:1400}),cell([paragraph(category,{after:0})],{width:7600})]}))]
   const pricingRows=[new TableRow({tableHeader:true,cantSplit:true,children:['Format','Recommended launch price'].map(label=>cell([paragraph(label,{bold:true,color:DARK,after:0})],{fill:LAVENDER,width:4500}))}),new TableRow({cantSplit:true,children:[cell([paragraph('Ebook',{bold:true,after:0})]),cell([paragraph(launchPack.pricingRecommendation.ebook,{bold:true,color:PURPLE,after:0})])]}),new TableRow({cantSplit:true,children:[cell([paragraph('Paperback',{bold:true,after:0})]),cell([paragraph(launchPack.pricingRecommendation.paperback,{bold:true,color:PURPLE,after:0})])]})]
   const topOpportunityRows=[new TableRow({tableHeader:true,children:['# / Opportunity','Why it fits','Effort / Cost','Next action'].map(label=>cell([paragraph(label,{bold:true,color:DARK,after:0})],{fill:LAVENDER,width:2250}))}),...launchPack.topOpportunities.map(item=>new TableRow({cantSplit:true,children:[cell([paragraph(`${item.rank}. ${item.opportunity}`,{bold:true,after:50}),link('Open',item.url)],{width:2250}),cell([paragraph(authorCopy(item.whyItFits),{after:0})],{width:2250}),cell([paragraph(`${item.effort} / ${item.likelyCost}`,{after:0})],{width:2250}),cell([paragraph(authorCopy(item.recommendedAction),{after:0})],{width:2250})]}))]
-  const outreachRows=[new TableRow({tableHeader:true,children:['Opportunity','Type / Fit','Cost / Permission','Priority / URL'].map(label=>cell([paragraph(label,{bold:true,color:DARK,after:0})],{fill:LAVENDER,width:2250}))}),...launchPack.opportunities.map(item=>new TableRow({cantSplit:true,children:[cell([paragraph(item.name,{bold:true,after:0})],{width:2250}),cell([paragraph(`${item.type}: ${item.fit}`,{after:0})],{width:2250}),cell([paragraph(`${item.cost}; ${item.promotionAllowed}`,{after:0})],{width:2250}),cell([paragraph(item.priority,{bold:true,after:50}),link('Open',item.url)],{width:2250})]}))]
+  const outreachRows=[new TableRow({tableHeader:true,children:['Opportunity','Type / Fit','Cost / Permission','Priority / URL'].map(label=>cell([paragraph(label,{bold:true,color:DARK,after:0})],{fill:LAVENDER,width:2250}))}),...launchPack.opportunities.map(item=>new TableRow({cantSplit:true,children:[cell([paragraph(item.name,{bold:true,after:0})],{width:2250}),cell([paragraph(`${item.type}: ${authorCopy(item.fit)}`,{after:0})],{width:2250}),cell([paragraph(`${item.cost}; ${authorCopy(item.promotionAllowed)}`,{after:0})],{width:2250}),cell([paragraph(item.priority,{bold:true,after:50}),link('Open',item.url)],{width:2250})]}))]
   const priorities=launchPack.topOpportunities.slice(0,3)
   const bestHook=launchPack.marketingHooks[0]?.frenchPromotionalLine||launchPack.marketingHooks[0]?.hook||''
   const coverPanel=table([new TableRow({cantSplit:true,children:[cell([
     ...(authorName?[paragraph(`Prepared for ${authorName}`,{bold:true,color:DARK,after:80,alignment:AlignmentType.CENTER})]:[]),
     paragraph(`${launchPack.market} market · Research completed ${launchPack.research.completedAt}`,{color:GRAY,after:0,alignment:AlignmentType.CENTER}),
   ],{fill:LAVENDER,width:9000})]})],[9000])
+  const glanceCards=table([new TableRow({cantSplit:true,children:[
+    cell([paragraph('IF YOU ONLY DO THREE THINGS',{bold:true,color:PURPLE,after:80,alignment:AlignmentType.CENTER}),paragraph(priorities.map(item=>item.opportunity).join(' · '),{after:0,alignment:AlignmentType.CENTER})],{fill:PALE,width:3000}),
+    cell([paragraph('MINIMUM VIABLE LAUNCH',{bold:true,color:PURPLE,after:80,alignment:AlignmentType.CENTER}),paragraph('Use the practical checklist and phased plan in the detailed sections that follow.',{after:0,alignment:AlignmentType.CENTER})],{fill:PALE,width:3000}),
+    cell([paragraph('WHERE TO FOCUS',{bold:true,color:PURPLE,after:80,alignment:AlignmentType.CENTER}),paragraph(`${launchPack.market} · ${launchPack.amazonDomain}`,{after:0,alignment:AlignmentType.CENTER})],{fill:PALE,width:3000}),
+  ]})],[3000,3000,3000])
   return pack([
-    brandLine(),paragraph(`YOUR ${launchPack.language.toUpperCase()} LAUNCH PACK`,{bold:true,color:PURPLE,after:220,alignment:AlignmentType.CENTER}),centeredHeading(title,HeadingLevel.TITLE),paragraph(marketLine,{color:GRAY,after:220,alignment:AlignmentType.CENTER}),
+    brandLine(),brandDivider(),paragraph(`YOUR ${launchPack.language.toUpperCase()} LAUNCH PACK`,{bold:true,color:PURPLE,after:220,alignment:AlignmentType.CENTER}),centeredHeading(title,HeadingLevel.TITLE),paragraph(marketLine,{color:GRAY,after:220,alignment:AlignmentType.CENTER}),
     table([new TableRow({cantSplit:true,children:[cell([paragraph(`Everything you need to position, list and launch your translated book in ${launchPack.market}.`,{bold:true,color:DARK,after:80,alignment:AlignmentType.CENTER}),paragraph('Market research, copy-ready listing assets and a practical 30-day launch plan.',{color:GRAY,after:0,alignment:AlignmentType.CENTER})],{fill:PALE,width:9000})]})],[9000]),paragraph('',{after:420}),coverPanel,
+    paragraph('YOUR LAUNCH AT A GLANCE',{bold:true,color:DARK,after:140,before:320,alignment:AlignmentType.CENTER}),glanceCards,
     pageBreak(),heading('Your Launch at a Glance',HeadingLevel.TITLE),paragraph('A focused plan you can understand in under two minutes.',{color:GRAY}),
     heading('If you only do three things'),...priorities.map(item=>bullet(`${item.opportunity}: ${authorCopy(item.recommendedAction)}`)),
     heading('Minimum viable launch'),...launchPack.launchPlan30Day.minimumViable.slice(0,7).map(item=>bullet(authorCopy(item))),
@@ -118,7 +139,7 @@ export async function renderCustomerLaunchPackDocx(bytes:Buffer,bookTitle:string
     pageBreak(),heading('Researched Outreach Shortlist',HeadingLevel.TITLE),
     table(outreachRows,[2250,2250,2250,2250]),
     pageBreak(),heading('Research Notes & Sources',HeadingLevel.TITLE),paragraph(`Research completed: ${launchPack.research.completedAt}. Platforms and community rules change; verify details before outreach.`,{color:GRAY}),
-    ...launchPack.research.sources.flatMap(source=>[link(source.name,source.url),paragraph(source.note,{color:GRAY,after:140})]),
+    ...launchPack.research.sources.flatMap(source=>[sourceLink(source.name,source.url),paragraph(source.note,{color:GRAY,after:80})]),
     heading('KDP Upload Checklist'),
     ...[
       'Upload the supplied Final EPUB directly for the ebook unless you deliberately rebuild the edition from the Final DOCX.',
@@ -136,7 +157,7 @@ export async function renderCustomerTranslationNotesDocx(bytes:Buffer,bookTitle:
   const meaningful=lines.filter(Boolean)
   if(meaningful.length<2)throw new Error('Translation Notes are too sparse for customer delivery')
   const translatedTitle=extractAuthoritativeTranslatedTitle(bytes,bookTitle)||bookTitle
-  const children:(Paragraph|Table)[]=[brandLine(),centeredHeading('Translation Notes',HeadingLevel.TITLE),centeredHeading(translatedTitle,HeadingLevel.HEADING_1),paragraph(`${language} Translation`,{italics:true,color:GRAY,after:260,alignment:AlignmentType.CENTER})]
+  const children:(Paragraph|Table)[]=[brandLine(),brandDivider(),centeredHeading('Translation Notes',HeadingLevel.TITLE),centeredHeading(translatedTitle,HeadingLevel.HEADING_1),paragraph(`${language} Translation`,{italics:true,color:GRAY,after:260,alignment:AlignmentType.CENTER})]
   let sawEntry=false,sectionSeen=false
   for(let index=0;index<meaningful.length;index++){
     const line=meaningful[index]
@@ -144,7 +165,7 @@ export async function renderCustomerTranslationNotesDocx(bytes:Buffer,bookTitle:
     if(/^Reason:/i.test(line))continue
     if(line.includes('→')){
       const [source,...targetParts]=line.split('→'),reason=meaningful[index+1]?.replace(/^Reason:\s*/i,'')||''
-      children.push(table([new TableRow({children:[cell([paragraph('SOURCE MEANING / PHRASE',{bold:true,color:PURPLE,after:80}),paragraph(source.trim(),{after:0})],{fill:PALE,width:4500}),cell([paragraph('FINAL TRANSLATED CHOICE',{bold:true,color:PURPLE,after:80}),paragraph(targetParts.join('→').trim(),{after:0})],{fill:PALE,width:4500})]}),new TableRow({children:[cell([paragraph('WHY WE CHOSE IT',{bold:true,color:DARK,after:70}),paragraph(reason,{after:0})],{width:9000,columnSpan:2})]})],[4500,4500]))
+      children.push(table([new TableRow({cantSplit:true,children:[cell([paragraph('SOURCE MEANING / PHRASE',{bold:true,color:PURPLE,after:80}),paragraph(source.trim(),{after:0})],{fill:PALE,width:4500}),cell([paragraph('FINAL TRANSLATED CHOICE',{bold:true,color:PURPLE,after:80}),paragraph(targetParts.join('→').trim(),{after:0})],{fill:PALE,width:4500})]}),new TableRow({cantSplit:true,children:[cell([paragraph('WHY WE CHOSE IT',{bold:true,color:DARK,after:70}),paragraph(reason,{after:0})],{width:9000,columnSpan:2})]})],[4500,4500]))
       children.push(paragraph('',{after:100}));sawEntry=true;index++;continue
     }
     if(!sectionSeen){children.push(paragraph(line,{after:220}));sectionSeen=true}
@@ -157,7 +178,7 @@ export async function renderCustomerTranslationNotesDocx(bytes:Buffer,bookTitle:
 export async function renderCustomerUploadGuideDocx():Promise<Buffer>{
   const section=(title:string,intro:string,items:string[])=>[heading(title),paragraph(intro),...items.map(bullet)]
   return pack([
-    brandLine(),paragraph('START HERE',{bold:true,color:PURPLE,after:180,alignment:AlignmentType.CENTER}),centeredHeading('How to Use Your Translations + Upload Guide',HeadingLevel.TITLE),paragraph('A practical guide to reviewing your BookLingua files and preparing your translated book for publishing.',{color:GRAY,after:300,alignment:AlignmentType.CENTER}),
+    brandLine(),brandDivider(),paragraph('START HERE',{bold:true,color:PURPLE,after:180,alignment:AlignmentType.CENTER}),centeredHeading('How to Use Your Translations + Upload Guide',HeadingLevel.TITLE),paragraph('A practical guide to reviewing your BookLingua files and preparing your translated book for publishing.',{color:GRAY,after:300,alignment:AlignmentType.CENTER}),
     ...section('Start with these three steps','Your Final DOCX is the best place to begin because it is editable and contains the clean, reviewed translation.', ['1. Open the Final DOCX and read through it, making any preference edits you want.','2. Keep the Chapters document beside it so you can match each original chapter to its translated chapter.','3. Use the Final EPUB directly for ebook upload only after previewing it; rebuild from the DOCX if you want to change the design or structure.']),
     ...section('What every delivered file is for','Your package separates publishing files from review evidence and launch support.', ['Final DOCX — the clean, editable, reviewed manuscript; use it for reading, personal edits, print formatting, Atticus, Vellum, or another formatter.','Final EPUB — a ready-made ebook package; use it directly when its layout and navigation meet your needs.','Review DOCX — the editorial audit trail showing the initial translation and reviewed wording.','Chapters DOCX — the Chapter Map linking the source-book structure to the translated structure.','Notes DOCX — selected translation and editorial decisions, with explanations of tone, terminology, names, and localisation.','Launch Pack DOCX — market-ready description, keywords, categories, pricing, and English publishing guidance for the target market.','This guide — practical instructions for checking, formatting, and uploading the files.']),
     ...section('Review and edit the Final DOCX','Work on a copy so you always retain the delivered original. The Final DOCX already contains the accepted second-pass wording.', ['Turn on paragraph marks if you need to inspect spacing and breaks.','Use Find to check names, recurring terms, chapter titles, and any preference changes consistently.','Do not copy visible strike-through wording from the Review file into the Final DOCX; the Final already contains the reviewed choice.','Save a new version after your edits and keep the delivered file as a reference.']),
