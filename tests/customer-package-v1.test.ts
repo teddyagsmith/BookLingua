@@ -67,3 +67,16 @@ test('batching postconditions cannot shadow information_schema table_name', () =
   assert.match(postconditions, /information_schema\.columns\s+c[\s\S]*c\.table_name='launch_pack_results'/i)
   assert.match(postconditions, /group by c\.table_schema,c\.table_name having count\(\*\)=5/i)
 })
+
+test('Customer Package V1 postconditions probe effective RLS access instead of table grants', () => {
+  const postconditions = read('supabase/deployment/production_customer_package_v1_postconditions.sql')
+  const probe = read('scripts/test-customer-package-v1-rls-postconditions.sh')
+  assert.doesNotMatch(postconditions, /has_table_privilege/i)
+  assert.match(postconditions, /c\.relrowsecurity/)
+  assert.match(postconditions, /pg_policy/)
+  for (const role of ['anon','authenticated','service_role']) assert.match(postconditions, new RegExp(`set local role ${role}`))
+  assert.match(probe, /create policy customer_package_v1_unsafe_anon/)
+  assert.match(probe, /disable row level security/)
+  assert.match(probe, /grant select on public\.pipeline_cutovers to anon, authenticated, service_role/)
+  assert.match(probe, /single-transaction/)
+})
