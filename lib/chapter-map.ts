@@ -61,10 +61,10 @@ export async function renderChapterMapDocx(rows: ChapterMapRow[], options: { boo
   return deterministicDocx(Buffer.from(await Packer.toBuffer(new Document({
     styles:{default:{document:{run:{font:BOOKLINGUA_CLEAN_BOOK_STYLE.bodyFont,size:BOOKLINGUA_CLEAN_BOOK_STYLE.bodySizeHalfPoints}}}},
     sections: [{properties:{page:{margin:BOOKLINGUA_CLEAN_BOOK_STYLE.pageMarginsTwips}},children: [
-      new Paragraph({children:[new ImageRun({data:readFileSync(path.join(process.cwd(),'public','logo-doc-hq.png')),transformation:{width:132,height:45},altText:{title:'BookLingua',description:'BookLingua logo',name:'BookLingua logo'}})],spacing:{after:260}}),
-      new Paragraph({ text: title, heading: HeadingLevel.TITLE }),
-      ...(options.language?[new Paragraph({children:[new TextRun({text:options.language,italics:true,color:'555555'})]})]:[]),
-      new Paragraph({text:'Use this Chapter Map to match chapters in your original manuscript with their translated equivalents when editing or uploading your translated book.',spacing:{after:240}}),
+      new Paragraph({alignment:AlignmentType.CENTER,children:[new ImageRun({data:readFileSync(path.join(process.cwd(),'public','logo-doc-hq.png')),transformation:{width:528,height:181},altText:{title:'BookLingua',description:'BookLingua logo',name:'BookLingua logo'}})],spacing:{after:260}}),
+      new Paragraph({ text: title, heading: HeadingLevel.TITLE, alignment:AlignmentType.CENTER }),
+      ...(options.language?[new Paragraph({alignment:AlignmentType.CENTER,children:[new TextRun({text:options.language,italics:true,color:'555555'})]})]:[]),
+      new Paragraph({text:'Use this Chapter Map to match chapters in your original manuscript with their translated equivalents when editing or uploading your translated book.',alignment:AlignmentType.CENTER,spacing:{after:240}}),
       new Table({ rows: tableRows, width:{size:9000,type:WidthType.DXA},columnWidths:[1600,3700,3700],layout:TableLayoutType.FIXED,borders:{top:{style:BorderStyle.SINGLE,size:2,color:'D1D5DB'},bottom:{style:BorderStyle.SINGLE,size:2,color:'D1D5DB'},left:{style:BorderStyle.SINGLE,size:2,color:'D1D5DB'},right:{style:BorderStyle.SINGLE,size:2,color:'D1D5DB'},insideHorizontal:{style:BorderStyle.SINGLE,size:1,color:'E5E7EB'},insideVertical:{style:BorderStyle.SINGLE,size:1,color:'E5E7EB'}} }),
     ]}]
   }))))

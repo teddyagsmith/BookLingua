@@ -20,8 +20,9 @@ const table=(rows:TableRow[],columnWidths:number[])=>new Table({rows,width:{size
 // resized only so each DOCX does not carry a multi-megabyte source image).
 const LOGO=readFileSync(path.join(process.cwd(),'public','logo-doc-hq.png'))
 // 35 mm wide at 96 px/in; height follows the cropped artwork's native ratio.
-const LOGO_WIDTH=132,LOGO_HEIGHT=Math.round(LOGO_WIDTH*370/1080)
-const brandLine=()=>new Paragraph({children:[new ImageRun({data:LOGO,transformation:{width:LOGO_WIDTH,height:LOGO_HEIGHT},altText:{title:'BookLingua',description:'BookLingua logo',name:'BookLingua logo'}})],spacing:{after:260}})
+const LOGO_WIDTH=528,LOGO_HEIGHT=Math.round(LOGO_WIDTH*370/1080)
+const brandLine=()=>new Paragraph({alignment:AlignmentType.CENTER,children:[new ImageRun({data:LOGO,transformation:{width:LOGO_WIDTH,height:LOGO_HEIGHT},altText:{title:'BookLingua',description:'BookLingua logo',name:'BookLingua logo'}})],spacing:{after:260}})
+const centeredHeading=(text:string,level:typeof HeadingLevel[keyof typeof HeadingLevel]=HeadingLevel.HEADING_1)=>new Paragraph({heading:level,alignment:AlignmentType.CENTER,keepNext:true,keepLines:true,children:[body(text,{bold:true,color:level===HeadingLevel.TITLE?DARK:PURPLE,size:level===HeadingLevel.TITLE?38:28})],spacing:{before:level===HeadingLevel.TITLE?0:280,after:140}})
 const footer=()=>new Footer({children:[new Paragraph({alignment:AlignmentType.CENTER,children:[body('BookLingua · Translate your book in hours, not months',{color:'6B7280',size:18}),body('   ·   ',{color:'9CA3AF',size:18}),new TextRun({children:[PageNumber.CURRENT],color:'6B7280',size:18})]})]})
 
 async function pack(children:(Paragraph|Table)[],withFooter=false):Promise<Buffer>{
@@ -72,12 +73,12 @@ export async function renderCustomerLaunchPackDocx(bytes:Buffer,bookTitle:string
   const priorities=launchPack.topOpportunities.slice(0,3)
   const bestHook=launchPack.marketingHooks[0]?.frenchPromotionalLine||launchPack.marketingHooks[0]?.hook||''
   const coverPanel=table([new TableRow({cantSplit:true,children:[cell([
-    ...(authorName?[paragraph(`Prepared for ${authorName}`,{bold:true,color:DARK,after:80})]:[]),
-    paragraph(`${launchPack.market} market · Research completed ${launchPack.research.completedAt}`,{color:GRAY,after:0}),
+    ...(authorName?[paragraph(`Prepared for ${authorName}`,{bold:true,color:DARK,after:80,alignment:AlignmentType.CENTER})]:[]),
+    paragraph(`${launchPack.market} market · Research completed ${launchPack.research.completedAt}`,{color:GRAY,after:0,alignment:AlignmentType.CENTER}),
   ],{fill:LAVENDER,width:9000})]})],[9000])
   return pack([
-    brandLine(),paragraph(`YOUR ${launchPack.language.toUpperCase()} LAUNCH PACK`,{bold:true,color:PURPLE,after:220}),heading(title,HeadingLevel.TITLE),paragraph(marketLine,{color:GRAY,after:220}),
-    table([new TableRow({cantSplit:true,children:[cell([paragraph(`Everything you need to position, list and launch your translated book in ${launchPack.market}.`,{bold:true,color:DARK,after:80}),paragraph('Market research, copy-ready listing assets and a practical 30-day launch plan.',{color:GRAY,after:0})],{fill:PALE,width:9000})]})],[9000]),paragraph('',{after:420}),coverPanel,
+    brandLine(),paragraph(`YOUR ${launchPack.language.toUpperCase()} LAUNCH PACK`,{bold:true,color:PURPLE,after:220,alignment:AlignmentType.CENTER}),centeredHeading(title,HeadingLevel.TITLE),paragraph(marketLine,{color:GRAY,after:220,alignment:AlignmentType.CENTER}),
+    table([new TableRow({cantSplit:true,children:[cell([paragraph(`Everything you need to position, list and launch your translated book in ${launchPack.market}.`,{bold:true,color:DARK,after:80,alignment:AlignmentType.CENTER}),paragraph('Market research, copy-ready listing assets and a practical 30-day launch plan.',{color:GRAY,after:0,alignment:AlignmentType.CENTER})],{fill:PALE,width:9000})]})],[9000]),paragraph('',{after:420}),coverPanel,
     pageBreak(),heading('Your Launch at a Glance',HeadingLevel.TITLE),paragraph('A focused plan you can understand in under two minutes.',{color:GRAY}),
     heading('If you only do three things'),...priorities.map(item=>bullet(`${item.opportunity}: ${authorCopy(item.recommendedAction)}`)),
     heading('Minimum viable launch'),...launchPack.launchPlan30Day.minimumViable.slice(0,7).map(item=>bullet(authorCopy(item))),
@@ -135,7 +136,7 @@ export async function renderCustomerTranslationNotesDocx(bytes:Buffer,bookTitle:
   const meaningful=lines.filter(Boolean)
   if(meaningful.length<2)throw new Error('Translation Notes are too sparse for customer delivery')
   const translatedTitle=extractAuthoritativeTranslatedTitle(bytes,bookTitle)||bookTitle
-  const children:(Paragraph|Table)[]=[brandLine(),heading('Translation Notes',HeadingLevel.TITLE),heading(translatedTitle,HeadingLevel.HEADING_1),paragraph(`${language} Translation`,{italics:true,color:GRAY,after:260})]
+  const children:(Paragraph|Table)[]=[brandLine(),centeredHeading('Translation Notes',HeadingLevel.TITLE),centeredHeading(translatedTitle,HeadingLevel.HEADING_1),paragraph(`${language} Translation`,{italics:true,color:GRAY,after:260,alignment:AlignmentType.CENTER})]
   let sawEntry=false,sectionSeen=false
   for(let index=0;index<meaningful.length;index++){
     const line=meaningful[index]
@@ -156,7 +157,7 @@ export async function renderCustomerTranslationNotesDocx(bytes:Buffer,bookTitle:
 export async function renderCustomerUploadGuideDocx():Promise<Buffer>{
   const section=(title:string,intro:string,items:string[])=>[heading(title),paragraph(intro),...items.map(bullet)]
   return pack([
-    brandLine(),paragraph('START HERE',{bold:true,color:PURPLE,after:180}),heading('How to Use Your Translations + Upload Guide',HeadingLevel.TITLE),paragraph('A practical guide to reviewing your BookLingua files and preparing your translated book for publishing.',{color:GRAY,after:300}),
+    brandLine(),paragraph('START HERE',{bold:true,color:PURPLE,after:180,alignment:AlignmentType.CENTER}),centeredHeading('How to Use Your Translations + Upload Guide',HeadingLevel.TITLE),paragraph('A practical guide to reviewing your BookLingua files and preparing your translated book for publishing.',{color:GRAY,after:300,alignment:AlignmentType.CENTER}),
     ...section('Start with these three steps','Your Final DOCX is the best place to begin because it is editable and contains the clean, reviewed translation.', ['1. Open the Final DOCX and read through it, making any preference edits you want.','2. Keep the Chapters document beside it so you can match each original chapter to its translated chapter.','3. Use the Final EPUB directly for ebook upload only after previewing it; rebuild from the DOCX if you want to change the design or structure.']),
     ...section('What every delivered file is for','Your package separates publishing files from review evidence and launch support.', ['Final DOCX — the clean, editable, reviewed manuscript; use it for reading, personal edits, print formatting, Atticus, Vellum, or another formatter.','Final EPUB — a ready-made ebook package; use it directly when its layout and navigation meet your needs.','Review DOCX — the editorial audit trail showing the initial translation and reviewed wording.','Chapters DOCX — the Chapter Map linking the source-book structure to the translated structure.','Notes DOCX — selected translation and editorial decisions, with explanations of tone, terminology, names, and localisation.','Launch Pack DOCX — market-ready description, keywords, categories, pricing, and English publishing guidance for the target market.','This guide — practical instructions for checking, formatting, and uploading the files.']),
     ...section('Review and edit the Final DOCX','Work on a copy so you always retain the delivered original. The Final DOCX already contains the accepted second-pass wording.', ['Turn on paragraph marks if you need to inspect spacing and breaks.','Use Find to check names, recurring terms, chapter titles, and any preference changes consistently.','Do not copy visible strike-through wording from the Review file into the Final DOCX; the Final already contains the reviewed choice.','Save a new version after your edits and keep the delivered file as a reference.']),
