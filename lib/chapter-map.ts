@@ -1,6 +1,5 @@
-import { AlignmentType, BorderStyle, Document, Footer, HeadingLevel, ImageRun, PageNumber, Packer, Paragraph, Table, TableCell, TableLayoutType, TableRow, TextRun, WidthType } from 'docx'
-import { readFileSync } from 'fs'
-import path from 'path'
+import { AlignmentType, BorderStyle, Document, Footer, HeadingLevel, PageNumber, Packer, Paragraph, Table, TableCell, TableLayoutType, TableRow, TextRun, WidthType } from 'docx'
+import { brandedDocumentHeader } from './branded-document-header'
 import { SemanticDocumentV2 } from './semantic-document'
 import { deterministicDocx } from './deterministic-docx'
 import { BOOKLINGUA_CLEAN_BOOK_STYLE } from './formatting-policy'
@@ -61,8 +60,7 @@ export async function renderChapterMapDocx(rows: ChapterMapRow[], options: { boo
   return deterministicDocx(Buffer.from(await Packer.toBuffer(new Document({
     styles:{default:{document:{run:{font:'Georgia',size:BOOKLINGUA_CLEAN_BOOK_STYLE.bodySizeHalfPoints}}}},
     sections: [{properties:{page:{margin:BOOKLINGUA_CLEAN_BOOK_STYLE.pageMarginsTwips}},footers:{default:new Footer({children:[new Paragraph({alignment:AlignmentType.CENTER,children:[new TextRun({text:'BookLingua · Translate your book in hours, not months · ',font:'Georgia',color:'6B7280',size:18}),new TextRun({children:[PageNumber.CURRENT],font:'Georgia',color:'6B7280',size:18})]})]})},children: [
-      new Paragraph({alignment:AlignmentType.CENTER,children:[new ImageRun({data:readFileSync(path.join(process.cwd(),'public','logo-doc-hq.png')),transformation:{width:144,height:Math.round(144*370/1080)},altText:{title:'BookLingua',description:'BookLingua logo',name:'BookLingua logo'}})],spacing:{after:260}}),
-      new Paragraph({alignment:AlignmentType.CENTER,children:[new TextRun({text:' ',size:4})],border:{bottom:{style:BorderStyle.SINGLE,size:8,color:'6D28D9',space:1}},spacing:{after:260},indent:{left:2700,right:2700}}),
+      ...brandedDocumentHeader(),
       new Paragraph({heading:HeadingLevel.TITLE,alignment:AlignmentType.CENTER,children:[new TextRun({text:title,font:'Georgia',bold:true,color:'312E81',size:38})]}),
       ...(options.language?[new Paragraph({alignment:AlignmentType.CENTER,children:[new TextRun({text:options.language,italics:true,color:'555555'})]})]:[]),
       new Paragraph({text:'Use this Chapter Map to match chapters in your original manuscript with their translated equivalents when editing or uploading your translated book.',alignment:AlignmentType.CENTER,spacing:{after:240}}),

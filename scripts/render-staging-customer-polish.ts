@@ -7,6 +7,10 @@ import { buildChapterMap, renderChapterMapDocx } from '../lib/chapter-map'
 async function main(){
 const root=process.argv[2]
 if(!root)throw new Error('Usage: tsx scripts/render-staging-customer-polish.ts <inspection-root>')
+const languageArg=process.argv.find(value=>value.startsWith('--language='))?.split('=')[1]
+const artifactArg=process.argv.find(value=>value.startsWith('--artifacts='))?.split('=')[1]
+const languages=languageArg?[languageArg]:['fr','de']
+const artifacts=new Set((artifactArg||'notes,launch_pack,chapter_map,guide').split(','))
 const authoritative=path.join(root,'authoritative'),bundle=path.join(root,'CUSTOMER-ARTIFACT-INSPECTION-BUNDLE')
 const records=JSON.parse(await readFile(path.join(authoritative,'semantic-documents.json'),'utf8')) as Array<{language:string|null;pass:string;document:any}>
 await mkdir(bundle,{recursive:true})
@@ -17,7 +21,8 @@ function evidence(document:any,pattern:RegExp,reason:string):TranslationNoteEntr
   return node?{source:short(node.sourceText),target:short(node.translatedText),reason}:null
 }
 
-for(const language of ['fr','de']){
+for(const language of languages){
+  if(!['fr','de'].includes(language))throw new Error(`Unsupported staging language: ${language}`)
   const pass1=records.find(item=>item.language===language&&item.pass==='pass1')!.document
   const pass2=records.find(item=>item.language===language&&item.pass==='pass2')!.document
   const titleNode=pass2.nodes.find((node:any)=>node.sourceText.trim()==='Bride of the Hollow King')
@@ -38,13 +43,13 @@ for(const language of ['fr','de']){
   const limit=language==='fr'?12:8
   const entries=[...existing,...broader].filter((entry,index,list)=>list.findIndex(candidate=>candidate.source===entry.source)===index).slice(0,limit)
   const notes:TranslationNotesV1={schemaVersion:'1.0',language:language==='fr'?'French':'German',approach:`The translation preserves the novel’s intimate gothic-romantasy voice, romantic tension, character relationships, and internally consistent fantasy world. These selected decisions are grounded in the completed source, translation brief, and two-pass translated text.`,sections:[{id:'selected-decisions',title:'Selected Translation & Editorial Decisions',entries}]}
-  await writeFile(path.join(bundle,`Bride of the Hollow King - Notes - ${language.toUpperCase()}.docx`),await renderCustomerTranslationNotesDocx(Buffer.from(renderTranslationNotes(notes)),'Bride of the Hollow King',notes.language))
+  if(artifacts.has('notes'))await writeFile(path.join(bundle,`Bride of the Hollow King - Notes - ${language.toUpperCase()}.docx`),await renderCustomerTranslationNotesDocx(Buffer.from(renderTranslationNotes(notes)),'Bride of the Hollow King',notes.language))
   const pack=await readFile(path.join(authoritative,`${language}-launch_pack.json`))
-  await writeFile(path.join(bundle,`Bride of the Hollow King - Launch Pack - ${language.toUpperCase()}.docx`),await renderCustomerLaunchPackDocx(pack,'Bride of the Hollow King',titleNode.translatedText,'T.S. Everly'))
-  await writeFile(path.join(bundle,`Bride of the Hollow King - Chapters - ${language.toUpperCase()}.docx`),await renderChapterMapDocx(buildChapterMap(pass2),{bookTitle:'Bride of the Hollow King',language:notes.language}))
+  if(artifacts.has('launch_pack'))await writeFile(path.join(bundle,`Bride of the Hollow King - Launch Pack - ${language.toUpperCase()}.docx`),await renderCustomerLaunchPackDocx(pack,'Bride of the Hollow King',titleNode.translatedText,'T.S. Everly'))
+  if(artifacts.has('chapter_map'))await writeFile(path.join(bundle,`Bride of the Hollow King - Chapters - ${language.toUpperCase()}.docx`),await renderChapterMapDocx(buildChapterMap(pass2),{bookTitle:'Bride of the Hollow King',language:notes.language}))
 }
 
-await writeFile(path.join(bundle,'BookLingua - How to Use Your Translations + Upload Guide.docx'),await renderCustomerUploadGuideDocx())
+if(artifacts.has('guide'))await writeFile(path.join(bundle,'BookLingua - How to Use Your Translations + Upload Guide.docx'),await renderCustomerUploadGuideDocx())
 console.log(JSON.stringify({bundle,notes:{fr:12,de:8},modelCalls:0,newBuilds:0},null,2))
 }
 

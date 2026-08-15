@@ -2,6 +2,8 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import AdmZip from 'adm-zip'
 import { renderCustomerLaunchPackDocx,renderCustomerTranslationNotesDocx,renderCustomerUploadGuideDocx } from '../lib/customer-delivery-docx'
+import { renderChapterMapDocx } from '../lib/chapter-map'
+import { BRANDED_DOCUMENT_LOGO_ASSET,BRANDED_DOCUMENT_LOGO_HEIGHT_PX,BRANDED_DOCUMENT_LOGO_INTRINSIC,BRANDED_DOCUMENT_LOGO_WIDTH_MM,BRANDED_DOCUMENT_LOGO_WIDTH_PX } from '../lib/branded-document-header'
 import { researchFields } from './launch-pack-fixture'
 
 function documentXml(bytes:Buffer):string{const zip:any=new AdmZip(bytes);return zip.readAsText('word/document.xml')}
@@ -35,4 +37,29 @@ test('customer guide is deterministic, renamed and structured as Start Here',asy
   const xml=documentXml(first)
   for(const expected of ['START HERE','How to Use Your Translations + Upload Guide','Start with these three steps','What every delivered file is for','Review and edit the Final DOCX','Understand the Review document','Use the Translation Notes','Use the Chapter Map in practice','Chapter 1 → Chapitre 1','Transfer into your existing formatted book','Practical Atticus workflow','Practical Vellum workflow','Use the Final EPUB or rebuild?','Final checks before upload','Basic KDP upload workflow','Need help'])assert.ok(xml.includes(expected),expected)
   assert.match(xml,/automated validation does not replace your final publishing review/i)
+})
+
+test('every branded support document uses the shared centred 55–65 mm aspect-safe logo header',async()=>{
+  const launchSource=Buffer.from(JSON.stringify({schemaVersion:'3.0',locale:'fr',language:'French',market:'France',amazonDomain:'amazon.fr',currency:'EUR',backendKeywords:Array.from({length:7},(_,i)=>`mot-clé ${i}`),adKeywords:Array.from({length:20},(_,i)=>`recherche ${i}`),categories:['Romantasy','Fantasy sombre','Romance fantastique'],pricingRecommendation:{ebook:'4,99 €',paperback:'14,99 €',reasoning:'Grounded.'},bookDescription:'Description française.',reviewStrategy:['Review'],kdpUploadChecklist:['Upload'],...researchFields}))
+  const documents=[
+    await renderCustomerLaunchPackDocx(launchSource,'Bride of the Hollow King',"L'Épouse du Roi Vide"),
+    await renderCustomerTranslationNotesDocx(Buffer.from("Translation Notes — fr\nGrounded decisions.\n\nRepresentative decisions\nBride of the Hollow King → L'Épouse du Roi Vide\nReason: Authoritative translated title.\nCaelan → Caelan\nReason: Proper name retained."),'Bride of the Hollow King','French'),
+    await renderCustomerUploadGuideDocx(),
+    await renderChapterMapDocx([{chapterId:'chapter-001',sourceChapterNumber:'1',sourceTitle:'Chapter 1',translatedChapterNumber:'1',translatedTitle:'Chapitre 1',status:'mapped'}],{bookTitle:'Bride of the Hollow King',language:'French'}),
+  ]
+  assert.equal(BRANDED_DOCUMENT_LOGO_ASSET,'public/logo-doc-safe.png')
+  assert.ok(BRANDED_DOCUMENT_LOGO_WIDTH_MM>=55&&BRANDED_DOCUMENT_LOGO_WIDTH_MM<=65)
+  assert.equal(BRANDED_DOCUMENT_LOGO_WIDTH_PX/BRANDED_DOCUMENT_LOGO_HEIGHT_PX,BRANDED_DOCUMENT_LOGO_INTRINSIC.width/BRANDED_DOCUMENT_LOGO_INTRINSIC.height)
+  for(const bytes of documents){
+    const zip:any=new AdmZip(bytes),xml=zip.readAsText('word/document.xml')
+    const logoParagraph=xml.match(/<w:p[\s\S]*?<w:drawing>[\s\S]*?<\/w:drawing>[\s\S]*?<\/w:p>/)?.[0]||''
+    assert.match(logoParagraph,/<w:jc w:val="center"\/>/)
+    const extent=logoParagraph.match(/<wp:extent cx="(\d+)" cy="(\d+)"\/>/)
+    assert.ok(extent)
+    assert.ok(Math.abs(Number(extent[1])/Number(extent[2])-BRANDED_DOCUMENT_LOGO_INTRINSIC.width/BRANDED_DOCUMENT_LOGO_INTRINSIC.height)<0.00001)
+    const media=zip.getEntries().find((entry:{entryName:string})=>entry.entryName.startsWith('word/media/image-'))?.getData()
+    assert.ok(media)
+    assert.equal(media.readUInt32BE(16),BRANDED_DOCUMENT_LOGO_INTRINSIC.width)
+    assert.equal(media.readUInt32BE(20),BRANDED_DOCUMENT_LOGO_INTRINSIC.height)
+  }
 })
