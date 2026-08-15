@@ -2,6 +2,7 @@
 
 import { useSearchParams } from 'next/navigation'
 import { Suspense } from 'react'
+import SiteFooter from '@/components/SiteFooter'
 
 function SuccessContent() {
   const searchParams = useSearchParams()
@@ -12,7 +13,7 @@ function SuccessContent() {
   const displayId = isFreeOrder ? orderId : sessionId?.slice(-12)
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-amber-50 via-rose-50 to-violet-50 flex items-center justify-center p-8">
+    <div className="flex-1 bg-gradient-to-br from-amber-50 via-rose-50 to-violet-50 flex items-center justify-center p-8">
       <div className="max-w-lg w-full">
         <div className="bg-white rounded-3xl shadow-xl p-8 text-center">
           <div className="w-24 h-24 mx-auto mb-6 rounded-full bg-gradient-to-br from-green-400 to-emerald-500 flex items-center justify-center shadow-xl">
@@ -82,12 +83,15 @@ function SuccessContent() {
 
 export default function SuccessPage() {
   return (
-    <Suspense fallback={
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="w-16 h-16 border-4 border-violet-200 border-t-violet-600 rounded-full animate-spin" />
-      </div>
-    }>
-      <SuccessContent />
-    </Suspense>
+    <div className="min-h-screen flex flex-col">
+      <Suspense fallback={
+        <div className="flex-1 flex items-center justify-center">
+          <div className="w-16 h-16 border-4 border-violet-200 border-t-violet-600 rounded-full animate-spin" />
+        </div>
+      }>
+        <SuccessContent />
+      </Suspense>
+      <SiteFooter />
+    </div>
   )
 }

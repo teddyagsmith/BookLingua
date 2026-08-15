@@ -19,6 +19,7 @@
  *   npx ts-node -P tsconfig.scripts.json scripts/gdoc-to-blog.ts
  *   npx ts-node -P tsconfig.scripts.json scripts/gdoc-to-blog.ts --dry-run
  *   npx ts-node -P tsconfig.scripts.json scripts/gdoc-to-blog.ts --slug my-custom-slug
+ *   npx ts-node -P tsconfig.scripts.json scripts/gdoc-to-blog.ts --category using-booklingua
  */
 
 import { google } from 'googleapis'
@@ -381,6 +382,7 @@ async function convertDocToMdx(
   auth: any,
   docId: string,
   slug: string,
+  category: 'translation-advice' | 'using-booklingua',
   dryRun: boolean
 ): Promise<string> {
   const res  = await docs.documents.get({ documentId: docId })
@@ -391,6 +393,8 @@ async function convertDocToMdx(
 
   // Extract the first TITLE-style paragraph as the article title
   let articleTitle = doc.title ?? slug
+  let titleParagraphIndex = -1
+  let titleSourceStyle = 'TITLE'
   for (const el of body) {
     if (!el.paragraph) continue
     const style = el.paragraph.paragraphStyle?.namedStyleType
@@ -398,6 +402,10 @@ async function convertDocToMdx(
       const t = runsToMarkdown(el.paragraph.elements ?? [], imageMap, { allowBold: false })
       if (t.trim()) {
         articleTitle = stripMarkdownBold(t)
+        titleSourceStyle = style
+        titleParagraphIndex = (body as docs_v1.Schema$StructuralElement[])
+          .filter(item => !!item.paragraph)
+          .findIndex(item => item.paragraph === el.paragraph)
         break
       }
     }
@@ -422,6 +430,10 @@ async function convertDocToMdx(
     const isHeadingStyle = style.startsWith('HEADING_') || style === 'TITLE'
     const isBullet = !!para.bullet
     const raw   = runsToMarkdown(para.elements ?? [], imageMap, { altText: articleTitle, allowBold: true })
+
+    // The page template renders the frontmatter title as the sole H1.
+    // Do not repeat the source title in the article body or table of contents.
+    if (i === titleParagraphIndex) continue
 
     if (!raw.trim()) {
       if (inBlockquote) { inBlockquote = false; lines.push('') }
@@ -472,29 +484,14 @@ async function convertDocToMdx(
       let tocLevel = 2
       let tocText = ''
 
-      switch (style) {
-        case 'TITLE':
-          break
-        case 'HEADING_1':
-          md = `## ${stripMarkdownBold(raw)}`
-          tocLevel = 2
-          tocText = stripMarkdownBold(raw)
-          break
-        case 'HEADING_2':
-          md = `### ${stripMarkdownBold(raw)}`
-          tocLevel = 3
-          tocText = stripMarkdownBold(raw)
-          break
-        case 'HEADING_3':
-          md = `#### ${stripMarkdownBold(raw)}`
-          tocLevel = 4
-          tocText = stripMarkdownBold(raw)
-          break
-        case 'HEADING_4':
-          md = `##### ${stripMarkdownBold(raw)}`
-          tocLevel = 5
-          tocText = stripMarkdownBold(raw)
-          break
+      if (style !== 'TITLE') {
+        const sourceLevel = Number(style.replace('HEADING_', ''))
+        // If the document uses Heading 1 for its title, Heading 2 is the
+        // article's top-level section and must become H2 on the web page.
+        const webLevel = Math.min(6, sourceLevel + (titleSourceStyle === 'HEADING_1' ? 0 : 1))
+        tocText = stripMarkdownBold(raw)
+        tocLevel = webLevel
+        md = `${'#'.repeat(webLevel)} ${tocText}`
       }
 
       if (md && tocText) {
@@ -560,13 +557,28 @@ async function convertDocToMdx(
 
   // Build frontmatter
   const date = new Date().toISOString().split('T')[0]
+  const descriptionSource = paragraphs
+    .filter((_, index) => index !== titleParagraphIndex)
+    .find(para => {
+      const style = para.paragraphStyle?.namedStyleType ?? 'NORMAL_TEXT'
+      return style === 'NORMAL_TEXT' && !para.bullet && runsToMarkdown(para.elements ?? [], imageMap, { allowBold: false }).trim().length >= 70
+    })
+  const description = descriptionSource
+    ? stripMarkdownBold(runsToMarkdown(descriptionSource.elements ?? [], imageMap, { allowBold: false }))
+        .replace(/\s+/g, ' ')
+        .replace(/"/g, '\\"')
+        .slice(0, 157)
+        .replace(/\s+\S*$/, '') + '…'
+    : `Discover how to choose the best translation market for your book and compare reader demand across major languages.`
+
   const frontmatter = [
     '---',
     `title: "${articleTitle.replace(/"/g, '\\"')}"`,
-    `description: ""`,
+    `description: "${description}"`,
     `date: "${date}"`,
     `author: "${DEFAULT_AUTHOR}"`,
     `slug: "${slug}"`,
+    `category: "${category}"`,
     '---',
     '',
   ].join('\n')
@@ -596,6 +608,11 @@ async function main() {
   const args    = process.argv.slice(2)
   const dryRun  = args.includes('--dry-run')
   const forceSlug = (() => { const i = args.indexOf('--slug'); return i !== -1 ? args[i+1] : null })()
+  const onlyDocId = (() => { const i = args.indexOf('--doc-id'); return i !== -1 ? args[i+1] : null })()
+  const categoryArg = (() => { const i = args.indexOf('--category'); return i !== -1 ? args[i+1] : 'translation-advice' })()
+  if (categoryArg !== 'translation-advice' && categoryArg !== 'using-booklingua') {
+    throw new Error('Invalid --category. Use "translation-advice" or "using-booklingua".')
+  }
 
   const { drive, docs, auth } = await getClients()
 
@@ -603,7 +620,8 @@ async function main() {
   const readyFolderId   = await getOrCreateFolder(drive, READY_FOLDER_NAME, parentFolderId)
   const publishedFolderId = await getOrCreateFolder(drive, DONE_FOLDER_NAME, parentFolderId)
 
-  const pending = await getDocsInFolder(drive, readyFolderId)
+  const allPending = await getDocsInFolder(drive, readyFolderId)
+  const pending = onlyDocId ? allPending.filter(file => file.id === onlyDocId) : allPending
 
   if (pending.length === 0) {
     console.log(`No documents found in "${READY_FOLDER_NAME}". Move a Google Doc into that folder and try again.`)
@@ -632,7 +650,7 @@ async function main() {
     console.log(`Processing: "${docName}" → slug: "${slug}"`)
 
     try {
-      await convertDocToMdx(docs, drive, auth, docId, slug, dryRun)
+      await convertDocToMdx(docs, drive, auth, docId, slug, categoryArg, dryRun)
 
       if (!dryRun) {
         await moveFile(drive, docId, readyFolderId, publishedFolderId)

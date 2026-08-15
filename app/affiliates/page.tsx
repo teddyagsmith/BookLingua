@@ -1,4 +1,5 @@
 import { Metadata } from 'next'
+import SiteFooter from '@/components/SiteFooter'
 
 export const metadata: Metadata = {
   title: 'Affiliate Program - BookLingua',
@@ -125,6 +126,7 @@ export default function AffiliatesPage() {
           </a>
         </div>
       </div>
+      <SiteFooter />
     </div>
   )
 }
