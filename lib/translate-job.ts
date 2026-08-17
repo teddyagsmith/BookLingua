@@ -20,6 +20,7 @@ import { BOOKLINGUA_MODEL_CONFIG } from './model-config'
 import { finalizeSemanticOrder } from './semantic-finalization'
 import { cachedLaunchPack, launchPackRequestIdentity } from './launch-pack-cache'
 import { recordModelTelemetry } from './model-telemetry'
+import { translateWithDeterministicJsonRecovery } from './semantic-model-recovery'
 
 const anthropic = new Anthropic({
   apiKey: process.env.ANTHROPIC_API_KEY,
@@ -336,28 +337,30 @@ export const translateBook = inngest.createFunction(
             title: order.book_title, brief, notes, buildId: deterministicSemanticBuildId(orderId,language,crypto.createHash('sha256').update(source).digest('hex'),brief.revision), allowReviewedStructure: order.semantic_structure_approved === true,
             launchPack, dualFormat: (order.upsells || []).includes('dual-format'),
             translate: async (batch, context) => {
-              let response: any
               const stage=context.pass===1?'translation':'editorial';const requestIdentity=`${orderId}:${language}:${stage}:${context.batchId}`
-              try{
-                response = await anthropic.messages.create({
-                  model: BOOKLINGUA_MODEL_CONFIG.translation, max_tokens: 8192,
-                  system: 'Return only valid JSON matching the supplied schema. Preserve every node id and order exactly. Translate all textual node values; never omit or add nodes.',
-                  messages: [{ role: 'user', content: `${renderTranslationBriefPrompt(context.brief)}\nPass ${context.pass}; target language ${context.language}.\n${JSON.stringify(batch)}` }],
-                })
-                const text = response.content.find((block:any) => block.type === 'text')
-                if (!text || text.type !== 'text') throw new Error('Semantic model returned no JSON text')
-                const parsed=JSON.parse(text.text.replace(/^```json\s*|\s*```$/g, ''))
-                await recordModelTelemetry(getSupabaseAdmin(),{orderId,language,stage,batchId:context.batchId,attempt:attempt+1,requestIdentity,
-                  provider:'anthropic',modelId:response.model,providerRequestId:response.id,success:true,inputTokens:response.usage.input_tokens,
-                  outputTokens:response.usage.output_tokens,cacheStatus:'write'})
-                return parsed
-              }catch(error){
-                await recordModelTelemetry(getSupabaseAdmin(),{orderId,language,stage,batchId:context.batchId,attempt:attempt+1,requestIdentity,
-                  provider:'anthropic',modelId:response?.model||BOOKLINGUA_MODEL_CONFIG.translation,providerRequestId:response?.id,success:false,
-                  inputTokens:response?.usage.input_tokens,outputTokens:response?.usage.output_tokens,cacheStatus:'miss',
-                  errorCode:error instanceof SyntaxError?'MODEL_JSON_INVALID':error instanceof Error?error.name:'MODEL_FAILURE'})
-                throw error
-              }
+              return translateWithDeterministicJsonRecovery(batch, requestIdentity, async (requestBatch, recovery) => {
+                let response: any
+                try{
+                  response = await anthropic.messages.create({
+                    model: BOOKLINGUA_MODEL_CONFIG.translation, max_tokens: 8192,
+                    system: 'Return only valid JSON matching the supplied schema. Preserve every node id and order exactly. Translate all textual node values; never omit or add nodes.',
+                    messages: [{ role: 'user', content: `${renderTranslationBriefPrompt(context.brief)}\nPass ${context.pass}; target language ${context.language}.\n${JSON.stringify(requestBatch)}` }],
+                  })
+                  const text = response.content.find((block:any) => block.type === 'text')
+                  if (!text || text.type !== 'text') throw new Error('Semantic model returned no JSON text')
+                  const parsed=JSON.parse(text.text.replace(/^```json\s*|\s*```$/g, ''))
+                  await recordModelTelemetry(getSupabaseAdmin(),{orderId,language,stage,batchId:context.batchId,attempt:attempt+1,requestIdentity:recovery.requestId,
+                    provider:'anthropic',modelId:response.model,providerRequestId:response.id,success:true,inputTokens:response.usage.input_tokens,
+                    outputTokens:response.usage.output_tokens,cacheStatus:'write'})
+                  return parsed
+                }catch(error){
+                  await recordModelTelemetry(getSupabaseAdmin(),{orderId,language,stage,batchId:context.batchId,attempt:attempt+1,requestIdentity:recovery.requestId,
+                    provider:'anthropic',modelId:response?.model||BOOKLINGUA_MODEL_CONFIG.translation,providerRequestId:response?.id,success:false,
+                    inputTokens:response?.usage.input_tokens,outputTokens:response?.usage.output_tokens,cacheStatus:'miss',
+                    errorCode:error instanceof SyntaxError?'MODEL_JSON_INVALID':error instanceof Error?error.name:'MODEL_FAILURE'})
+                  throw error
+                }
+              })
             },
           })
           return { buildId: result.buildId, status: result.manifest.status }
