@@ -19,7 +19,7 @@ import { LaunchPackV1, validateLaunchPack } from './launch-pack-schema'
 import { BOOKLINGUA_MODEL_CONFIG } from './model-config'
 import { assertCompleteBatchCoverage, createDeterministicSemanticBatches, semanticBatchIdentity } from './semantic-batching'
 import { recordModelTelemetry } from './model-telemetry'
-import { assertSourceAwareDuplicateParity } from './semantic-duplicate-validation'
+import { assertSourceAwareDuplicateParity, assertSourceAwareHeadingDuplicateParity } from './semantic-duplicate-validation'
 
 export type SemanticTranslator = (input: NodeTranslationInput, context: {
   pass: 1 | 2
@@ -75,7 +75,7 @@ async function persistSemantic(supabase: SupabaseClient, input: { orderId: strin
 }
 
 async function validationReport(supabase: SupabaseClient, input: { orderId: string; language: string; buildId: string; stage: string; passed: boolean; errors?: unknown[]; metrics?: object }): Promise<string> {
-  const validatorVersion = 'semantic-v2.1'
+  const validatorVersion = 'semantic-v2.2'
   const { data, error } = await supabase.from('validation_reports').insert({ order_id: input.orderId, language: input.language, build_id: input.buildId, stage: input.stage, validator_version: validatorVersion, passed: input.passed, errors: input.errors || [], metrics: input.metrics || {} }).select('id').single()
   if (error?.code === '23505') {
     const { data: existing, error: existingError } = await supabase.from('validation_reports').select('id,passed,errors,metrics').eq('order_id',input.orderId).eq('language',input.language).eq('build_id',input.buildId).eq('stage',input.stage).eq('validator_version',validatorVersion).single()
@@ -102,7 +102,7 @@ async function storeValidated(input: SemanticPipelineInput, buildId: string, typ
     sizeBytes: Number(existing.size_bytes), schemaVersion: existing.schema_version || undefined,
     validationStatus: existing.validation_status, validationReportId: existing.validation_report_id || undefined,
   }
-  const result = kind ? validateArtifact(buffer, kind, { semanticDuplicateParityValidated }) : { passed: buffer.length > 0, errors: buffer.length ? [] : [{ code: 'EMPTY', message: 'Artifact empty' }], metrics: {} }
+  const result = kind ? validateArtifact(buffer, kind, { semanticDuplicateParityValidated, semanticHeadingDuplicateParityValidated: semanticDuplicateParityValidated }) : { passed: buffer.length > 0, errors: buffer.length ? [] : [{ code: 'EMPTY', message: 'Artifact empty' }], metrics: {} }
   const reportId = await validationReport(input.supabase, { orderId: input.orderId, language: input.language, buildId, stage: `artifact:${type}`, passed: result.passed, errors: result.errors, metrics: result.metrics })
   if (!result.passed) throw new Error(`${type} validation failed: ${result.errors.map((error: any) => error.message).join('; ')}`)
   return storeImmutableArtifact({ supabase: input.supabase, orderId: input.orderId, language: input.language, buildId, type, filename, buffer, schemaVersion: 'semantic-v2', validationStatus: 'pass', validationReportId: reportId })
@@ -200,6 +200,7 @@ export async function runSemanticPipeline(input: SemanticPipelineInput) {
   if (buildError) throw new Error(`Build allocation failed: ${buildError.message}`)
   const pass1 = { ...sourceDocument, nodes: await runBatchedPass(input, sourceDocument.nodes, 1) }
   assertSourceAwareDuplicateParity(sourceDocument.nodes, pass1.nodes)
+  assertSourceAwareHeadingDuplicateParity(sourceDocument.nodes, pass1.nodes)
   await persistSemantic(input.supabase, { orderId: input.orderId, language: input.language, buildId, pass: 'pass1', document: pass1, eligibility: eligibility.status })
   const rawPass2 = { ...pass1, nodes: await runBatchedPass(input, pass1.nodes, 2) }
   const titleAuthority = resolveTitleAuthority({ document: rawPass2, checkoutTitle: input.title, source: input.source })
@@ -207,6 +208,7 @@ export async function runSemanticPipeline(input: SemanticPipelineInput) {
   const pass2 = titleResult.document
   await validationReport(input.supabase, { orderId: input.orderId, language: input.language, buildId, stage: 'title_authority', passed: true, metrics: { titleAuthority } })
   assertSourceAwareDuplicateParity(sourceDocument.nodes, pass2.nodes)
+  assertSourceAwareHeadingDuplicateParity(sourceDocument.nodes, pass2.nodes)
   await persistSemantic(input.supabase, { orderId: input.orderId, language: input.language, buildId, pass: 'pass2', document: pass2, eligibility: eligibility.status })
 
   // A completed build is immutable. Retries must reuse its validated package rather

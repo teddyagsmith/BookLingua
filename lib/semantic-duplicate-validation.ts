@@ -50,3 +50,19 @@ export function assertSourceAwareDuplicateParity(
     }
   }
 }
+
+export function assertSourceAwareHeadingDuplicateParity(
+  sourceNodes: SemanticNodeV2[],
+  translatedNodes: SemanticNodeV2[],
+): void {
+  if (sourceNodes.length !== translatedNodes.length) throw new Error('Heading duplicate parity requires complete semantic node coverage')
+  const headings=sourceNodes.map((node,index)=>node.type==='heading'?index:-1).filter(index=>index>=0)
+  for(let left=0;left<headings.length;left++)for(let right=left+1;right<headings.length;right++){
+    const a=headings[left],b=headings[right]
+    if(sourceNodes[a].id!==translatedNodes[a]?.id||sourceNodes[b].id!==translatedNodes[b]?.id)throw new Error('Heading duplicate parity requires exact semantic node identity')
+    const translatedA=normalize(translatedNodes[a].translatedText||''),translatedB=normalize(translatedNodes[b].translatedText||'')
+    if(translatedA&&translatedA===translatedB&&normalize(sourceNodes[a].sourceText)!==normalize(sourceNodes[b].sourceText)){
+      throw new Error(`Translation introduced duplicate heading at nodes ${sourceNodes[a].id}, ${sourceNodes[b].id}`)
+    }
+  }
+}

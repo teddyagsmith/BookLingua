@@ -1,7 +1,7 @@
 import AdmZip from 'adm-zip'
 import path from 'path'
 
-export const ARTIFACT_VALIDATOR_VERSION = '1.2'
+export const ARTIFACT_VALIDATOR_VERSION = '1.3'
 export type ArtifactKind = 'epub' | 'docx'
 export interface ArtifactValidationIssue { code: string; message: string; location?: string }
 export interface ArtifactValidationResult {
@@ -92,7 +92,7 @@ function docxParagraphs(xml: string): Array<{ text: string; style: string }> {
   }).filter(p => p.text)
 }
 
-export function validateArtifact(buffer: Buffer, kind: ArtifactKind, options: { semanticDuplicateParityValidated?: boolean } = {}): ArtifactValidationResult {
+export function validateArtifact(buffer: Buffer, kind: ArtifactKind, options: { semanticDuplicateParityValidated?: boolean; semanticHeadingDuplicateParityValidated?: boolean } = {}): ArtifactValidationResult {
   const errors: ArtifactValidationIssue[] = []; const warnings: ArtifactValidationIssue[] = []
   const headings: string[] = []; const navigationHeadings: string[] = []; const paragraphs: string[] = []; const allText: string[] = []
   let contentFiles = 0
@@ -151,7 +151,7 @@ export function validateArtifact(buffer: Buffer, kind: ArtifactKind, options: { 
   if (VISIBLE_MARKDOWN_HEADING.test(joined)) errors.push({ code: 'VISIBLE_MARKDOWN', message: 'Markdown heading syntax is visible' })
   const normalizedHeadings = headings.map(h => h.toLowerCase().replace(/\s+/g, ' ').trim())
   const duplicateHeading = normalizedHeadings.find((h, i) => normalizedHeadings.indexOf(h) !== i)
-  if (duplicateHeading) errors.push({ code: 'DUPLICATE_HEADING', message: `Duplicate major heading: ${duplicateHeading}` })
+  if (duplicateHeading && !options.semanticHeadingDuplicateParityValidated) errors.push({ code: 'DUPLICATE_HEADING', message: `Duplicate major heading: ${duplicateHeading}` })
   const numbers = chapterNumbers(headings); const duplicateNumber = numbers.find((n, i) => numbers.indexOf(n) !== i)
   if (duplicateNumber) errors.push({ code: 'DUPLICATE_CHAPTER_NUMBER', message: `Duplicate chapter number: ${duplicateNumber}` })
   if (!options.semanticDuplicateParityValidated) {
