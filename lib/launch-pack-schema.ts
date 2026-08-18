@@ -5,6 +5,8 @@ export const LAUNCH_MARKETS = {
   'es-419': { language: 'Spanish (Latin America)', market: 'Mexico and Spanish-speaking Latin America', amazonDomain: 'amazon.com.mx', currency: 'MXN/USD' },
   fr: { language: 'French', market: 'France', amazonDomain: 'amazon.fr', currency: 'EUR' },
   de: { language: 'German', market: 'Germany', amazonDomain: 'amazon.de', currency: 'EUR' },
+  it: { language: 'Italian', market: 'Italy', amazonDomain: 'amazon.it', currency: 'EUR' },
+  pl: { language: 'Polish', market: 'Poland', amazonDomain: 'amazon.pl', currency: 'PLN' },
   'pt-pt': { language: 'Portuguese (Portugal)', market: 'Portugal', amazonDomain: 'amazon.es', currency: 'EUR' },
   'pt-br': { language: 'Portuguese (Brazil)', market: 'Brazil', amazonDomain: 'amazon.com.br', currency: 'BRL' },
 } as const
