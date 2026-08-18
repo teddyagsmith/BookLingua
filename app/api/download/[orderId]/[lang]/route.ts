@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getSupabaseAdmin } from '@/lib/supabase'
-import { verifyDownloadToken, verifyCustomerArtifactToken } from '@/lib/download-token'
+import { verifyDownloadToken, verifyCustomerArtifactToken,verifyReviewArtifactToken } from '@/lib/download-token'
 import {
   Document,
   Paragraph,
@@ -648,11 +648,13 @@ export async function GET(
   const token = request.nextUrl.searchParams.get('token')
   const requestedArtifact = request.nextUrl.searchParams.get('artifact')
   const customerScope = request.nextUrl.searchParams.get('scope') === 'customer'
+  const reviewScope = request.nextUrl.searchParams.get('scope') === 'review'
   const type = (request.nextUrl.searchParams.get('type') || 'review') as 'review' | 'final' | 'pass1'
 
   const validToken = token && (customerScope
     ? Boolean(requestedArtifact) && CUSTOMER_ARTIFACT_TYPES.includes(requestedArtifact as any) && verifyCustomerArtifactToken(orderId,lang,requestedArtifact!,token)
-    : verifyDownloadToken(orderId, lang, token))
+    : reviewScope ? Boolean(requestedArtifact) && CUSTOMER_ARTIFACT_TYPES.includes(requestedArtifact as any) && verifyReviewArtifactToken(orderId,lang,requestedArtifact!,token)
+      : verifyDownloadToken(orderId, lang, token))
   if (!validToken) {
     return NextResponse.json({ error: 'Invalid or missing download token' }, { status: 403 })
   }
@@ -732,19 +734,19 @@ export async function GET(
         }catch{/* Preserve the validated original title rather than trust an unverified fallback. */}
         responseBuffer=await renderCustomerLaunchPackDocx(buffer,order.book_title,translatedTitle)
       }
-      if(customerScope&&artifactType==='translation_notes')responseBuffer=await renderCustomerTranslationNotesDocx(buffer,order.book_title,LANG_DISPLAY[lang]||lang)
-      const renderedDocx=artifactType==='launch_pack'||(customerScope&&artifactType==='translation_notes')
+      if((customerScope||reviewScope)&&artifactType==='translation_notes')responseBuffer=await renderCustomerTranslationNotesDocx(buffer,order.book_title,LANG_DISPLAY[lang]||lang)
+      const renderedDocx=artifactType==='launch_pack'||((customerScope||reviewScope)&&artifactType==='translation_notes')
       const contentType = renderedDocx ? 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
         : storedArtifact.filename.endsWith('.epub') ? 'application/epub+zip'
         : storedArtifact.filename.endsWith('.docx') ? 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
           : storedArtifact.filename.endsWith('.json') ? 'application/json'
             : storedArtifact.filename.endsWith('.csv') ? 'text/csv; charset=utf-8' : 'text/plain; charset=utf-8'
-      const responseFilename=(customerScope||artifactType==='launch_pack')
+      const responseFilename=(customerScope||reviewScope||artifactType==='launch_pack')
         ? customerArtifactFilename(order.book_title,lang,storedArtifact.manifestArtifact)
         : storedArtifact.filename.replace(/"/g, '')
       return new NextResponse(new Uint8Array(responseBuffer), { headers: {
         'Content-Type': contentType,
-        'Content-Disposition': (customerScope||artifactType==='launch_pack')
+        'Content-Disposition': (customerScope||reviewScope||artifactType==='launch_pack')
           ? customerContentDisposition(responseFilename)
           : `attachment; filename="${responseFilename}"`,
         'Cache-Control':'private, no-store',
