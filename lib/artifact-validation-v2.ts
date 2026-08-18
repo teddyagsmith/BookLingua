@@ -127,7 +127,19 @@ export function validateArtifact(buffer: Buffer, kind: ArtifactKind, options: { 
           for (const item of Array.from(manifest.values())) if (/\bnav\b/.test(item.properties)) { const p = safeZipPath(base, item.href); const e = p && entries.get(p); if (!e) errors.push({ code: 'EPUB_NAV', message: 'Declared navigation document is missing' }); else { const xml = e.getData().toString('utf8'); navigationHeadings.push(...navigationLabels(xml)); navSequences.push(chapterNumbers(navigationLabels(xml))) } }
           const ncx = Array.from(manifest.values()).find(item => /ncx/i.test(item.mediaType)); if (ncx) { const p = safeZipPath(base, ncx.href); const e = p && entries.get(p); if (!e) errors.push({ code: 'EPUB_NCX', message: 'Declared NCX navigation document is missing' }); else { const labels = navigationLabels(e.getData().toString('utf8')); navigationHeadings.push(...labels); navSequences.push(chapterNumbers(labels)) } }
           const contentSequence = chapterNumbers(headings)
-          for (const sequence of navSequences) if (sequence.length && sequence.join('|') !== contentSequence.join('|')) errors.push({ code: 'EPUB_NAV_MISMATCH', message: `Navigation chapter sequence [${sequence.join(', ')}] does not match content [${contentSequence.join(', ')}]` })
+          for (const sequence of navSequences) {
+            if (!sequence.length) continue
+            // Some valid publisher EPUBs encode chapter labels as styled
+            // paragraphs rather than h1-h6 elements. In that case there is no
+            // independent content-heading sequence to compare; EPUBCheck and
+            // spine integrity remain authoritative and we must not invent a
+            // mismatch against an empty set.
+            if (!contentSequence.length) {
+              warnings.push({ code: 'EPUB_NAV_CONTENT_UNVERIFIABLE', message: `Navigation contains ${sequence.length} numbered chapters but content uses no semantic heading elements` })
+              continue
+            }
+            if (sequence.join('|') !== contentSequence.join('|')) errors.push({ code: 'EPUB_NAV_MISMATCH', message: `Navigation chapter sequence [${sequence.join(', ')}] does not match content [${contentSequence.join(', ')}]` })
+          }
         }
       } else {
         const contentTypes = entries.get('[Content_Types].xml')?.getData().toString('utf8')
