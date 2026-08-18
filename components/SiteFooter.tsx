@@ -6,11 +6,11 @@ export default function SiteFooter({ note }: { note?: ReactNode }) {
     <footer className="bg-gray-900 text-gray-400 py-12">
       <div className="max-w-7xl mx-auto px-8 text-center">
         <Image
-          src="/logo.png"
+          src="/logo-dark-bg.png"
           alt="BookLingua"
-          width={200}
-          height={80}
-          className="mx-auto mb-5 h-auto w-44 brightness-0 invert"
+          width={358}
+          height={82}
+          className="mx-auto mb-5 h-auto w-52 max-w-full object-contain"
         />
         <p className="mb-2">
           Questions? Email us at{' '}
