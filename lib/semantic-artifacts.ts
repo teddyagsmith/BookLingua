@@ -200,7 +200,7 @@ function replaceTextPreservingInline(inner: string, translated: string, forcedPr
   return tokens.join('')
 }
 
-export function buildSemanticEpub(source: Buffer, document: SemanticDocumentV2, titleAuthority?: TitleAuthority): Buffer {
+export function buildSemanticEpub(source: Buffer, document: SemanticDocumentV2, titleAuthority?: TitleAuthority, inlineHeadingOverrides: Record<string,string> = {}): Buffer {
   assertTranslated(document)
   if (document.sourceFormat !== 'epub') throw new Error('EPUB output requires an EPUB semantic source')
   const zip: any = new AdmZip(source)
@@ -221,9 +221,12 @@ export function buildSemanticEpub(source: Buffer, document: SemanticDocumentV2, 
       if (!inner.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim()) return _full
       const node = nodes[index++]
       if (!node) throw new Error(`EPUB semantic block count changed: ${entryPath}`)
+      const explicitPrefix=Object.entries(inlineHeadingOverrides).filter(([sourceHeading])=>node.sourceText.startsWith(`${sourceHeading} `))
+        .sort(([a],[b])=>b.length-a.length)[0]
       const prefix=navigationHeadings.filter(candidate=>node.sourceText!==candidate.sourceText&&node.sourceText.startsWith(`${candidate.sourceText} `))
         .sort((a,b)=>b.sourceText.length-a.sourceText.length)[0]
-      return `<${tag}${attrs}>${replaceTextPreservingInline(inner,node.translatedText!,prefix?{source:prefix.sourceText,translated:prefix.translatedText!}:undefined)}</${tag}>`
+      const forcedPrefix=explicitPrefix?{source:explicitPrefix[0],translated:explicitPrefix[1]}:prefix?{source:prefix.sourceText,translated:prefix.translatedText!}:undefined
+      return `<${tag}${attrs}>${replaceTextPreservingInline(inner,node.translatedText!,forcedPrefix)}</${tag}>`
     })
     if (index !== nodes.length) throw new Error(`EPUB semantic block count changed: ${entryPath}`)
     zip.updateFile(entryPath, Buffer.from(xml))

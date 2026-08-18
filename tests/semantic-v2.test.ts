@@ -26,7 +26,7 @@ function inlineHeadingEpubFixture(): Buffer {
   zip.addFile('mimetype', Buffer.from('application/epub+zip'))
   zip.addFile('META-INF/container.xml', Buffer.from('<container><rootfiles><rootfile full-path="OEBPS/content.opf"/></rootfiles></container>'))
   zip.addFile('OEBPS/content.opf', Buffer.from('<package><manifest><item id="nav" href="toc.xhtml" media-type="application/xhtml+xml" properties="nav"/><item id="content" href="content.xhtml" media-type="application/xhtml+xml"/></manifest><spine><itemref idref="nav"/><itemref idref="content"/></spine></package>'))
-  zip.addFile('OEBPS/toc.xhtml', Buffer.from('<html><body><nav><ol><li>Handling Hazardous Ingredients</li><li>Step-by-Step Handling Guide</li><li>DIY Skincare Recipes</li></ol></nav></body></html>'))
+  zip.addFile('OEBPS/toc.xhtml', Buffer.from('<html><body><nav><ol><li>Handling Hazardous Ingredients</li><li>DIY Skincare Recipes</li></ol></nav></body></html>'))
   zip.addFile('OEBPS/content.xhtml', Buffer.from('<html><body><h1>The Castor Oil Bible</h1><h2><b>Handling Hazardous Ingredients</b> Working with ingredients is risky.</h2><h2><b>Step-by-Step Handling Guide</b> Working with hazardous ingredients takes care.</h2><h2><b>DIY Skincare Recipes</b> Making your own products gives control.</h2><h3><b>Special</b>Cases:</h3></body></html>'))
   return zip.toBuffer()
 }
@@ -123,7 +123,9 @@ test('EPUB rebuild pins translated navigation headings to inline heading boundar
     ['Special Cases:', 'Besondere Fälle:'],
   ])
   document.nodes.forEach(node => { node.translatedText = translations.get(node.sourceText) || `DE ${node.sourceText}` })
-  const output: any = new AdmZip(buildSemanticEpub(source, document))
+  const output: any = new AdmZip(buildSemanticEpub(source, document, undefined, {
+    'Step-by-Step Handling Guide': 'Schritt-für-Schritt-Anleitung zum sicheren Umgang',
+  }))
   const xml = output.getEntry('OEBPS/content.xhtml')!.getData().toString()
   assert.match(xml, /<b>Umgang mit gefährlichen Inhaltsstoffen<\/b> Der Umgang mit Zutaten ist riskant\./)
   assert.match(xml, /<b>Schritt-für-Schritt-Anleitung zum sicheren Umgang<\/b> Die Arbeit mit gefährlichen Zutaten erfordert Sorgfalt\./)
@@ -171,7 +173,6 @@ test('EPUB chapter map falls back to translated navigation when content has one 
   const document = parseSemanticEpub(inlineHeadingEpubFixture(), 'navigation-map-hash')
   const translated = new Map([
     ['Handling Hazardous Ingredients', 'Umgang mit gefährlichen Inhaltsstoffen'],
-    ['Step-by-Step Handling Guide', 'Schritt-für-Schritt-Anleitung zum sicheren Umgang'],
     ['DIY Skincare Recipes', 'DIY-Hautpflegerezepte'],
   ])
   document.nodes.forEach(node => { node.translatedText = translated.get(node.sourceText) || `DE ${node.sourceText}` })

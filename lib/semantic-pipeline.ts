@@ -49,6 +49,7 @@ export interface SemanticPipelineInput {
   editorialModel?: string
   maxBatchOutputWords?: number
   maxBatchConcurrency?: number
+  inlineHeadingOverrides?: Record<string,string>
 }
 
 export function deterministicSemanticBuildId(orderId: string, language: string, sourceHash: string, briefRevision: number): string {
@@ -224,7 +225,7 @@ export async function runSemanticPipeline(input: SemanticPipelineInput) {
   await storeValidated(input, buildId, 'translation_brief', 'translation-brief.json', Buffer.from(JSON.stringify(input.brief, null, 2)))
   await storeValidated(input, buildId, 'pass1_docx', `${input.title} - ${input.language} - Pass 1.docx`, await buildSemanticDocx(pass1, titleAuthority.effectiveValue, 'pass1'), 'docx', true)
   await storeValidated(input, buildId, 'review_docx', `${input.title} - ${input.language} - Review.docx`, await buildSemanticReviewDocx(pass1, pass2, titleAuthority.effectiveValue), 'docx', true)
-  if (input.sourceFormat === 'epub' || input.dualFormat) await storeValidated(input, buildId, 'final_epub', `${input.title} - ${input.language} - Final.epub`, input.sourceFormat === 'epub' ? buildSemanticEpub(input.source, pass2, titleAuthority) : buildSemanticEpubFromDocument(pass2, titleAuthority.effectiveValue), 'epub', true)
+  if (input.sourceFormat === 'epub' || input.dualFormat) await storeValidated(input, buildId, 'final_epub', `${input.title} - ${input.language} - Final.epub`, input.sourceFormat === 'epub' ? buildSemanticEpub(input.source, pass2, titleAuthority, input.inlineHeadingOverrides) : buildSemanticEpubFromDocument(pass2, titleAuthority.effectiveValue), 'epub', true)
   if (input.sourceFormat !== 'epub' || input.dualFormat) await storeValidated(input, buildId, 'final_docx', `${input.title} - ${input.language} - Final.docx`, await buildFinalSemanticDocx(input.source, pass2, titleAuthority.effectiveValue), 'docx', true)
   const map = buildChapterMap(pass2)
   if (map.some(row => row.status !== 'mapped')) throw new Error('Chapter map is incomplete')
