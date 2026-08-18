@@ -17,6 +17,7 @@ type Order = {
   created_at: string
   completed_at: string | null
   upsells: string[] | null
+  reader_panel_requests?: Array<{language:string;build_id:string;state:string;sample_filename:string;sample_word_count:number;email_state:string;requested_at:string|null;verdict_notes:string|null}>
 }
 
 type AbandonedUpload = {
@@ -56,6 +57,10 @@ const STATUS_COLORS: Record<string, string> = {
   qa_blocked: 'bg-red-200 text-red-950',
   gate_failed: 'bg-red-200 text-red-950',
   ready_for_review: 'bg-emerald-100 text-emerald-900',
+  reader_review_pending: 'bg-amber-100 text-amber-900',
+  reader_review_pass: 'bg-emerald-100 text-emerald-900',
+  reader_review_pass_with_notes: 'bg-emerald-100 text-emerald-900',
+  reader_review_fail: 'bg-red-200 text-red-950',
   delivery_pending: 'bg-blue-100 text-blue-900',
 }
 
@@ -65,6 +70,10 @@ const STATUS_LABELS: Record<string, string> = {
   gate_failed: 'Failed',
   qa_blocked: 'Failed',
   ready_for_review: 'Ready for review',
+  reader_review_pending: 'Awaiting reader feedback',
+  reader_review_pass: 'Reader passed',
+  reader_review_pass_with_notes: 'Reader passed with notes',
+  reader_review_fail: 'Reader failed',
   delivery_pending: 'Approved / sending',
   completed: 'Approved / delivered',
 }
@@ -161,6 +170,20 @@ export default function AdminPage() {
       setActionLoading(null)
     }
   }
+
+  const handleReaderVerdict = async (order:Order,row:NonNullable<Order['reader_panel_requests']>[number],verdict:'reader_review_pass'|'reader_review_pass_with_notes'|'reader_review_fail')=>{
+    const notes=verdict==='reader_review_pass'?'':window.prompt(verdict==='reader_review_fail'?'Why did this fail?':'Notes for Teddy’s decision:','')
+    if(notes===null)return
+    if(!window.confirm(`Record ${verdict.replaceAll('_',' ')} for ${LANG_NAMES[row.language]||row.language.toUpperCase()}? This is bound to the current build.`))return
+    setActionLoading(order.id)
+    try{
+      const res=await fetch(`/api/admin/orders/${order.id}/reader-panel`,{method:'POST',headers:{'x-admin-password':password,'content-type':'application/json'},body:JSON.stringify({language:row.language,buildId:row.build_id,verdict,notes})})
+      const data=await res.json();if(!res.ok)throw new Error(data.error||'Verdict failed')
+      setActionMsg(m=>({...m,[order.id]:`Reader verdict recorded: ${verdict.replace('reader_review_','').replaceAll('_',' ')}`}));await fetchData(password)
+    }catch(error){setActionMsg(m=>({...m,[order.id]:`❌ ${error instanceof Error?error.message:'Request failed'}`}))}finally{setActionLoading(null)}
+  }
+
+  const readerPanelControls=(order:Order)=>order.reader_panel_requests?.length?<div className="mt-2 space-y-2">{order.reader_panel_requests.map(row=><div key={`${row.language}-${row.build_id}`} className="rounded-lg border border-amber-200 bg-amber-50 p-2 text-xs"><div className="font-medium">{LANG_NAMES[row.language]||row.language.toUpperCase()} · {row.sample_word_count?.toLocaleString()} words · email {row.email_state}</div><div className="mt-1">{row.state.replaceAll('_',' ')}</div>{!['reader_review_pass','reader_review_pass_with_notes'].includes(row.state)&&<div className="mt-2 flex flex-wrap gap-1"><button onClick={()=>handleReaderVerdict(order,row,'reader_review_pass')} className="rounded bg-green-600 px-2 py-1 text-white">Pass</button><button onClick={()=>handleReaderVerdict(order,row,'reader_review_pass_with_notes')} className="rounded bg-amber-600 px-2 py-1 text-white">Pass with notes</button><button onClick={()=>handleReaderVerdict(order,row,'reader_review_fail')} className="rounded bg-red-600 px-2 py-1 text-white">Fail</button></div>}</div>)}</div>:null
 
   const fetchData = useCallback(async (pw: string) => {
     setLoading(true)
@@ -526,6 +549,7 @@ export default function AdminPage() {
                         {inspectionLinks[o.id]?.length > 0 && <div className="mt-2 flex flex-wrap gap-2">
                           {inspectionLinks[o.id].map(link => <a key={`${link.language}-${link.label}`} href={link.url} target="_blank" rel="noreferrer" className="text-xs text-violet-700 underline">{link.language}: {link.label}</a>)}
                         </div>}
+                        {readerPanelControls(o)}
                       </td>
                     </tr>
                   )}
@@ -603,6 +627,7 @@ export default function AdminPage() {
                     {inspectionLinks[o.id]?.length > 0 && <div className="mt-2 flex flex-wrap gap-2">
                       {inspectionLinks[o.id].map(link => <a key={`${link.language}-${link.label}`} href={link.url} target="_blank" rel="noreferrer" className="text-xs text-violet-700 underline">{link.language}: {link.label}</a>)}
                     </div>}
+                    {readerPanelControls(o)}
                   </div>
                 )}
               </div>

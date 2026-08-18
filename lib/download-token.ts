@@ -88,3 +88,5 @@ export function signCustomerArtifactToken(orderId:string,lang:string,artifact:st
 export function verifyCustomerArtifactToken(orderId:string,lang:string,artifact:string,token:string):boolean{return verifyScopedToken(token,signCustomerArtifactToken(orderId,lang,artifact))}
 export function buildCustomerPortalUrl(orderId:string,origin:string):string{return `${origin}/download/${orderId}?token=${signCustomerPortalToken(orderId)}`}
 export function buildCustomerArtifactDownloadUrl(orderId:string,lang:string,artifact:string,origin:string):string{return `${origin}/api/download/${orderId}/${lang}?scope=customer&artifact=${encodeURIComponent(artifact)}&token=${signCustomerArtifactToken(orderId,lang,artifact)}`}
+export function signReaderPanelToken(requestIdentity:string):string{return scopedToken(`reader-panel:${requestIdentity}`)}
+export function verifyReaderPanelToken(requestIdentity:string,token:string):boolean{return verifyScopedToken(token,signReaderPanelToken(requestIdentity))}
