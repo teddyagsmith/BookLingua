@@ -174,6 +174,11 @@ test('real semantic job wires Launch Pack and dual-format entitlements', () => {
   assert.match(job,/toCanonicalLaunchPack/); assert.match(job,/launchPack, dualFormat:/); assert.match(pipeline,/buildSemanticEpubFromDocument/)
 })
 
+test('translation runs are serialized per paid order before any model work', () => {
+  const job=fs.readFileSync(path.join(process.cwd(),'lib/translate-job.ts'),'utf8')
+  assert.match(job,/concurrency:\s*\{\s*limit:\s*1,\s*key:\s*'event\.data\.orderId'\s*\}/)
+})
+
 test('completed semantic retry checks authoritative package before any model call', () => {
   const job = fs.readFileSync(path.join(process.cwd(), 'lib/translate-job.ts'), 'utf8')
   const completedLookup = job.indexOf(".eq('status', 'pass').maybeSingle()")

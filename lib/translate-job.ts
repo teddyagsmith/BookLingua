@@ -203,6 +203,10 @@ export const translateBook = inngest.createFunction(
   {
     id: 'translate-book',
     retries: 3,
+    // Never allow two runs for the same paid order to execute model steps at
+    // once. Manual retriggers and automatic retries must queue behind the
+    // authoritative run so they can reuse its immutable batch cache.
+    concurrency: { limit: 1, key: 'event.data.orderId' },
     onFailure: async ({ event, error }) => {
       const originalEvent = event.data.event
       const orderId = originalEvent.data.orderId as string | undefined
