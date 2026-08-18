@@ -155,11 +155,13 @@ test('hardened external delivery is fail-closed and cannot be enabled by truthy 
   assert.match(approve, /delivery_events/)
 })
 
-test('hardened downloads require approval and accept the delivery-pending state', () => {
+test('hardened downloads allow internal review while customer delivery remains approval-gated', () => {
   const download = fs.readFileSync(path.join(process.cwd(), 'app/api/download/[orderId]/[lang]/route.ts'), 'utf8')
-  assert.match(download, /\['completed', 'pending_review', 'ready_for_review', 'delivery_pending'\]/)
+  assert.match(download, /\['completed', 'pending_review', 'ready_for_review', 'reader_review_pending', 'delivery_pending'\]/)
   assert.match(download, /order\.status === 'delivery_pending'/)
   assert.match(download, /order\.status === 'ready_for_review'/)
+  assert.match(download, /order\.status === 'reader_review_pending'/)
+  assert.match(download, /customerScope && !\['completed','delivery_pending'\]\.includes\(order\.status\)/)
 })
 
 test('hardened email paths use deterministic provider idempotency keys', () => {
