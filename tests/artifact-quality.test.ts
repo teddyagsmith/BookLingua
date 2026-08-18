@@ -7,6 +7,7 @@ import { assessSourceFormatting } from '../lib/formatting-policy'
 import { buildFinalSemanticDocx, buildSemanticDocxPreservingSource, buildSemanticEpub, buildSemanticReviewDocx, wordLevelDiff } from '../lib/semantic-artifacts'
 import { deriveEditorialTranslationNotes, validateTranslationNotes } from '../lib/translation-notes'
 import { parseSemanticDocx, parseSemanticTxt } from '../lib/semantic-parser'
+import { inferHeadingsFromContents } from '../lib/extract-segments'
 
 function document(nodes: Array<{ sourceText: string; translatedText: string }>,sourceFormat:'epub'|'docx'|'txt'='epub'): any {
   return { schemaVersion: '2.0', sourceHash: 'source', sourceFormat, parserConfidence: 1, nodes: nodes.map((node,index)=>({ id:`node-${index}`, chapterId:'chapter-1', type:index?'paragraph':'heading', headingLevel:index?null:1, sourceChapterNumber:null, order:index, sourceLocation:`OEBPS/book.xhtml:block:${index}`,...node })) }
@@ -100,6 +101,21 @@ test('well-structured DOCX retains its source presentation while weak text uses 
   assert.match(xml,/663399/);assert.match(xml,/w:i/);assert.match(xml,/Chapitre/)
   const weak=parseSemanticTxt('Plain body only.','txt-source');weak.nodes[0].translatedText='Corps simple.'
   assert.ok((await buildFinalSemanticDocx(Buffer.from('Plain body only.'),weak,'Simple')).length>0)
+})
+
+test('flattened DOCX contents recover only exact later body headings',()=>{
+  const paragraph=(id:number,text:string):any=>({id,type:'paragraph',level:0,text})
+  const input=[paragraph(0,'Contents'),paragraph(1,'Part One ........ 1'),paragraph(2,'Healthy Mouth .... 3'),paragraph(3,'Daily Care .... 7'),paragraph(4,'Body introduction.'),paragraph(5,'Part One'),paragraph(6,'Healthy Mouth'),paragraph(7,'Daily Care'),paragraph(8,'Long body text.')]
+  const recovered=inferHeadingsFromContents(input)
+  assert.equal(recovered[1].type,'paragraph');assert.equal(recovered[2].type,'paragraph')
+  assert.deepEqual(recovered.slice(5,8).map(item=>[item.type,item.level]),[['heading',1],['heading',2],['heading',2]])
+})
+
+test('source-preserving DOCX applies recovered semantic heading styles',async()=>{
+  const source=Buffer.from(await Packer.toBuffer(new Document({sections:[{children:[new Paragraph('Recovered chapter'),new Paragraph('Body text.')]}]})))
+  const parsed=await parseSemanticDocx(source,'recovered-source');parsed.nodes[0].type='heading';parsed.nodes[0].headingLevel=1;parsed.nodes.forEach(node=>{node.translatedText=node.sourceText})
+  const zip:any=new AdmZip(await buildSemanticDocxPreservingSource(source,parsed)),xml=zip.getEntry('word/document.xml')!.getData().toString('utf8')
+  assert.match(xml,/w:pStyle w:val="Heading1"/)
 })
 
 test('translation notes are derived from real editorial changes and remain schema-valid', () => {

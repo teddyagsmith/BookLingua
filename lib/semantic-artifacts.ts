@@ -132,6 +132,16 @@ function replaceDocxParagraphText(inner: string, translated: string): string {
   })
 }
 
+function applySemanticParagraphStyle(inner:string,node:SemanticNodeV2):string{
+  if(node.type!=='heading')return inner
+  const style=`Heading${Math.max(1,Math.min(3,node.headingLevel||1))}`
+  if(/<w:pPr\b[^>]*>/.test(inner)){
+    if(/<w:pStyle\b[^>]*\/?\s*>/.test(inner))return inner.replace(/<w:pStyle\b[^>]*\/?\s*>/,`<w:pStyle w:val="${style}"/>`)
+    return inner.replace(/<w:pPr\b([^>]*)>/,`<w:pPr$1><w:pStyle w:val="${style}"/>`)
+  }
+  return `<w:pPr><w:pStyle w:val="${style}"/></w:pPr>${inner}`
+}
+
 export async function buildSemanticDocxPreservingSource(source:Buffer,document:SemanticDocumentV2):Promise<Buffer>{
   assertTranslated(document)
   if(document.sourceFormat!=='docx')throw new Error('Source-preserving DOCX output requires a DOCX semantic source')
@@ -144,7 +154,7 @@ export async function buildSemanticDocxPreservingSource(source:Buffer,document:S
     const node=document.nodes[nodeIndex]
     if(!node||normalize(node.sourceText)!==sourceText)throw new Error(`DOCX source presentation does not align at semantic node ${nodeIndex+1}`)
     nodeIndex++
-    return `<w:p${attrs}>${replaceDocxParagraphText(inner,node.translatedText!)}</w:p>`
+    return `<w:p${attrs}>${applySemanticParagraphStyle(replaceDocxParagraphText(inner,node.translatedText!),node)}</w:p>`
   })
   if(nodeIndex!==document.nodes.length)throw new Error('DOCX source presentation has incomplete semantic coverage')
   zip.updateFile('word/document.xml',Buffer.from(xml))

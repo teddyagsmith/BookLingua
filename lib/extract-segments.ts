@@ -146,6 +146,37 @@ function sanitizePagesExport(segments: Segment[]): Segment[] {
   })
 }
 
+function tocKey(value: string): string {
+  return value.normalize('NFKC').toLowerCase()
+    .replace(/[.…·_]{2,}\s*\d*\s*$/, '')
+    .replace(/\s+\d+\s*$/, '')
+    .replace(/[^a-z0-9À-ž]+/gi, ' ').replace(/\s+/g, ' ').trim()
+}
+
+// Google Docs/Pages conversions often flatten every paragraph to "Default"
+// while leaving a readable contents list. Recover only headings that have an
+// exact later body match; the contents entries themselves remain paragraphs.
+export function inferHeadingsFromContents(segments: Segment[]): Segment[] {
+  const contentsIndex = segments.findIndex(segment => /^(contents|table of contents)$/i.test(segment.text.trim()))
+  if (contentsIndex < 0) return segments
+  const candidates = new Map<string, { text: string; level: number; bodyIndex: number }>()
+  const scanEnd = Math.min(segments.length, contentsIndex + 220)
+  for (let index = contentsIndex + 1; index < scanEnd; index++) {
+    const text = segments[index].text.trim(), key = tocKey(text)
+    if (key.length < 3 || key.length > 120 || text.split(/\s+/).length > 18) continue
+    const later = segments.findIndex((segment, candidateIndex) => candidateIndex > index + 2 && tocKey(segment.text) === key)
+    if (later < 0) continue
+    candidates.set(key, { text, level: /^(part|section)\b/i.test(text) ? 1 : 2, bodyIndex: later })
+  }
+  if (candidates.size < 3) return segments
+  const firstBodyMatch = Math.min(...Array.from(candidates.values()).map(candidate => candidate.bodyIndex))
+  return segments.map((segment, index) => {
+    if (index < firstBodyMatch || segment.type === 'heading') return segment
+    const candidate = candidates.get(tocKey(segment.text))
+    return candidate && index >= candidate.bodyIndex ? { ...segment, type: 'heading', level: candidate.level } : segment
+  })
+}
+
 export interface ExtractionResult {
   segments: Segment[]
   quality: QualityReport
@@ -228,8 +259,9 @@ export async function extractDocxSegments(buffer: Buffer): Promise<ExtractionRes
   const headingCount = segments.filter(s => s.type === 'heading').length
   console.log(`[extractDocxSegments] Extracted ${segments.length} segments (${headingCount} headings)`)
 
-  const quality = assessQuality(segments)
-  return { segments: sanitizePagesExport(segments), quality }
+  const inferred = inferHeadingsFromContents(sanitizePagesExport(segments))
+  const quality = assessQuality(inferred)
+  return { segments: inferred, quality }
 }
 
 // ─── TXT extractor ───────────────────────────────────────────────────────────
