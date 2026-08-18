@@ -50,6 +50,19 @@ test('Launch Pack captures successful and failed attempt metadata', async () => 
   assert.equal(records[1].attempt, 3); assert.equal(records[1].success, false); assert.equal(records[1].modelId, 'claude-opus-5')
 })
 
+test('Launch Pack generation supports an identity-bound model fallback', async () => {
+  let requestedModel = ''
+  await generateLaunchStrategy({ bookTitle: 'Synthetic', authorName: 'Author', genre: 'fantasy', bookDescription: 'Synthetic', targetLanguage: 'Portuguese', targetMarket: 'Portugal' }, {
+    modelId: 'claude-sonnet-5',
+    requestId: 'order:pt-pt:launch-pack:fallback',
+    createMessage: async params => {
+      requestedModel = params.model
+      return { id: 'msg-fallback', model: params.model, usage: { input_tokens: 1, output_tokens: 1 }, content: [{ type: 'text', text: json }] } as any
+    },
+  })
+  assert.equal(requestedModel, 'claude-sonnet-5')
+})
+
 test('validated Launch Pack is generated once and reused on whole-job retry', async () => {
   const rows:any[]=[]
   const db:any={from(){let filters:any={};const chain:any={select:()=>chain,eq:(k:string,v:any)=>{filters[k]=v;return chain},maybeSingle:async()=>({data:rows.find(r=>Object.entries(filters).every(([k,v])=>r[k]===v))||null,error:null}),insert:async(row:any)=>{rows.push(row);return{error:null}}};return chain}}

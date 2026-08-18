@@ -92,6 +92,7 @@ export async function generateLaunchStrategy(
   execution: {
     attempt?: number
     requestId?: string
+    modelId?: string
     onMetadata?: (metadata: LaunchPackExecutionMetadata) => Promise<void> | void
     createMessage?: (params: MessageCreateParamsNonStreaming) => Promise<AnthropicMessage>
   } = {},
@@ -101,7 +102,7 @@ export async function generateLaunchStrategy(
   let response: AnthropicMessage | undefined
   try {
   response = await (execution.createMessage || ((params) => anthropic.messages.create(params)))({
-    model: BOOKLINGUA_MODEL_CONFIG.launchPack,
+    model: execution.modelId || BOOKLINGUA_MODEL_CONFIG.launchPack,
     // Opus may spend part of this budget on thinking blocks before emitting the
     // canonical JSON text block. Complex non-fiction packs can otherwise reach
     // the response ceiling before the closing JSON object is emitted.

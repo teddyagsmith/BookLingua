@@ -304,6 +304,9 @@ export const translateBook = inngest.createFunction(
           }
           let launchPack: Buffer | undefined
           if ((order.upsells || []).includes('launch-pack')) {
+            const launchPackModel = String(order.special_instructions || '').includes('[LAUNCH_PACK_SONNET_FALLBACK]')
+              ? BOOKLINGUA_MODEL_CONFIG.translation
+              : BOOKLINGUA_MODEL_CONFIG.launchPack
             const market = launchMarket(language)
             const sourceFingerprint=crypto.createHash('sha256').update(source).digest('hex')
             const buildId=deterministicSemanticBuildId(orderId,language,sourceFingerprint,brief.revision)
@@ -311,12 +314,13 @@ export const translateBook = inngest.createFunction(
             const cached=await cachedLaunchPack({supabase:getSupabaseAdmin(),identity:{
               orderId,language,targetLanguage:market.language,targetMarket:market.market,sourceFingerprint,buildId,
               briefRevision:brief.revision,briefSchemaVersion:brief.schemaVersion,briefFingerprint:translationBriefFingerprint(brief),bookTitle:order.book_title,
-              authorName:order.author_name,genre:order.genre,description,modelId:BOOKLINGUA_MODEL_CONFIG.launchPack,
+              authorName:order.author_name,genre:order.genre,description,modelId:launchPackModel,
               schemaVersion:LAUNCH_PACK_SCHEMA_VERSION,entitled:true,researchFingerprint:'launch-pack-research-contract-v3',
             },generate:async identity=>{
               const strategy = await generateLaunchStrategy({ bookTitle: order.book_title, authorName: order.author_name, genre: order.genre, bookDescription: fileContent.slice(0, 2500), targetLanguage: market.language, targetMarket: market.market }, {
                 attempt: attempt + 1,
                 requestId: launchPackRequestIdentity(identity),
+                modelId: launchPackModel,
                 onMetadata: async metadata => {
                   await recordModelTelemetry(getSupabaseAdmin(), { orderId, language, stage:'launch-pack', attempt:metadata.attempt,
                     requestIdentity:metadata.requestId, provider:metadata.provider, modelId:metadata.modelId,
@@ -332,7 +336,7 @@ export const translateBook = inngest.createFunction(
               return toCanonicalLaunchPack(strategy, language, true)
             }})
             if(cached.cached)await recordModelTelemetry(getSupabaseAdmin(),{orderId,language,stage:'launch-pack',attempt:1,
-              requestIdentity:`${launchPackRequestIdentity(cached.identity)}:cache-hit`,provider:'anthropic',modelId:BOOKLINGUA_MODEL_CONFIG.launchPack,
+              requestIdentity:`${launchPackRequestIdentity(cached.identity)}:cache-hit`,provider:'anthropic',modelId:launchPackModel,
               success:true,inputTokens:0,outputTokens:0,cacheStatus:'hit'})
             launchPack = Buffer.from(JSON.stringify(cached.pack))
           }
