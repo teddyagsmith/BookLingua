@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { assertSourceAwareDuplicateParity } from '../lib/semantic-duplicate-validation'
+import { assertSourceAwareDuplicateParity, assertSourceAwareHeadingDuplicateParity } from '../lib/semantic-duplicate-validation'
 import { SemanticNodeV2 } from '../lib/semantic-document'
 
 const long=(value:string)=>`${value} ${'substantial source-aware duplicate validation prose '.repeat(4)}`
@@ -49,4 +49,14 @@ test('large newly duplicated translated section fails',()=>{
 test('heading duplication remains outside prose parity and independently blocked by artifact validation',()=>{
   const source=nodes([long('body one'),long('body two')]);source[0].type='heading';source[1].type='heading'
   assert.doesNotThrow(()=>assertSourceAwareDuplicateParity(source,translated(source,['Chapter 1','Chapter 1'])))
+})
+
+test('identical repeated source headings may remain identical in translation',()=>{
+  const source=nodes(['What did they find?','What did they find?']);source[0].type='heading';source[1].type='heading'
+  assert.doesNotThrow(()=>assertSourceAwareHeadingDuplicateParity(source,translated(source,['Was haben sie herausgefunden?','Was haben sie herausgefunden?'])))
+})
+
+test('different source headings may not collapse to one translated heading',()=>{
+  const source=nodes(['Antibacterial findings','Cancer findings']);source[0].type='heading';source[1].type='heading'
+  assert.throws(()=>assertSourceAwareHeadingDuplicateParity(source,translated(source,['Ergebnisse','Ergebnisse'])),/introduced duplicate heading/)
 })
