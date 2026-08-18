@@ -120,6 +120,20 @@ test('hardened behavior defaults disabled and admin supports both review states'
   assert.match(approve, /pending_review', 'ready_for_review/)
 })
 
+test('large source uploads bypass Vercel and DOCX word count is server-authoritative', () => {
+  const root = process.cwd()
+  const page = fs.readFileSync(path.join(root, 'app/page.tsx'), 'utf8')
+  const init = fs.readFileSync(path.join(root, 'app/api/upload/init/route.ts'), 'utf8')
+  const finalize = fs.readFileSync(path.join(root, 'app/api/upload/route.ts'), 'utf8')
+  assert.match(page, /uploadToSignedUrl/)
+  assert.match(page, /\/api\/upload\/init/)
+  assert.doesNotMatch(page, /ext === '\.txt' \|\| ext === '\.docx'/)
+  assert.match(init, /createSignedUploadUrl/)
+  assert.match(finalize, /verifyUploadIdentity/)
+  assert.match(finalize, /downloadOriginalBinary/)
+  assert.match(finalize, /binary\.length !== declaredSize/)
+})
+
 test('current build identity is enforced at every package authority boundary', () => {
   const root = process.cwd()
   const state = fs.readFileSync(path.join(root, 'supabase/migrations/202608120002_pipeline_hardening_state.sql'), 'utf8')

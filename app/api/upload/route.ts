@@ -13,8 +13,8 @@ import { getSupabaseAdmin } from '@/lib/supabase'
 import mammoth from 'mammoth'
 import AdmZip from 'adm-zip'
 import { buildSourceManifest, SourceFormat } from '@/lib/source-manifest'
-import { HARDENED_SOURCE_BUCKET, SOURCE_UPLOAD_BUCKET, sourceStoragePath } from '@/lib/source-binary'
-import { issueUploadIdentity } from '@/lib/upload-identity'
+import { downloadOriginalBinary, HARDENED_SOURCE_BUCKET, SOURCE_UPLOAD_BUCKET, sourceStoragePath } from '@/lib/source-binary'
+import { issueUploadIdentity, verifyUploadIdentity } from '@/lib/upload-identity'
 import { HARDENED_V1_ENABLED } from '@/lib/pipeline-capabilities'
 import { assertSupportedSourcePackage } from '@/lib/source-upload-validation'
 
@@ -158,20 +158,30 @@ function countWords(text: string): number {
 // ---------------------------------------------------------------------------
 export async function POST(request: NextRequest) {
   try {
-    const formData = await request.formData()
-    const file = formData.get('file') as File
-    const { uploadId: sessionId, uploadToken } = issueUploadIdentity()
-
-    if (!file) {
-      return NextResponse.json({ error: 'No file provided' }, { status: 400 })
+    const directUpload = request.headers.get('content-type')?.includes('application/json')
+    let sessionId: string, uploadToken: string, fileName: string, declaredSize: number, binary: Buffer
+    let binaryAlreadyStored = false
+    if (directUpload) {
+      const body = await request.json()
+      if (!verifyUploadIdentity(body.uploadId, body.uploadToken)) return NextResponse.json({ error: 'Invalid upload identity' }, { status: 403 })
+      sessionId = body.uploadId; uploadToken = body.uploadToken
+      fileName = typeof body.fileName === 'string' ? body.fileName : ''; declaredSize = Number(body.fileSize)
+      const extension = fileName.split('.').pop()?.toLowerCase() || ''
+      binary = await downloadOriginalBinary(getSupabaseAdmin(), sourceStoragePath(sessionId, extension), null, HARDENED_SOURCE_BUCKET)
+      binaryAlreadyStored = true
+      if (!Number.isSafeInteger(declaredSize) || binary.length !== declaredSize) return NextResponse.json({ error: 'Stored upload size does not match the selected file' }, { status: 409 })
+    } else {
+      const formData = await request.formData(); const file = formData.get('file') as File
+      if (!file) return NextResponse.json({ error: 'No file provided' }, { status: 400 })
+      const identity = issueUploadIdentity(); sessionId = identity.uploadId; uploadToken = identity.uploadToken
+      fileName = file.name; declaredSize = file.size; binary = Buffer.from(await file.arrayBuffer())
     }
 
-    const fileExtension = file.name.split('.').pop()?.toLowerCase()
+    const fileExtension = fileName.split('.').pop()?.toLowerCase()
     if (!fileExtension || !['txt', 'docx', 'epub'].includes(fileExtension)) {
       return NextResponse.json({ error: 'Unsupported file type' }, { status: 400 })
     }
     const sourceFormat = fileExtension as SourceFormat
-    const binary = Buffer.from(await file.arrayBuffer())
     if (!binary.length || binary.length > 50 * 1024 * 1024) {
       return NextResponse.json({ error: 'File must be between 1 byte and 50 MB' }, { status: 400 })
     }
@@ -198,12 +208,12 @@ export async function POST(request: NextRequest) {
     } else if (fileExtension === 'epub') {
       // Extract real text and count words
       textContent = extractEpubText(binary)
-      wordCount = textContent ? countWords(textContent) : Math.round(file.size / 6)
+      wordCount = textContent ? countWords(textContent) : Math.round(binary.length / 6)
 
       // If extraction produced nothing useful, fall back to size estimate
       if (wordCount < 100) {
-        wordCount = Math.round(file.size / 6)
-        textContent = `[EPUB file uploaded - ${file.name}]`
+        wordCount = Math.round(binary.length / 6)
+        textContent = `[EPUB file uploaded - ${fileName}]`
       }
 
     }
@@ -213,24 +223,24 @@ export async function POST(request: NextRequest) {
       : fileExtension === 'docx'
         ? 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
         : 'text/plain'
-    const sourceBucket = HARDENED_V1_ENABLED ? HARDENED_SOURCE_BUCKET : SOURCE_UPLOAD_BUCKET
-    const { error: uploadError } = await getSupabaseAdmin().storage
-      .from(sourceBucket)
-      .upload(storagePath, binary, { contentType, upsert: false })
-    if (uploadError) throw new Error(`Original binary storage failed: ${uploadError.message}`)
+    const sourceBucket = directUpload || HARDENED_V1_ENABLED ? HARDENED_SOURCE_BUCKET : SOURCE_UPLOAD_BUCKET
+    if (!binaryAlreadyStored) {
+      const { error: uploadError } = await getSupabaseAdmin().storage.from(sourceBucket).upload(storagePath, binary, { contentType, upsert: false })
+      if (uploadError) throw new Error(`Original binary storage failed: ${uploadError.message}`)
+    }
 
     const sourceManifest = buildSourceManifest({
       binary,
       extractedText: textContent,
       format: sourceFormat,
-      filename: file.name,
+      filename: fileName,
       wordCount,
     })
 
     // Store in temp_uploads for the checkout flow
     const tempRow: any = HARDENED_V1_ENABLED ? {
       session_id: sessionId,
-      file_name: file.name,
+      file_name: fileName,
       file_format: `.${fileExtension}`,
       content: textContent,
       word_count: wordCount,
@@ -242,7 +252,7 @@ export async function POST(request: NextRequest) {
       created_at: new Date().toISOString(),
     } : {
       session_id: sessionId,
-      file_name: file.name,
+      file_name: fileName,
       file_format: `.${fileExtension}`,
       content: textContent,
       word_count: wordCount,
@@ -261,7 +271,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({
       success: true,
       wordCount,
-      fileName: file.name,
+      fileName,
       fileFormat: `.${fileExtension}`,
       sourceHash: sourceManifest.sourceHash,
       sourceManifest,

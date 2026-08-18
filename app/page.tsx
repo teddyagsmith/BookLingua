@@ -3,6 +3,7 @@
 import { useState, useCallback, useRef, useEffect } from 'react'
 import Image from 'next/image'
 import EmailSignupPopup from '@/components/EmailSignupPopup'
+import { getSupabase } from '@/lib/supabase'
 import ResourcesMenu from '@/components/ResourcesMenu'
 import SiteFooter from '@/components/SiteFooter'
 
@@ -442,24 +443,27 @@ export default function Home() {
 
       let words = 0
 
-      if (ext === '.txt' || ext === '.docx') {
+      if (ext === '.txt') {
         const text = await file.text()
         words = text.trim().split(/\s+/).filter(word => word.length > 0).length
-      } else if (ext === '.epub') {
-        words = Math.round(file.size / 6)
       }
 
       setWordCount(words)
-      setSelectedTier(determineTier(words))
+      setSelectedTier(words ? determineTier(words) : null)
 
       const titleFromFile = file.name.replace(/\.[^/.]+$/, '').replace(/_/g, ' ')
       setBookTitle(titleFromFile)
 
-      // Upload file to server so it's available after payment
+      // Upload book binaries directly to private storage so image-heavy DOCX
+      // files never pass through Vercel's request-body limit.
       try {
-        const formData = new FormData()
-        formData.append('file', file)
-        const res = await fetch('/api/upload', { method: 'POST', body: formData })
+        const initRes = await fetch('/api/upload/init', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ fileName: file.name, fileSize: file.size }) })
+        if (!initRes.ok) throw new Error((await initRes.json().catch(() => null))?.error || 'Upload could not be started')
+        const init = await initRes.json()
+        const contentType = ext === '.epub' ? 'application/epub+zip' : ext === '.docx' ? 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' : 'text/plain'
+        const stored = await getSupabase().storage.from(init.storageBucket).uploadToSignedUrl(init.storagePath, init.signedUploadToken, file, { contentType })
+        if (stored.error) throw new Error(stored.error.message)
+        const res = await fetch('/api/upload', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ uploadId: init.uploadId, uploadToken: init.uploadToken, fileName: file.name, fileSize: file.size }) })
         if (!res.ok) throw new Error('Upload failed')
         const result = await res.json()
         sessionIdRef.current = result.sessionId
