@@ -162,6 +162,8 @@ test('hardened downloads allow internal review while customer delivery remains a
   assert.match(download, /order\.status === 'ready_for_review'/)
   assert.match(download, /order\.status === 'reader_review_pending'/)
   assert.match(download, /customerScope && !\['completed','delivery_pending'\]\.includes\(order\.status\)/)
+  assert.match(download, /if\(artifactType==='launch_pack'\)/)
+  assert.match(download, /const renderedDocx=artifactType==='launch_pack'/)
 })
 
 test('hardened email paths use deterministic provider idempotency keys', () => {

@@ -712,7 +712,9 @@ export async function GET(
         return NextResponse.json({ error: 'Stored artifact integrity check failed' }, { status: 409 })
       }
       let responseBuffer:Buffer<ArrayBufferLike>=buffer
-      if(customerScope&&artifactType==='launch_pack'){
+      // Launch Packs are stored as validated canonical JSON, but every human
+      // download (internal review and customer delivery) must be readable.
+      if(artifactType==='launch_pack'){
         let translatedTitle:string|undefined
         try{
           const notesManifest=selectManifestArtifact(storedArtifact.packageManifest,'translation_notes')
@@ -731,16 +733,20 @@ export async function GET(
         responseBuffer=await renderCustomerLaunchPackDocx(buffer,order.book_title,translatedTitle)
       }
       if(customerScope&&artifactType==='translation_notes')responseBuffer=await renderCustomerTranslationNotesDocx(buffer,order.book_title,LANG_DISPLAY[lang]||lang)
-      const customerDocx=customerScope&&(artifactType==='launch_pack'||artifactType==='translation_notes')
-      const contentType = customerDocx ? 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+      const renderedDocx=artifactType==='launch_pack'||(customerScope&&artifactType==='translation_notes')
+      const contentType = renderedDocx ? 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
         : storedArtifact.filename.endsWith('.epub') ? 'application/epub+zip'
         : storedArtifact.filename.endsWith('.docx') ? 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
           : storedArtifact.filename.endsWith('.json') ? 'application/json'
             : storedArtifact.filename.endsWith('.csv') ? 'text/csv; charset=utf-8' : 'text/plain; charset=utf-8'
-      const responseFilename=customerScope?customerArtifactFilename(order.book_title,lang,storedArtifact.manifestArtifact):storedArtifact.filename.replace(/"/g, '')
+      const responseFilename=(customerScope||artifactType==='launch_pack')
+        ? customerArtifactFilename(order.book_title,lang,storedArtifact.manifestArtifact)
+        : storedArtifact.filename.replace(/"/g, '')
       return new NextResponse(new Uint8Array(responseBuffer), { headers: {
         'Content-Type': contentType,
-        'Content-Disposition': customerScope?customerContentDisposition(responseFilename):`attachment; filename="${responseFilename}"`,
+        'Content-Disposition': (customerScope||artifactType==='launch_pack')
+          ? customerContentDisposition(responseFilename)
+          : `attachment; filename="${responseFilename}"`,
         'Cache-Control':'private, no-store',
         'X-BookLingua-Artifact': 'stored-validated',
       } })
