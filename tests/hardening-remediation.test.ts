@@ -179,6 +179,13 @@ test('translation runs are serialized per paid order before any model work', () 
   assert.match(job,/concurrency:\s*\{\s*limit:\s*1,\s*key:\s*'event\.data\.orderId'\s*\}/)
 })
 
+test('manually managed orders can complete without contacting internal reviewers', () => {
+  const job=fs.readFileSync(path.join(process.cwd(),'lib/translate-job.ts'),'utf8')
+  const finalization=fs.readFileSync(path.join(process.cwd(),'lib/semantic-finalization.ts'),'utf8')
+  assert.match(job,/\[INTERNAL_REVIEW_EMAIL_HOLD\]/)
+  assert.match(finalization,/if \(input\.suppressInternalReview\)[\s\S]*emailSent: false/)
+})
+
 test('completed semantic retry checks authoritative package before any model call', () => {
   const job = fs.readFileSync(path.join(process.cwd(), 'lib/translate-job.ts'), 'utf8')
   const completedLookup = job.indexOf(".eq('status', 'pass').maybeSingle()")

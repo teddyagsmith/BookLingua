@@ -373,6 +373,7 @@ export const translateBook = inngest.createFunction(
       const finalization = await step.run('semantic-v2-finalize', async () => finalizeSemanticOrder({
         supabase: getSupabaseAdmin(), orderId, bookTitle: order.book_title, languages,
         genre: order.genre || order.selected_genre || 'Not specified', customerPackageVersion: order.customer_package_version || 'customer-package-v1', readerPanelEnabled: true,
+        suppressInternalReview: String(order.special_instructions || '').includes('[INTERNAL_REVIEW_EMAIL_HOLD]'),
         internalReviewAddress: process.env.ADMIN_EMAIL || 'gilly@myromancereads.com',
         appUrl: process.env.NEXT_PUBLIC_APP_URL || 'https://booklingua.io',
         sendInternalReview: async (message, options) => {
