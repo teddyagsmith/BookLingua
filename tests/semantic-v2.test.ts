@@ -21,6 +21,16 @@ function epubFixture(): Buffer {
   return zip.toBuffer()
 }
 
+function inlineHeadingEpubFixture(): Buffer {
+  const zip: any = new AdmZip()
+  zip.addFile('mimetype', Buffer.from('application/epub+zip'))
+  zip.addFile('META-INF/container.xml', Buffer.from('<container><rootfiles><rootfile full-path="OEBPS/content.opf"/></rootfiles></container>'))
+  zip.addFile('OEBPS/content.opf', Buffer.from('<package><manifest><item id="nav" href="toc.xhtml" media-type="application/xhtml+xml" properties="nav"/><item id="content" href="content.xhtml" media-type="application/xhtml+xml"/></manifest><spine><itemref idref="nav"/><itemref idref="content"/></spine></package>'))
+  zip.addFile('OEBPS/toc.xhtml', Buffer.from('<html><body><nav><ol><li>Handling Hazardous Ingredients</li><li>Step-by-Step Handling Guide</li><li>DIY Skincare Recipes</li></ol></nav></body></html>'))
+  zip.addFile('OEBPS/content.xhtml', Buffer.from('<html><body><h1>The Castor Oil Bible</h1><h2><b>Handling Hazardous Ingredients</b> Working with ingredients is risky.</h2><h2><b>Step-by-Step Handling Guide</b> Working with hazardous ingredients takes care.</h2><h2><b>DIY Skincare Recipes</b> Making your own products gives control.</h2><h3><b>Special</b>Cases:</h3></body></html>'))
+  return zip.toBuffer()
+}
+
 test('EPUB, DOCX and TXT parsers produce stable ordered IDs', async () => {
   const docx = await Packer.toBuffer(new Document({ sections: [{ children: [
     new Paragraph({ text: 'Chapter 10', heading: HeadingLevel.HEADING_1 }), new Paragraph('Ten body.'),
@@ -99,6 +109,28 @@ test('EPUB rebuild preserves inline semantics, links, attributes and anchors', (
   assert.equal(validateArtifact(output.toBuffer(),'epub').passed,true)
 })
 
+test('EPUB rebuild pins translated navigation headings to inline heading boundaries', () => {
+  const source = inlineHeadingEpubFixture()
+  const document = parseSemanticEpub(source, 'inline-heading-hash')
+  const translations = new Map([
+    ['The Castor Oil Bible', 'Die Rizinusöl-Bibel'],
+    ['Handling Hazardous Ingredients', 'Umgang mit gefährlichen Inhaltsstoffen'],
+    ['Step-by-Step Handling Guide', 'Schritt-für-Schritt-Anleitung zum sicheren Umgang'],
+    ['DIY Skincare Recipes', 'DIY-Hautpflegerezepte'],
+    ['Handling Hazardous Ingredients Working with ingredients is risky.', 'Umgang mit gefährlichen Inhaltsstoffen Der Umgang mit Zutaten ist riskant.'],
+    ['Step-by-Step Handling Guide Working with hazardous ingredients takes care.', 'Schritt-für-Schritt-Anleitung zum sicheren Umgang Die Arbeit mit gefährlichen Zutaten erfordert Sorgfalt.'],
+    ['DIY Skincare Recipes Making your own products gives control.', 'DIY-Hautpflegerezepte Wenn du deine eigenen Produkte herstellst, hast du Kontrolle.'],
+    ['Special Cases:', 'Besondere Fälle:'],
+  ])
+  document.nodes.forEach(node => { node.translatedText = translations.get(node.sourceText) || `DE ${node.sourceText}` })
+  const output: any = new AdmZip(buildSemanticEpub(source, document))
+  const xml = output.getEntry('OEBPS/content.xhtml')!.getData().toString()
+  assert.match(xml, /<b>Umgang mit gefährlichen Inhaltsstoffen<\/b> Der Umgang mit Zutaten ist riskant\./)
+  assert.match(xml, /<b>Schritt-für-Schritt-Anleitung zum sicheren Umgang<\/b> Die Arbeit mit gefährlichen Zutaten erfordert Sorgfalt\./)
+  assert.match(xml, /<b>DIY-Hautpflegerezepte<\/b> Wenn du deine eigenen Produkte herstellst/)
+  assert.match(xml, /<b>Besondere<\/b> Fälle:/)
+})
+
 test('EPUB rebuild ignores parser-omitted empty layout blocks', () => {
   const source:any=new AdmZip(epubFixture())
   source.updateFile('OEBPS/10.xhtml',Buffer.from('<html><body><h1>Chapter 10</h1><p>Ten body.</p><p><span> </span></p></body></html>'))
@@ -132,6 +164,21 @@ test('chapter map is one-to-one and emits CSV and DOCX', async () => {
   const rows = buildChapterMap(document)
   assert.deepEqual(rows.map(row => row.sourceChapterNumber), ['10', '11'])
   assert.match(renderChapterMapCsv(rows), /Chapitre 11/)
+  assert.ok((await renderChapterMapDocx(rows)).length > 0)
+})
+
+test('EPUB chapter map falls back to translated navigation when content has one generic chapter', async () => {
+  const document = parseSemanticEpub(inlineHeadingEpubFixture(), 'navigation-map-hash')
+  const translated = new Map([
+    ['Handling Hazardous Ingredients', 'Umgang mit gefährlichen Inhaltsstoffen'],
+    ['Step-by-Step Handling Guide', 'Schritt-für-Schritt-Anleitung zum sicheren Umgang'],
+    ['DIY Skincare Recipes', 'DIY-Hautpflegerezepte'],
+  ])
+  document.nodes.forEach(node => { node.translatedText = translated.get(node.sourceText) || `DE ${node.sourceText}` })
+  const rows = buildChapterMap(document)
+  assert.deepEqual(rows.map(row => row.sourceTitle), Array.from(translated.keys()))
+  assert.deepEqual(rows.map(row => row.translatedTitle), Array.from(translated.values()))
+  assert.match(renderChapterMapCsv(rows), /DIY-Hautpflegerezepte/)
   assert.ok((await renderChapterMapDocx(rows)).length > 0)
 })
 

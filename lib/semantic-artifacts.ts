@@ -170,18 +170,33 @@ export async function buildFinalSemanticDocx(source:Buffer,document:SemanticDocu
   return buildSemanticDocx(document,title,'final')
 }
 
-function replaceTextPreservingInline(inner: string, translated: string): string {
+function replaceTextPreservingInline(inner: string, translated: string, forcedPrefix?: { source: string; translated: string }): string {
   const tokens = inner.split(/(<[^>]+>)/g)
   const textIndexes = tokens.map((token,index) => !token.startsWith('<') && token.trim() ? index : -1).filter(index => index >= 0)
   if (!textIndexes.length) return inner
-  const weights = textIndexes.map(index => tokens[index].trim().split(/\s+/).length)
-  const words = translated.trim().split(/\s+/); let offset = 0; const total = weights.reduce((a,b)=>a+b,0)
-  textIndexes.forEach((tokenIndex, i) => {
+  const distribute=(indexes:number[],text:string)=>{
+    const weights=indexes.map(index=>tokens[index].trim().split(/\s+/).length)
+    const words=text.trim().split(/\s+/).filter(Boolean);let offset=0;const total=Math.max(1,weights.reduce((a,b)=>a+b,0));let previous=''
+    indexes.forEach((tokenIndex,i)=>{
     const remaining = words.length-offset
-    const count = i === textIndexes.length-1 ? remaining : Math.max(1, Math.min(remaining-(textIndexes.length-i-1), Math.round(words.length*weights[i]/total)))
+      const count=i===indexes.length-1?remaining:Math.max(0,Math.min(remaining,Math.round(words.length*weights[i]/total)))
     const leading = tokens[tokenIndex].match(/^\s*/)?.[0] || ''; const trailing = tokens[tokenIndex].match(/\s*$/)?.[0] || ''
-    tokens[tokenIndex] = `${leading}${escapeXml(words.slice(offset,offset+count).join(' '))}${trailing}`; offset += count
-  })
+      const value=words.slice(offset,offset+count).join(' ');offset+=count
+      const boundarySpace=!leading&&previous&&value&&/[A-Za-zÀ-ÖØ-öø-ÿ0-9]$/.test(previous)&&/^[A-Za-zÀ-ÖØ-öø-ÿ0-9]/.test(value)?' ':''
+      tokens[tokenIndex]=`${leading||boundarySpace}${escapeXml(value)}${trailing}`;previous=value
+    })
+  }
+  if(forcedPrefix&&translated.trim().startsWith(forcedPrefix.translated.trim())){
+    const normalize=(value:string)=>decodeXml(value.replace(/<[^>]+>/g,' ')).replace(/\s+/g,' ').trim()
+    let prefixCount=0,source=''
+    for(const tokenIndex of textIndexes){source=normalize(`${source} ${tokens[tokenIndex]}`);prefixCount++;if(source===forcedPrefix.source.trim())break;if(!forcedPrefix.source.trim().startsWith(source)) {prefixCount=0;break}}
+    if(prefixCount){
+      distribute(textIndexes.slice(0,prefixCount),forcedPrefix.translated)
+      distribute(textIndexes.slice(prefixCount),translated.trim().slice(forcedPrefix.translated.trim().length).trim())
+      return tokens.join('')
+    }
+  }
+  distribute(textIndexes,translated)
   return tokens.join('')
 }
 
@@ -189,6 +204,7 @@ export function buildSemanticEpub(source: Buffer, document: SemanticDocumentV2, 
   assertTranslated(document)
   if (document.sourceFormat !== 'epub') throw new Error('EPUB output requires an EPUB semantic source')
   const zip: any = new AdmZip(source)
+  const navigationHeadings=document.nodes.filter(node=>node.type==='list_item'&&/(?:toc|nav|ncx)/i.test(node.sourceLocation)&&node.translatedText?.trim())
   const byPath = new Map<string, SemanticNodeV2[]>()
   for (const node of document.nodes) {
     const split = node.sourceLocation.match(/^(.*):block:(\d+)$/)
@@ -205,7 +221,9 @@ export function buildSemanticEpub(source: Buffer, document: SemanticDocumentV2, 
       if (!inner.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim()) return _full
       const node = nodes[index++]
       if (!node) throw new Error(`EPUB semantic block count changed: ${entryPath}`)
-      return `<${tag}${attrs}>${replaceTextPreservingInline(inner,node.translatedText!)}</${tag}>`
+      const prefix=navigationHeadings.filter(candidate=>node.sourceText!==candidate.sourceText&&node.sourceText.startsWith(`${candidate.sourceText} `))
+        .sort((a,b)=>b.sourceText.length-a.sourceText.length)[0]
+      return `<${tag}${attrs}>${replaceTextPreservingInline(inner,node.translatedText!,prefix?{source:prefix.sourceText,translated:prefix.translatedText!}:undefined)}</${tag}>`
     })
     if (index !== nodes.length) throw new Error(`EPUB semantic block count changed: ${entryPath}`)
     zip.updateFile(entryPath, Buffer.from(xml))

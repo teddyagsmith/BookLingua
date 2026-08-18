@@ -14,7 +14,7 @@ export interface ChapterMapRow {
 }
 
 export function buildChapterMap(document: SemanticDocumentV2): ChapterMapRow[] {
-  const candidates = document.nodes
+  let candidates = document.nodes
     .filter(node => node.type === 'heading' && node.headingLevel === 1 && node.chapterId)
     .map(node => ({
       chapterId: node.chapterId!,
@@ -24,6 +24,15 @@ export function buildChapterMap(document: SemanticDocumentV2): ChapterMapRow[] {
       translatedTitle: node.translatedText || '',
       status: node.translatedText ? 'mapped' as const : 'missing_translation' as const,
     }))
+  // EPUBs often expose their real reading structure through the navigation
+  // document while assigning every content block to one generic chapter ID.
+  // In that case the navigation entries are a better, non-empty chapter map.
+  if(candidates.length<=1&&document.sourceFormat==='epub')candidates=document.nodes
+    .filter(node=>node.type==='list_item'&&/(?:toc|nav|ncx)/i.test(node.sourceLocation)&&node.sourceText.trim())
+    .filter((node,index,nodes)=>nodes.findIndex(candidate=>candidate.sourceText.trim()===node.sourceText.trim())===index)
+    .map((node,index)=>({chapterId:`navigation-${String(index+1).padStart(4,'0')}`,sourceChapterNumber:node.sourceChapterNumber,
+      sourceTitle:node.sourceText,translatedChapterNumber:node.sourceChapterNumber,translatedTitle:node.translatedText||'',
+      status:node.translatedText?'mapped' as const:'missing_translation' as const}))
   // Some source parsers associate front-matter H1s with the first numbered
   // chapter. When the same chapter number appears twice, the later heading is
   // the actual chapter boundary; omit the front-matter/title row.
