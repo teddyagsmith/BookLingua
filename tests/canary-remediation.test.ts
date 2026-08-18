@@ -1,5 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
+import fs from 'node:fs'
+import path from 'node:path'
 import { extractLaunchPackText, generateLaunchStrategy, parseLaunchStrategyText, toCanonicalLaunchPack } from '../lib/launch-strategy'
 import { finalizeSemanticOrder } from '../lib/semantic-finalization'
 import { PackageArtifact, PackageManifestV1, requiredArtifactTypes } from '../lib/package-manifest'
@@ -21,6 +23,12 @@ test('Launch Pack selects the first non-empty text block regardless of preceding
   assert.equal(extractLaunchPackText([{ type: 'thinking' } as any, { type: 'tool_use' } as any, { type: 'text', text: json, citations: [] } as any]), json)
   assert.throws(() => extractLaunchPackText([{ type: 'thinking' } as any]), /no non-empty text block/)
   assert.throws(() => extractLaunchPackText([{ type: 'text', text: '  ' } as any]), /no non-empty text block/)
+})
+
+test('Launch Pack generation reserves enough output budget and enforces compact JSON', () => {
+  const source=fs.readFileSync(path.join(process.cwd(),'lib/launch-strategy.ts'),'utf8')
+  assert.match(source,/max_tokens:\s*32768/)
+  assert.match(source,/complete response below 60,000 characters/)
 })
 
 test('Launch Pack parsing fails closed for malformed text and unsupported locale', () => {
