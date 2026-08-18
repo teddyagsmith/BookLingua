@@ -18,6 +18,11 @@ export async function GET(request: NextRequest) {
       .order('created_at', { ascending: false })
 
     if (error) throw error
+    const orderIds=(orders||[]).map(order=>order.id)
+    const {data:readerRequests}=orderIds.length
+      ? await getSupabaseAdmin().from('reader_panel_requests').select('order_id,language,build_id,state,sample_filename,sample_word_count,email_state,requested_at,verdict_notes').in('order_id',orderIds)
+      : {data:[] as any[]}
+    const ordersWithReaderPanel=(orders||[]).map(order=>({...order,reader_panel_requests:(readerRequests||[]).filter(row=>row.order_id===order.id)}))
 
     // Fetch abandoned uploads: temp_uploads older than 1 hour (still in checkout = not abandoned yet)
     const abandonedThreshold = new Date(Date.now() - 60 * 60 * 1000).toISOString()
@@ -56,7 +61,7 @@ export async function GET(request: NextRequest) {
     const totalApiCost = completedOrders.reduce((s, o) => s + Number(o.api_cost || 0), 0)
 
     return NextResponse.json({
-      orders: orders || [],
+      orders: ordersWithReaderPanel,
       abandonedUploads: abandonedUploads || [],
       stats: {
         todayRevenue,

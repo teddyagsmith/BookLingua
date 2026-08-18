@@ -8,6 +8,10 @@ export const ORDER_STATUSES = [
   'qa_blocked',
   'gate_failed',
   'ready_for_review',
+  'reader_review_pending',
+  'reader_review_pass',
+  'reader_review_pass_with_notes',
+  'reader_review_fail',
   'delivery_pending',
 ] as const
 
@@ -17,6 +21,8 @@ export const BLOCKED_ORDER_STATUSES: ReadonlySet<OrderStatus> = new Set<OrderSta
   'failed',
   'qa_blocked',
   'gate_failed',
+  'reader_review_pending',
+  'reader_review_fail',
 ])
 
 export function isOrderStatus(value: unknown): value is OrderStatus {

@@ -1,0 +1,12 @@
+import assert from 'node:assert/strict'
+import test from 'node:test'
+import fs from 'node:fs'
+import { selectReaderSample, readerPanelIdentity, readerSampleWordCount, renderReaderPanelEmail } from '../lib/reader-panel'
+import type { SemanticDocumentV2 } from '../lib/semantic-document'
+
+const nodes=Array.from({length:360},(_,i)=>({id:`n${i}`,chapterId:`c${Math.floor(i/30)}`,type:(i%30===0?'heading':'paragraph') as 'heading'|'paragraph',headingLevel:i%30===0?1:null,sourceChapterNumber:null,sourceText:`source ${i}`,translatedText:i%30===0?`Kapitel ${i/30+1}`:`${'übersetzter text dialog '.repeat(10)}${i}`,order:i,sourceLocation:`txt:${i}`}))
+const document:SemanticDocumentV2={schemaVersion:'2.0',sourceHash:'abc',sourceFormat:'txt',parserConfidence:1,nodes}
+test('selects three deterministic continuous clean sections near 8k words',()=>{const a=selectReaderSample(document),b=selectReaderSample(document);assert.deepEqual(a,b);assert.deepEqual(a.map(x=>x.label),['Opening','Middle','Translation stress']);assert.ok(readerSampleWordCount(a)>=7000&&readerSampleWordCount(a)<=9000);for(const section of a)for(let i=1;i<section.nodes.length;i++)assert.equal(section.nodes[i].order,section.nodes[i-1].order+1)})
+test('identity is build-bound and deterministic',()=>{assert.equal(readerPanelIdentity('o','de','b','customer-package-v1'),readerPanelIdentity('o','de','b','customer-package-v1'));assert.notEqual(readerPanelIdentity('o','de','b','customer-package-v1'),readerPanelIdentity('o','de','new','customer-package-v1'))})
+test('email is Gilly-routing copy with required links and labels',()=>{const sections=selectReaderSample(document),email=renderReaderPanelEmail({bookTitle:'Original',translatedTitle:'Übersetzt',language:'de',genre:'Romance',wordCount:readerSampleWordCount(sections),sections,sampleUrl:'https://example.com/sample',feedbackUrl:'https://example.com/form'});assert.match(email.subject,/\[BOOKLINGUA READER PANEL\] German check needed/);assert.match(email.html,/Teddy manually assigns/);assert.match(email.html,/Download Reader Sample/);assert.match(email.html,/Translation stress/)})
+test('migration binds verdict to current build and blocks delivery',()=>{const sql=fs.readFileSync('supabase/migrations/202608180001_reader_panel_v1.sql','utf8');assert.match(sql,/reader_verdict_build_superseded/);assert.match(sql,/reader_panel_review_not_passed/);assert.match(sql,/reader_review_pass_with_notes/)})

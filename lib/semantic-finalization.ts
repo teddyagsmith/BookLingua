@@ -2,6 +2,7 @@ import { createHash } from 'crypto'
 import { PackageManifestV1, evaluatePackageManifest } from './package-manifest'
 import { renderAggregateReviewEmail } from './email-templates'
 import { buildArtifactDownloadUrl } from './download-token'
+import { createReaderPanelRequests } from './reader-panel'
 
 export interface SemanticReviewSendResult { id?: string }
 export type SemanticReviewSender = (message: {
@@ -25,6 +26,9 @@ export async function finalizeSemanticOrder(input: {
   sendInternalReview: SemanticReviewSender
   internalReviewAddress: string
   appUrl: string
+  genre?: string
+  customerPackageVersion?: string
+  readerPanelEnabled?: boolean
 }): Promise<{ status: string; reviewEventCreated: boolean; emailSent: boolean }> {
   const { data: status, error: gateError } = await input.supabase.rpc('resolve_order_package_gate', { p_order_id: input.orderId })
   if (gateError) throw new Error(`Aggregate package gate failed: ${gateError.message}`)
@@ -46,6 +50,10 @@ export async function finalizeSemanticOrder(input: {
   for (const manifest of manifests as PackageManifestV1[]) {
     links[manifest.language] = Object.fromEntries(manifest.artifacts.map(artifact => [artifact.type,
       buildArtifactDownloadUrl(input.orderId, manifest.language, artifact.type, input.appUrl)]))
+  }
+  if(input.readerPanelEnabled&&(input.customerPackageVersion||'customer-package-v1')==='customer-package-v1'){
+    const panel=await createReaderPanelRequests({supabase:input.supabase,orderId:input.orderId,bookTitle:input.bookTitle,genre:input.genre||'Not specified',languages:input.languages,customerPackageVersion:input.customerPackageVersion||'customer-package-v1',appUrl:input.appUrl,send:input.sendInternalReview,feedbackFormConfidenceConfirmed:process.env.READER_PANEL_FEEDBACK_FORM_CONFIDENCE_CONFIRMED==='enabled'})
+    return {status:panel.status,reviewEventCreated:panel.results.some(result=>!result.duplicate),emailSent:panel.results.some(result=>result.emailSent)}
   }
   const email = renderAggregateReviewEmail({ bookTitle: input.bookTitle, adminUrl: `${input.appUrl}/admin`, manifests: manifests as PackageManifestV1[], artifactUrls: links })
 
