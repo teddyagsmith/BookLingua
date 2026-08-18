@@ -52,7 +52,7 @@ export async function finalizeSemanticOrder(input: {
       buildArtifactDownloadUrl(input.orderId, manifest.language, artifact.type, input.appUrl)]))
   }
   if(input.readerPanelEnabled&&(input.customerPackageVersion||'customer-package-v1')==='customer-package-v1'){
-    const panel=await createReaderPanelRequests({supabase:input.supabase,orderId:input.orderId,bookTitle:input.bookTitle,genre:input.genre||'Not specified',languages:input.languages,customerPackageVersion:input.customerPackageVersion||'customer-package-v1',appUrl:input.appUrl,send:input.sendInternalReview,feedbackFormConfidenceConfirmed:process.env.READER_PANEL_FEEDBACK_FORM_CONFIDENCE_CONFIRMED==='enabled'})
+    const panel=await createReaderPanelRequests({supabase:input.supabase,orderId:input.orderId,bookTitle:input.bookTitle,genre:input.genre||'Not specified',languages:input.languages,customerPackageVersion:input.customerPackageVersion||'customer-package-v1',appUrl:input.appUrl,send:input.sendInternalReview})
     return {status:panel.status,reviewEventCreated:panel.results.some(result=>!result.duplicate),emailSent:panel.results.some(result=>result.emailSent)}
   }
   const email = renderAggregateReviewEmail({ bookTitle: input.bookTitle, adminUrl: `${input.appUrl}/admin`, manifests: manifests as PackageManifestV1[], artifactUrls: links })

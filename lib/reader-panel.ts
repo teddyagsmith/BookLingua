@@ -8,6 +8,8 @@ import { signReaderPanelToken } from './download-token'
 export const READER_SAMPLE_VERSION = 'reader-sample-v1'
 export const READER_PANEL_TEMPLATE_VERSION = 'reader-panel-email-v1'
 export const READER_PANEL_RECIPIENT = 'gilly@myromancereads.com'
+export const READER_PANEL_FEEDBACK_FORM_FILENAME = 'BookLingua_Reader_Panel_Feedback_Form.docx'
+export const READER_PANEL_FEEDBACK_FORM_SHA256 = '6aba2957e80ca09c191605f2c6132278e9ae8b31185113476b7073e8f53fa8f7'
 export type ReaderReviewVerdict = 'reader_review_pass'|'reader_review_pass_with_notes'|'reader_review_fail'
 export type ReaderSampleSection = { label:'Opening'|'Middle'|'Translation stress'; startOrder:number; endOrder:number; wordCount:number; nodes:SemanticNodeV2[] }
 
@@ -76,7 +78,7 @@ export function renderReaderPanelEmail(input:{bookTitle:string;translatedTitle:s
 }
 
 export type ReaderPanelSender=(message:{from:string;to:string[];subject:string;html:string},options:{idempotencyKey:string})=>Promise<{id?:string}>
-export async function createReaderPanelRequests(input:{supabase:any;orderId:string;bookTitle:string;genre:string;languages:string[];customerPackageVersion:string;appUrl:string;send:ReaderPanelSender;feedbackFormConfidenceConfirmed:boolean}){
+export async function createReaderPanelRequests(input:{supabase:any;orderId:string;bookTitle:string;genre:string;languages:string[];customerPackageVersion:string;appUrl:string;send:ReaderPanelSender}){
   const results=[]
   for(const language of input.languages){
     const {data:build,error:buildError}=await input.supabase.from('order_language_builds').select('id').eq('order_id',input.orderId).eq('language',language).eq('is_current',true).single()
@@ -98,8 +100,7 @@ export async function createReaderPanelRequests(input:{supabase:any;orderId:stri
       if(row.sample_sha256!==sha256||row.sample_word_count!==wordCount)throw new Error('Reader sample retry differs from immutable request')
     }else if(insertError)throw new Error(`Reader request persistence failed: ${insertError.message}`)
     if(row.email_state==='sent'){results.push({language,wordCount,emailSent:false,duplicate:true});continue}
-    if(!input.feedbackFormConfidenceConfirmed)throw new Error('Approved feedback form is missing the required Translation Confidence question; reader-panel email blocked')
-    const token=signReaderPanelToken(identity),sampleUrl=`${input.appUrl}/api/reader-panel/${identity}/sample?token=${token}`,feedbackUrl=`${input.appUrl}/BookLingua_Reader_Panel_Feedback_Form.pdf`
+    const token=signReaderPanelToken(identity),sampleUrl=`${input.appUrl}/api/reader-panel/${identity}/sample?token=${token}`,feedbackUrl=`${input.appUrl}/${READER_PANEL_FEEDBACK_FORM_FILENAME}`
     const email=renderReaderPanelEmail({bookTitle:input.bookTitle,translatedTitle:document.nodes.find(node=>node.type==='heading')?.translatedText||input.bookTitle,language,genre:input.genre,wordCount,sections,sampleUrl,feedbackUrl})
     const sent=await input.send({from:'BookLingua Reader Panel <hello@booklingua.io>',to:[READER_PANEL_RECIPIENT],subject:email.subject,html:email.html},{idempotencyKey:`reader-panel/${identity}`})
     const {error:updateError}=await input.supabase.from('reader_panel_requests').update({email_state:'sent',provider_message_id:sent.id||null,requested_at:new Date().toISOString()}).eq('id',row.id).eq('email_state','pending')
