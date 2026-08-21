@@ -5,7 +5,7 @@ import { SemanticDocumentV2, SemanticNodeV2 } from './semantic-document'
 import { customerLanguageName, sanitizeCustomerFilenamePart } from './customer-delivery'
 import { signReaderPanelToken } from './download-token'
 
-export const READER_SAMPLE_VERSION = 'reader-sample-v1'
+export const READER_SAMPLE_VERSION = 'reader-sample-v2-flowing-layout'
 export const READER_PANEL_TEMPLATE_VERSION = 'reader-panel-email-v1'
 export const READER_PANEL_RECIPIENT = 'gilly@myromancereads.com'
 export const READER_PANEL_FEEDBACK_FORM_FILENAME = 'BookLingua_Reader_Panel_Feedback_Form.docx'
@@ -63,10 +63,25 @@ export async function buildReaderSampleDocx(input:{document:SemanticDocumentV2;t
     for(const node of section.nodes){
       if(node.type==='heading')children.push(new Paragraph({text:node.translatedText!,heading:node.headingLevel===1?HeadingLevel.HEADING_2:HeadingLevel.HEADING_3}))
       else if(node.type==='scene_break')children.push(new Paragraph({text:'* * *',alignment:AlignmentType.CENTER}))
-      else children.push(new Paragraph({text:node.translatedText!,alignment:AlignmentType.JUSTIFIED,spacing:{after:100},indent:node.type==='paragraph'?{firstLine:360}:undefined,bullet:node.type==='list_item'?{level:0}:undefined}))
+      else children.push(new Paragraph({
+        text:node.translatedText!,
+        alignment:AlignmentType.JUSTIFIED,
+        spacing:{after:100,line:276},
+        indent:node.type==='paragraph'?{firstLine:360}:undefined,
+        bullet:node.type==='list_item'?{level:0}:undefined,
+        // Explicit pagination flags avoid Word/Pages preview engines inheriting
+        // keep-with-next behaviour and placing one body paragraph per page.
+        keepLines:false,
+        keepNext:false,
+        pageBreakBefore:false,
+        widowControl:true,
+      }))
     }
   }
-  return deterministicDocx(Buffer.from(await Packer.toBuffer(new Document({sections:[{children}]}))))
+  return deterministicDocx(Buffer.from(await Packer.toBuffer(new Document({sections:[{
+    properties:{page:{size:{width:11906,height:16838},margin:{top:1134,right:1134,bottom:1134,left:1134}}},
+    children,
+  }]}))))
 }
 
 const escape=(value:string)=>value.replace(/[&<>"']/g,char=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]!))
