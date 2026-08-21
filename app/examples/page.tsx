@@ -1064,7 +1064,7 @@ export default function ExamplesPage() {
             <span>✓ EPUB, DOCX, TXT</span>
             <span>✓ Formatting preserved</span>
             <span>✓ 4 languages available</span>
-            <span>✓ Bundle & save up to 37%</span>
+            <span>✓ Bundle & save up to 20%</span>
           </div>
         </div>
       </section>

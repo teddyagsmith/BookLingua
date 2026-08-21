@@ -98,7 +98,7 @@ export default function AffiliatesPage() {
             </div>
           </div>
           <p className="text-center text-gray-500 mt-4 text-sm">
-            Bundle discounts apply too. 6 languages × $149 with 40% off = $536. You earn $107.
+            Bundle discounts apply too. 6 languages × $149 with 20% off = $715. You earn $143.
           </p>
         </div>
 

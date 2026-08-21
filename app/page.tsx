@@ -4,6 +4,7 @@ import { useState, useCallback, useRef, useEffect } from 'react'
 import Image from 'next/image'
 import EmailSignupPopup from '@/components/EmailSignupPopup'
 import { getSupabase } from '@/lib/supabase'
+import { bundleDiscountPercent } from '@/lib/bundle-pricing'
 import ResourcesMenu from '@/components/ResourcesMenu'
 import SiteFooter from '@/components/SiteFooter'
 
@@ -29,11 +30,11 @@ const WORD_TIERS = {
 
 const BUNDLE_DISCOUNTS = {
   1: { discount: 0, label: '1 Language' },
-  2: { discount: 12, label: '2 Languages' },
-  3: { discount: 25, label: '3 Languages' },
-  4: { discount: 30, label: '4 Languages' },
-  5: { discount: 35, label: '5 Languages' },
-  6: { discount: 40, label: 'All 6 Languages' },
+  2: { discount: 7, label: '2 Languages' },
+  3: { discount: 10, label: '3 Languages' },
+  4: { discount: 12, label: '4 Languages' },
+  5: { discount: 15, label: '5 Languages' },
+  6: { discount: 20, label: '6+ Languages' },
 }
 
 const CORE_LANGUAGES = [
@@ -272,9 +273,8 @@ export default function Home() {
   const calculatePrice = (tier: 'small' | 'medium' | 'large' | null, numLanguages: number) => {
     if (!tier || numLanguages === 0) return '0.00'
     const tierInfo = WORD_TIERS[tier]
-    const discountInfo = BUNDLE_DISCOUNTS[Math.min(numLanguages, 6) as keyof typeof BUNDLE_DISCOUNTS]
     const baseTotal = tierInfo.basePrice * numLanguages
-    const discount = baseTotal * (discountInfo.discount / 100)
+    const discount = baseTotal * (bundleDiscountPercent(numLanguages) / 100)
     return (baseTotal - discount).toFixed(2)
   }
 
@@ -805,17 +805,17 @@ export default function Home() {
                   ))}
                   <span className="text-lg">+</span>
                   <span className="ml-1 px-2 py-1 bg-brand-light text-brand-dark text-xs font-semibold rounded-full">
-                    6 Languages
+                    6+ Languages
                   </span>
                 </div>
 
                 <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4 py-4 border-t border-gray-100">
                   <div>
                     <span className="text-gray-600 text-sm block">AI Translation + AI Editorial Review + Human Proofreading Check</span>
-                    <span className="text-xs text-green-600 font-medium">40% bundle discount applied when you translate to 6 languages</span>
+                    <span className="text-xs text-green-600 font-medium">20% bundle discount applied when you translate to 6 or more languages</span>
                   </div>
                   <div className="sm:text-right flex-shrink-0">
-                    <span className="font-bold text-2xl text-brand">$89</span>
+                    <span className="font-bold text-2xl text-brand">$119</span>
                     <span className="text-xs text-gray-400 line-through block">$149</span>
                     <span className="text-xs text-gray-500 block">per language</span>
                   </div>
@@ -1128,7 +1128,7 @@ export default function Home() {
                 ))}
               </div>
               <p className="text-center text-gray-600 mt-6">
-                Example: 80k novel → All 6 languages = <span className="font-bold text-brand">${(149 * 6 * 0.60).toFixed(0)}</span> <span className="text-gray-400 line-through">${149 * 6}</span> (40% bundle discount)
+                Example: 80k novel → 6 languages = <span className="font-bold text-brand">${(149 * 6 * 0.80).toFixed(0)}</span> <span className="text-gray-400 line-through">${149 * 6}</span> (20% bundle discount)
               </p>
             </div>
 
@@ -1180,7 +1180,7 @@ export default function Home() {
                 },
                 {
                   q: 'How much does AI book translation cost?',
-                  a: 'Our pricing is based on word count: $99 for up to 40k words, $149 for up to 80k words, and $199 for up to 150k words — per language. If you translate into multiple languages, bundle discounts apply automatically, up to 40% off when you translate into all 6 core languages.',
+                  a: 'Our pricing is based on word count: $99 for up to 40k words, $149 for up to 80k words, and $199 for up to 150k words — per language. If you translate into multiple languages, bundle discounts apply automatically, up to 20% off when you translate into 6 or more languages.',
                 },
                 {
                   q: 'Is AI book translation good enough to publish?',
@@ -1279,7 +1279,7 @@ export default function Home() {
                     name: 'How much does AI book translation cost?',
                     acceptedAnswer: {
                       '@type': 'Answer',
-                      text: 'Our pricing is based on word count: $99 for up to 40k words, $149 for up to 80k words, and $199 for up to 150k words — per language. Bundle discounts apply automatically, up to 40% off for all 6 languages.',
+                      text: 'Our pricing is based on word count: $99 for up to 40k words, $149 for up to 80k words, and $199 for up to 150k words — per language. Bundle discounts apply automatically, up to 20% off for 6 or more languages.',
                     },
                   },
                   {
@@ -1703,14 +1703,14 @@ export default function Home() {
               <div className="bg-brand rounded-2xl p-6 mb-8 text-white">
                 <div className="flex items-center justify-between">
                   <div>
-                    <h3 className="text-xl font-bold mb-1">🎉 Bundle All 6 Languages & Save 40%</h3>
-                    <p className="text-white/80">Spanish, French, German, Italian, Polish, Japanese & Portuguese</p>
+                    <h3 className="text-xl font-bold mb-1">🎉 Choose 6+ Languages & Save 20%</h3>
+                    <p className="text-white/80">Choose from all available Spanish, French, German, Italian, Polish, Japanese and Portuguese markets</p>
                   </div>
                   <button
                     onClick={selectAllCore}
                     className="px-6 py-3 bg-white text-brand rounded-xl font-bold hover:shadow-lg transition-all"
                   >
-                    Select All 6
+                    Select All 9
                   </button>
                 </div>
               </div>

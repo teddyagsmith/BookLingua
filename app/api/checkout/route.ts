@@ -8,6 +8,7 @@ import { HARDENED_V1_ENABLED } from '@/lib/pipeline-capabilities'
 import { assertHardenedUploadReady } from '@/lib/hardened-upload'
 import { Resend } from 'resend'
 import { newOrderPipelineFields } from '@/lib/customer-package-version'
+import { bundleDiscountPercent } from '@/lib/bundle-pricing'
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
   apiVersion: '2023-10-16',
@@ -145,10 +146,6 @@ const WORD_TIERS: Record<string, { maxWords: number; basePrice: number }> = {
   large:  { maxWords: 150000, basePrice: 199 },
 }
 
-const BUNDLE_DISCOUNTS: Record<number, number> = {
-  1: 0, 2: 12, 3: 25, 4: 30, 5: 35, 6: 40,
-}
-
 function calculateServerPrice(
   tier: string,
   selectedLanguages: string[],
@@ -160,7 +157,7 @@ function calculateServerPrice(
   const numLanguages = selectedLanguages.length
   if (numLanguages === 0) throw new Error('No languages selected')
 
-  const discountPct = BUNDLE_DISCOUNTS[Math.min(numLanguages, 6)] ?? 0
+  const discountPct = bundleDiscountPercent(numLanguages)
   const baseTotal = tierInfo.basePrice * numLanguages
   const translationTotal = baseTotal * (1 - discountPct / 100)
 
