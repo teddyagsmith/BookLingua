@@ -201,8 +201,8 @@ Generate the following in JSON format. All author-facing explanations and instru
   "opportunities": [{"name":"","url":"https://...","type":"deal_site|reviewer_blog|reader_community|social_creator|media|event|platform","audience":"","fit":"","cost":"","promotionAllowed":"","contactRoute":"","priority":"High|Medium|Low"}],
   "topOpportunities": [{"rank":1,"opportunity":"","url":"https://...","whyItFits":"","effort":"Low|Medium|High","likelyCost":"Free|€|€€|€€€","recommendedAction":""}],
   "launchPlan30Day": {"minimumViable":[""],"pushHarder":[""],"phases":[{"timing":"4 weeks before launch","actions":[""]},{"timing":"2 weeks before launch","actions":[""]},{"timing":"Launch week","actions":[""]},{"timing":"Weeks 2–4","actions":[""]}]},
-  "marketingHooks": [{"hook":"","readerAppeal":"","frenchPromotionalLine":"copy-ready promotional line in ${input.targetLanguage}; despite the legacy field name this is never necessarily French"}],
-  "socialContentIdeas": [{"concept":"","explanation":"","frenchCaption":"copy-ready caption in ${input.targetLanguage}; despite the legacy field name this is never necessarily French","hashtags":["#..."],"format":"Reel|TikTok|Static|Carousel"}],
+  "marketingHooks": [{"hook":"","readerAppeal":"","promotionalLine":"copy-ready promotional line in ${input.targetLanguage}"}],
+  "socialContentIdeas": [{"concept":"","explanation":"","caption":"copy-ready caption in ${input.targetLanguage}","hashtags":["#..."],"format":"Reel|TikTok|Static|Carousel"}],
   "amazonAdsStrategy": {"startingStrategy":"","comparableTargets":[""],"targetingIdeas":[""],"metaPositioning":""},
   "discountPromotion": [{"option":"","availability":"","restriction":"","recommendedAction":""}],
   "research": {"completedAt":"2026-08-14","sources":[{"name":"","url":"https://...","note":"what was verified"}]}

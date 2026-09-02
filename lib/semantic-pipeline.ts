@@ -5,7 +5,7 @@ import { SupabaseClient } from '@supabase/supabase-js'
 import { parseSemanticDocx, parseSemanticEpub, parseSemanticTxt } from './semantic-parser'
 import { evaluateSemanticEligibility, SemanticDocumentV2 } from './semantic-document'
 import { createNodeTranslationInput, nodeBatchFingerprint, NodeTranslationInput, NodeTranslationOutput, validateAndMergeNodeOutput } from './node-translation-contract'
-import { buildFinalSemanticDocx, buildSemanticDocx, buildSemanticEpub, buildSemanticEpubFromDocument, buildSemanticReviewDocx } from './semantic-artifacts'
+import { buildFinalSemanticDocx, buildSemanticDocx, buildSemanticEpub, buildSemanticEpubFromDocument, buildSemanticReviewDocx, normalizeEpubImages } from './semantic-artifacts'
 import { buildChapterMap, renderChapterMapCsv, renderChapterMapDocx } from './chapter-map'
 import { validateArtifact } from './artifact-validation-v2'
 import { storeImmutableArtifact } from './artifact-store'
@@ -15,7 +15,7 @@ import { applyTitleAuthority, resolveTitleAuthority } from './authoritative-titl
 import { TranslationBriefV1, assertTranslationBriefForSource, translationBriefFingerprint } from './translation-brief'
 import { ArtifactType } from './package-manifest'
 import { UPLOAD_GUIDE_ASSET_PATH, UPLOAD_GUIDE_SHA256 } from './upload-guide'
-import { LaunchPackV1, validateLaunchPack } from './launch-pack-schema'
+import { LaunchPackV1, validateLaunchPack, validateLaunchPackRegister } from './launch-pack-schema'
 import { BOOKLINGUA_MODEL_CONFIG } from './model-config'
 import { assertCompleteBatchCoverage, createDeterministicSemanticBatches, semanticBatchIdentity } from './semantic-batching'
 import { recordModelTelemetry } from './model-telemetry'
@@ -75,7 +75,7 @@ async function persistSemantic(supabase: SupabaseClient, input: { orderId: strin
 }
 
 async function validationReport(supabase: SupabaseClient, input: { orderId: string; language: string; buildId: string; stage: string; passed: boolean; errors?: unknown[]; metrics?: object }): Promise<string> {
-  const validatorVersion = 'semantic-v2.2'
+  const validatorVersion = 'semantic-v2.4'
   const { data, error } = await supabase.from('validation_reports').insert({ order_id: input.orderId, language: input.language, build_id: input.buildId, stage: input.stage, validator_version: validatorVersion, passed: input.passed, errors: input.errors || [], metrics: input.metrics || {} }).select('id').single()
   if (error?.code === '23505') {
     const { data: existing, error: existingError } = await supabase.from('validation_reports').select('id,passed,errors,metrics').eq('order_id',input.orderId).eq('language',input.language).eq('build_id',input.buildId).eq('stage',input.stage).eq('validator_version',validatorVersion).single()
@@ -224,8 +224,8 @@ export async function runSemanticPipeline(input: SemanticPipelineInput) {
   await storeValidated(input, buildId, 'translation_brief', 'translation-brief.json', Buffer.from(JSON.stringify(input.brief, null, 2)))
   await storeValidated(input, buildId, 'pass1_docx', `${input.title} - ${input.language} - Pass 1.docx`, await buildSemanticDocx(pass1, titleAuthority.effectiveValue, 'pass1'), 'docx', true)
   await storeValidated(input, buildId, 'review_docx', `${input.title} - ${input.language} - Review.docx`, await buildSemanticReviewDocx(pass1, pass2, titleAuthority.effectiveValue), 'docx', true)
-  if (input.sourceFormat === 'epub' || input.dualFormat) await storeValidated(input, buildId, 'final_epub', `${input.title} - ${input.language} - Final.epub`, input.sourceFormat === 'epub' ? buildSemanticEpub(input.source, pass2, titleAuthority) : buildSemanticEpubFromDocument(pass2, titleAuthority.effectiveValue), 'epub', true)
-  if (input.sourceFormat !== 'epub' || input.dualFormat) await storeValidated(input, buildId, 'final_docx', `${input.title} - ${input.language} - Final.docx`, await buildFinalSemanticDocx(input.source, pass2, titleAuthority.effectiveValue), 'docx', true)
+  if (input.sourceFormat === 'epub' || input.dualFormat) await storeValidated(input, buildId, 'final_epub', `${input.title} - ${input.language} - Final.epub`, await normalizeEpubImages(input.sourceFormat === 'epub' ? buildSemanticEpub(input.source, pass2, titleAuthority, input.language) : buildSemanticEpubFromDocument(pass2, titleAuthority.effectiveValue)), 'epub', true)
+  await storeValidated(input, buildId, 'final_docx', `${input.title} - ${input.language} - Final.docx`, await buildFinalSemanticDocx(input.source, pass2, titleAuthority.effectiveValue), 'docx', true)
   const map = buildChapterMap(pass2)
   if (map.some(row => row.status !== 'mapped')) throw new Error('Chapter map is incomplete')
   await storeValidated(input, buildId, 'chapter_map_csv', 'chapter-map.csv', Buffer.from(renderChapterMapCsv(map)))
@@ -240,6 +240,7 @@ export async function runSemanticPipeline(input: SemanticPipelineInput) {
     let pack: LaunchPackV1
     try { pack = JSON.parse(input.launchPack.toString('utf8')) } catch { throw new Error('Launch Pack is not valid JSON') }
     const launchErrors = validateLaunchPack({ pack, expectedLocale: input.language, purchased: true })
+    launchErrors.push(...validateLaunchPackRegister(pack,input.brief.items.find(item=>item.issueType==='author_instruction'&&/address|pronoun/i.test(item.sourceTerm))?.authorDecision))
     if (launchErrors.length) throw new Error(`Launch Pack validation failed: ${launchErrors.join('; ')}`)
     await storeValidated(input, buildId, 'launch_pack', 'launch-pack.json', input.launchPack)
   }

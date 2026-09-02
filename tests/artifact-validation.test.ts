@@ -5,8 +5,9 @@ import { Document, HeadingLevel, Packer, Paragraph } from 'docx'
 import { validateArtifact, validateExpectedChapterSequence } from '../lib/artifact-validation-v2'
 
 function syntheticEpub(chapters: Array<{ heading: string; body: string }>): Buffer {
-  const zip: any = new AdmZip()
+  const zip: any = new (AdmZip as any)(undefined, { noSort: true })
   zip.addFile('mimetype', Buffer.from('application/epub+zip'))
+  zip.getEntry('mimetype').header.method = 0
   zip.addFile('META-INF/container.xml', Buffer.from(`<container><rootfiles><rootfile media-type="application/oebps-package+xml" full-path="OEBPS/content.opf"/></rootfiles></container>`))
   const manifest = chapters.map((_, index) => `<item media-type="application/xhtml+xml" href="chapter-${index + 1}.xhtml" id="c${index + 1}"/>`).join('')
   const spine = chapters.map((_, index) => `<itemref linear="yes" idref="c${index + 1}"/>`).join('')
@@ -56,8 +57,9 @@ test('empty chapter and Roman/Arabic duplicate identity fail', () => {
 })
 
 test('nested namespaced EPUB resolves attribute-independent manifest and validates nav parity', () => {
-  const zip: any = new AdmZip()
+  const zip: any = new (AdmZip as any)(undefined, { noSort: true })
   zip.addFile('mimetype', Buffer.from('application/epub+zip'))
+  zip.getEntry('mimetype').header.method = 0
   zip.addFile('META-INF/container.xml', Buffer.from(`<c:container xmlns:c="urn:oasis:names:tc:opendocument:xmlns:container"><c:rootfiles><c:rootfile full-path="OPS/package/book.opf" media-type="application/oebps-package+xml"/></c:rootfiles></c:container>`))
   zip.addFile('OPS/package/book.opf', Buffer.from(`<opf:package xmlns:opf="http://www.idpf.org/2007/opf"><opf:manifest><opf:item href="../Text/chapter.xhtml" id="chapter" media-type="application/xhtml+xml"/><opf:item properties="nav" media-type="application/xhtml+xml" id="nav" href="../Nav/nav.xhtml"/></opf:manifest><opf:spine><opf:itemref idref="chapter"/></opf:spine></opf:package>`))
   zip.addFile('OPS/Text/chapter.xhtml', Buffer.from(`<x:html xmlns:x="http://www.w3.org/1999/xhtml"><x:body><x:h1>Chapter XI</x:h1><x:p>Body.</x:p></x:body></x:html>`))

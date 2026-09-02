@@ -1,19 +1,21 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import AdmZip from 'adm-zip'
+import sharp from 'sharp'
 import { Document, HeadingLevel, Packer, Paragraph } from 'docx'
 import { parseSemanticDocx, parseSemanticEpub, parseSemanticTxt } from '../lib/semantic-parser'
 import { createNodeTranslationInput, validateAndMergeNodeOutput } from '../lib/node-translation-contract'
 import { buildChapterMap, renderChapterMapCsv, renderChapterMapDocx } from '../lib/chapter-map'
 import { evaluateSemanticEligibility } from '../lib/semantic-document'
-import { buildSemanticDocx, buildSemanticEpub, buildSemanticEpubFromDocument, buildSemanticReviewDocx } from '../lib/semantic-artifacts'
+import { buildSemanticDocx, buildSemanticEpub, buildSemanticEpubFromDocument, buildSemanticReviewDocx, normalizeEpubImages } from '../lib/semantic-artifacts'
 import { validateArtifact } from '../lib/artifact-validation-v2'
 import { deterministicSemanticBuildId } from '../lib/semantic-pipeline'
 import { semanticV2AllowedForOrder } from '../lib/semantic-canary'
 
 function epubFixture(): Buffer {
-  const zip: any = new AdmZip()
+  const zip: any = new (AdmZip as any)(undefined, { noSort: true })
   zip.addFile('mimetype', Buffer.from('application/epub+zip'))
+  zip.getEntry('mimetype').header.method = 0
   zip.addFile('META-INF/container.xml', Buffer.from('<container><rootfiles><rootfile full-path="OEBPS/content.opf"/></rootfiles></container>'))
   zip.addFile('OEBPS/content.opf', Buffer.from('<package><manifest><item id="c10" href="10.xhtml" media-type="application/xhtml+xml"/><item id="c11" href="11.xhtml" media-type="application/xhtml+xml"/></manifest><spine><itemref idref="c10"/><itemref idref="c11"/></spine></package>'))
   zip.addFile('OEBPS/10.xhtml', Buffer.from('<html><body><h1>Chapter 10</h1><h2>The Chapel</h2><p>Ten body.</p></body></html>'))
@@ -94,9 +96,11 @@ test('EPUB rebuild preserves inline semantics, links, attributes and anchors', (
   const zip: any = new AdmZip(epubFixture())
   zip.updateFile('OEBPS/10.xhtml', Buffer.from('<html><body><h1 id="chapter">Chapter <em>10</em></h1><p class="lead">A <strong>bold <i>nested</i></strong> sentence with <a href="#note" data-x="1">linked words</a> and H<sub>2</sub>O.<br/>Footnote<sup><a id="ref" href="#fn">1</a></sup></p></body></html>'))
   const doc = parseSemanticEpub(zip.toBuffer(),'inline-hash'); doc.nodes.forEach(node => { node.translatedText=`Traduit ${node.sourceText}` })
-  const output: any = new AdmZip(buildSemanticEpub(zip.toBuffer(),doc)); const xml=output.getEntry('OEBPS/10.xhtml').getData().toString()
+  const outputBytes = buildSemanticEpub(zip.toBuffer(),doc)
+  const output: any = new AdmZip(outputBytes); const xml=output.getEntry('OEBPS/10.xhtml').getData().toString()
   for (const expected of ['<em>','<strong>','<i>','<a href="#note" data-x="1">','<sub>','<sup>','<br/>','id="ref"','href="#fn"','class="lead"']) assert.match(xml,new RegExp(expected.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')))
-  assert.equal(validateArtifact(output.toBuffer(),'epub').passed,true)
+  const validation = validateArtifact(outputBytes,'epub')
+  assert.equal(validation.passed,true,JSON.stringify(validation.errors))
 })
 
 test('EPUB rebuild ignores parser-omitted empty layout blocks', () => {
@@ -115,6 +119,21 @@ test('EPUB rebuild repacks output with readable entries and mimetype first', () 
   const output = buildSemanticEpub(input, document)
   assert.equal(validateArtifact(output, 'epub').passed, true)
   assert.equal(new AdmZip(output).getEntries()[0].entryName, 'mimetype')
+})
+
+test('EPUB image normalization converts TIFF assets and rewrites the manifest', async () => {
+  const zip: any = new (AdmZip as any)(undefined, { noSort: true })
+  zip.addFile('mimetype', Buffer.from('application/epub+zip')); zip.getEntry('mimetype').header.method = 0
+  zip.addFile('META-INF/container.xml', Buffer.from('<container><rootfiles><rootfile full-path="OPS/book.opf"/></rootfiles></container>'))
+  zip.addFile('OPS/book.opf', Buffer.from('<package><manifest><item id="c" href="c.xhtml" media-type="application/xhtml+xml"/><item id="img" href="media/picture.tiff" media-type="image/tiff"/></manifest><spine><itemref idref="c"/></spine></package>'))
+  zip.addFile('OPS/c.xhtml', Buffer.from('<html><body><h1>Chapter 1</h1><p>Body.</p><img src="media/picture.tiff"/></body></html>'))
+  zip.addFile('OPS/media/picture.tiff', await sharp({ create: { width: 2, height: 2, channels: 3, background: 'red' } }).tiff().toBuffer())
+  assert.ok(validateArtifact(zip.toBuffer(), 'epub').errors.some(error => error.code === 'EPUB_NON_CORE_IMAGE'))
+  const output = await normalizeEpubImages(zip.toBuffer()), normalized: any = new AdmZip(output)
+  assert.equal(normalized.getEntry('OPS/media/picture.tiff'), null)
+  assert.ok(normalized.getEntry('OPS/media/picture.png'))
+  assert.match(normalized.getEntry('OPS/book.opf')!.getData().toString(), /picture\.png[^>]+image\/png/)
+  assert.equal(validateArtifact(output, 'epub').passed, true)
 })
 
 test('DOCX semantic artifacts are byte-stable across immutable retries', async () => {

@@ -1,7 +1,7 @@
 import AdmZip from 'adm-zip'
 import path from 'path'
 
-export const ARTIFACT_VALIDATOR_VERSION = '1.3'
+export const ARTIFACT_VALIDATOR_VERSION = '1.4'
 export type ArtifactKind = 'epub' | 'docx'
 export interface ArtifactValidationIssue { code: string; message: string; location?: string }
 export interface ArtifactValidationResult {
@@ -102,6 +102,7 @@ export function validateArtifact(buffer: Buffer, kind: ArtifactKind, options: { 
       const zip = new AdmZip(buffer); const zipEntries = zip.getEntries(); const entries = new Map(zipEntries.map(entry => [entry.entryName, entry]))
       if (kind === 'epub') {
         if (entries.get('mimetype')?.getData().toString('utf8').trim() !== 'application/epub+zip') errors.push({ code: 'EPUB_MIMETYPE', message: 'EPUB mimetype is missing or invalid' })
+        if (zipEntries[0]?.entryName !== 'mimetype' || (zipEntries[0] as any)?.header.method !== 0) errors.push({ code: 'EPUB_MIMETYPE_PACKAGING', message: 'EPUB mimetype must be the first ZIP entry and stored uncompressed' })
         const container = entries.get('META-INF/container.xml')?.getData().toString('utf8')
         const rootTag = container?.match(/<(?:[\w.-]+:)?rootfile\b[^>]*\/?\s*>/i)?.[0]
         const opfPath = rootTag ? attrs(rootTag)['full-path'] : undefined
@@ -110,6 +111,7 @@ export function validateArtifact(buffer: Buffer, kind: ArtifactKind, options: { 
           const opf = entries.get(opfPath)!.getData().toString('utf8'); const base = path.posix.dirname(opfPath) === '.' ? '' : path.posix.dirname(opfPath)
           const manifest = new Map<string, { href: string; properties: string; mediaType: string }>()
           for (const tag of opf.match(/<(?:[\w.-]+:)?item\b[^>]*\/?\s*>/gi) || []) { const a = attrs(tag); if (a.id && a.href) manifest.set(a.id, { href: a.href, properties: a.properties || '', mediaType: a['media-type'] || '' }) }
+          for (const item of Array.from(manifest.values())) if (item.mediaType.startsWith('image/') && !['image/jpeg','image/png','image/gif','image/svg+xml'].includes(item.mediaType.toLowerCase())) errors.push({ code: 'EPUB_NON_CORE_IMAGE', message: `EPUB contains unsupported image media type: ${item.mediaType}`, location: item.href })
           const spine = (opf.match(/<(?:[\w.-]+:)?itemref\b[^>]*\/?\s*>/gi) || []).map(tag => attrs(tag).idref).filter(Boolean)
           if (!spine.length) errors.push({ code: 'EPUB_SPINE', message: 'EPUB spine is missing or empty' })
           for (const id of spine) {
@@ -127,7 +129,19 @@ export function validateArtifact(buffer: Buffer, kind: ArtifactKind, options: { 
           for (const item of Array.from(manifest.values())) if (/\bnav\b/.test(item.properties)) { const p = safeZipPath(base, item.href); const e = p && entries.get(p); if (!e) errors.push({ code: 'EPUB_NAV', message: 'Declared navigation document is missing' }); else { const xml = e.getData().toString('utf8'); navigationHeadings.push(...navigationLabels(xml)); navSequences.push(chapterNumbers(navigationLabels(xml))) } }
           const ncx = Array.from(manifest.values()).find(item => /ncx/i.test(item.mediaType)); if (ncx) { const p = safeZipPath(base, ncx.href); const e = p && entries.get(p); if (!e) errors.push({ code: 'EPUB_NCX', message: 'Declared NCX navigation document is missing' }); else { const labels = navigationLabels(e.getData().toString('utf8')); navigationHeadings.push(...labels); navSequences.push(chapterNumbers(labels)) } }
           const contentSequence = chapterNumbers(headings)
-          for (const sequence of navSequences) if (sequence.length && sequence.join('|') !== contentSequence.join('|')) errors.push({ code: 'EPUB_NAV_MISMATCH', message: `Navigation chapter sequence [${sequence.join(', ')}] does not match content [${contentSequence.join(', ')}]` })
+          for (const sequence of navSequences) {
+            if (!sequence.length) continue
+            // Some valid publisher EPUBs encode chapter labels as styled
+            // paragraphs rather than h1-h6 elements. In that case there is no
+            // independent content-heading sequence to compare; EPUBCheck and
+            // spine integrity remain authoritative and we must not invent a
+            // mismatch against an empty set.
+            if (!contentSequence.length) {
+              warnings.push({ code: 'EPUB_NAV_CONTENT_UNVERIFIABLE', message: `Navigation contains ${sequence.length} numbered chapters but content uses no semantic heading elements` })
+              continue
+            }
+            if (sequence.join('|') !== contentSequence.join('|')) errors.push({ code: 'EPUB_NAV_MISMATCH', message: `Navigation chapter sequence [${sequence.join(', ')}] does not match content [${contentSequence.join(', ')}]` })
+          }
         }
       } else {
         const contentTypes = entries.get('[Content_Types].xml')?.getData().toString('utf8')
@@ -149,6 +163,10 @@ export function validateArtifact(buffer: Buffer, kind: ArtifactKind, options: { 
   const joined = allText.join('\n')
   if (INTERNAL_MARKER.test(joined)) errors.push({ code: 'LEAKED_MARKER', message: 'Internal pipeline marker is visible' })
   if (VISIBLE_MARKDOWN_HEADING.test(joined)) errors.push({ code: 'VISIBLE_MARKDOWN', message: 'Markdown heading syntax is visible' })
+  if (/\b(?:book|manuscript|document)\s+WORD\b/i.test(joined)) errors.push({ code: 'PLACEHOLDER_TITLE', message: 'Internal filename/project placeholder is visible in customer-facing content' })
+  const gluedWords = joined.match(/[a-zà-ÿ][A-ZÀ-Þ]/g) || []
+  if (gluedWords.length > 60) errors.push({ code: 'GLUED_WORDS', message: `Unusually high number of possible missing-space boundaries: ${gluedWords.length}` })
+  else if (gluedWords.length > 25) warnings.push({ code: 'GLUED_WORDS_REVIEW', message: `Possible missing-space boundaries require baseline review: ${gluedWords.length}` })
   const normalizedHeadings = headings.map(h => h.toLowerCase().replace(/\s+/g, ' ').trim())
   const duplicateHeading = normalizedHeadings.find((h, i) => normalizedHeadings.indexOf(h) !== i)
   if (duplicateHeading && !options.semanticHeadingDuplicateParityValidated) errors.push({ code: 'DUPLICATE_HEADING', message: `Duplicate major heading: ${duplicateHeading}` })

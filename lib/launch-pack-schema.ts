@@ -1,10 +1,12 @@
-export const LAUNCH_PACK_SCHEMA_VERSION = '3.0'
+export const LAUNCH_PACK_SCHEMA_VERSION = '3.1'
 
 export const LAUNCH_MARKETS = {
   'es-es': { language: 'Spanish (Spain)', market: 'Spain', amazonDomain: 'amazon.es', currency: 'EUR' },
   'es-419': { language: 'Spanish (Latin America)', market: 'Mexico and Spanish-speaking Latin America', amazonDomain: 'amazon.com.mx', currency: 'MXN/USD' },
   fr: { language: 'French', market: 'France', amazonDomain: 'amazon.fr', currency: 'EUR' },
   de: { language: 'German', market: 'Germany', amazonDomain: 'amazon.de', currency: 'EUR' },
+  it: { language: 'Italian', market: 'Italy', amazonDomain: 'amazon.it', currency: 'EUR' },
+  pl: { language: 'Polish', market: 'Poland', amazonDomain: 'amazon.pl', currency: 'PLN' },
   'pt-pt': { language: 'Portuguese (Portugal)', market: 'Portugal', amazonDomain: 'amazon.es', currency: 'EUR' },
   'pt-br': { language: 'Portuguese (Brazil)', market: 'Brazil', amazonDomain: 'amazon.com.br', currency: 'BRL' },
 } as const
@@ -20,6 +22,7 @@ export interface LaunchPackV1 {
   backendKeywords: string[]
   adKeywords: string[]
   categories: string[]
+  categoriesNote?: string
   pricingRecommendation: { ebook: string; paperback: string; reasoning: string }
   bookDescription: string
   reviewStrategy: string[]
@@ -27,8 +30,8 @@ export interface LaunchPackV1 {
   opportunities: Array<{ name:string; url:string; type:string; audience:string; fit:string; cost:string; promotionAllowed:string; contactRoute:string; priority:'High'|'Medium'|'Low' }>
   topOpportunities: Array<{ rank:number; opportunity:string; url:string; whyItFits:string; effort:'Low'|'Medium'|'High'; likelyCost:string; recommendedAction:string }>
   launchPlan30Day: { minimumViable:string[]; pushHarder:string[]; phases:Array<{ timing:string; actions:string[] }> }
-  marketingHooks: Array<{ hook:string; readerAppeal:string; frenchPromotionalLine:string }>
-  socialContentIdeas: Array<{ concept:string; explanation:string; frenchCaption:string; hashtags:string[]; format:string }>
+  marketingHooks: Array<{ hook:string; readerAppeal:string; promotionalLine:string }>
+  socialContentIdeas: Array<{ concept:string; explanation:string; caption:string; hashtags:string[]; format:string }>
   amazonAdsStrategy: { startingStrategy:string; comparableTargets:string[]; targetingIdeas:string[]; metaPositioning:string }
   discountPromotion: Array<{ option:string; availability:string; restriction:string; recommendedAction:string }>
   research: { completedAt:string; sources:Array<{ name:string; url:string; note:string }> }
@@ -51,6 +54,7 @@ export function validateLaunchPack(input: { pack: LaunchPackV1; expectedLocale: 
   if (input.pack.backendKeywords.some(keyword => keyword.length > 50 || !keyword.trim())) errors.push('Backend keyword boxes must be non-empty and at most 50 characters')
   if (input.pack.adKeywords.length < 20) errors.push('Launch Pack must contain at least 20 ad keywords')
   if (input.pack.categories.length < 3) errors.push('Launch Pack must contain at least 3 categories')
+  if (input.pack.categories.some(category => /verify|available|category paths|amazon kdp|methodolog/i.test(category))) errors.push('Launch Pack categories must contain category paths only; notes belong in categoriesNote')
   if (!input.pack.bookDescription.trim()) errors.push('Launch Pack book description is empty')
   if (!input.pack.pricingRecommendation.ebook || !input.pack.pricingRecommendation.paperback || !input.pack.pricingRecommendation.reasoning) errors.push('Launch Pack pricing recommendation is incomplete')
   if (!input.pack.reviewStrategy.length) errors.push('Launch Pack review strategy is empty')
@@ -59,7 +63,33 @@ export function validateLaunchPack(input: { pack: LaunchPackV1; expectedLocale: 
   if (!Array.isArray(input.pack.topOpportunities) || input.pack.topOpportunities.length !== 10) errors.push('Launch Pack must contain exactly 10 ranked opportunities')
   if (!input.pack.launchPlan30Day?.minimumViable?.length || input.pack.launchPlan30Day.phases.length < 4) errors.push('Launch Pack 30-day plan is incomplete')
   if (!Array.isArray(input.pack.marketingHooks) || input.pack.marketingHooks.length < 5) errors.push('Launch Pack must contain at least 5 book-specific hooks')
+  else if(input.pack.marketingHooks.some(item=>!item.promotionalLine?.trim()))errors.push('Every Launch Pack hook requires a localized promotional line')
   if (!Array.isArray(input.pack.socialContentIdeas) || input.pack.socialContentIdeas.length < 8 || input.pack.socialContentIdeas.length > 12) errors.push('Launch Pack must contain 8-12 social concepts')
+  else if(input.pack.socialContentIdeas.some(item=>!item.caption?.trim()))errors.push('Every social concept requires a localized caption')
+  if(input.expectedLocale!=='fr'&&containsLocaleSpecificKey(input.pack,'fr'+'ench'))errors.push('Non-French Launch Pack contains a French-specific schema key')
   if (!input.pack.research?.completedAt || input.pack.research.sources.length < 10 || input.pack.research.sources.some(source => !/^https:\/\//.test(source.url))) errors.push('Launch Pack research sources are incomplete')
   return errors
+}
+
+function containsLocaleSpecificKey(value:unknown,needle:string):boolean{
+  if(Array.isArray(value))return value.some(item=>containsLocaleSpecificKey(item,needle))
+  if(value&&typeof value==='object')return Object.entries(value).some(([key,item])=>key.toLowerCase().includes(needle)||containsLocaleSpecificKey(item,needle))
+  return false
+}
+
+function allStringValues(value:unknown,path='$'):Array<{path:string;value:string}>{
+  if(typeof value==='string')return [{path,value}]
+  if(Array.isArray(value))return value.flatMap((item,index)=>allStringValues(item,`${path}[${index}]`))
+  if(value&&typeof value==='object')return Object.entries(value).flatMap(([key,item])=>allStringValues(item,`${path}.${key}`))
+  return []
+}
+
+/** Enforce an approved reader register across the complete customer-facing pack. */
+export function validateLaunchPackRegister(pack:LaunchPackV1,authorDecision:string|undefined):string[]{
+  if(authorDecision!=='informal_du')return []
+  const formal=/\b(?:Sie|Ihnen|Ihr|Ihre|Ihrem|Ihren|Ihrer|Ihres)\b/g
+  return allStringValues(pack).flatMap(item=>{
+    const matches=item.value.match(formal)
+    return matches?.length?[`Formal German reader address (${matches.join(', ')}) is forbidden at ${item.path}`]:[]
+  })
 }

@@ -1,4 +1,6 @@
 import AdmZip from 'adm-zip'
+import path from 'node:path'
+import sharp from 'sharp'
 import { AlignmentType, Document, HeadingLevel, Packer, Paragraph, TextRun } from 'docx'
 import { SemanticDocumentV2, SemanticNodeV2, validateSemanticDocument } from './semantic-document'
 import { deterministicDocx } from './deterministic-docx'
@@ -16,6 +18,7 @@ function assertTranslated(document: SemanticDocumentV2): void {
 }
 
 function nodeParagraph(node: SemanticNodeV2, text: string, runs?: TextRun[], index = 0): Paragraph {
+  text = decodeVisibleEntities(text)
   if (node.type === 'heading') return new Paragraph({
     children: runs || [new TextRun(text)],
     heading: heading(node.headingLevel),
@@ -47,6 +50,19 @@ function semanticStyles() {
 function translatedTitleAlreadyPresent(document: SemanticDocumentV2, title: string): boolean {
   const normalized = (value: string) => value.normalize('NFKC').toLocaleLowerCase().replace(/[^\w\u00c0-\u024f]+/g, ' ').trim()
   return document.nodes.some(node => node.type === 'heading' && normalized(node.translatedText || '') === normalized(title))
+}
+
+export function decodeVisibleEntities(value:string):string{
+  let previous=''
+  let output=value
+  for(let i=0;i<3&&output!==previous;i++){
+    previous=output
+    output=output
+      .replace(/&#x([0-9a-f]+);/gi,(_m,hex)=>String.fromCodePoint(parseInt(hex,16)))
+      .replace(/&#(\d+);/g,(_m,decimal)=>String.fromCodePoint(parseInt(decimal,10)))
+      .replace(/&(?:amp|apos|quot|lt|gt|nbsp);/g,entity=>({ '&amp;':'&','&apos;':"'",'&quot;':'"','&lt;':'<','&gt;':'>','&nbsp;':'\u00a0' }[entity]!))
+  }
+  return output
 }
 
 export async function buildSemanticDocx(document: SemanticDocumentV2, title: string, mode: 'pass1' | 'final'): Promise<Buffer> {
@@ -94,17 +110,19 @@ export function wordLevelDiff(before: string, after: string): DiffToken[] {
 export async function buildSemanticReviewDocx(pass1: SemanticDocumentV2, pass2: SemanticDocumentV2, title: string): Promise<Buffer> {
   assertTranslated(pass1); assertTranslated(pass2)
   if (pass1.sourceHash !== pass2.sourceHash) throw new Error('Review documents have different source fingerprints')
+  const changeCount = pass1.nodes.filter((first, index) => first.translatedText !== pass2.nodes[index]?.translatedText).length
   const children: Paragraph[] = [
     new Paragraph({ text: `${title} — Review`, heading: HeadingLevel.TITLE }),
     new Paragraph({ text: 'How to use this file', heading: HeadingLevel.HEADING_1 }),
     new Paragraph('Read this as a polished translation with editorial changes marked in place. Yellow strikethrough shows wording removed during editorial review; adjacent yellow text shows its replacement. Unmarked text was unchanged. Accept or reject marked revisions in Word as appropriate.'),
+    ...(changeCount === 0 ? [new Paragraph('Editorial review completed: no wording changes were required, so this document intentionally contains no highlighted revisions.')] : []),
   ]
   pass1.nodes.forEach((first, index) => {
     const second = pass2.nodes[index]
     if (!second || second.id !== first.id) throw new Error('Review semantic identity mismatch')
     if (first.translatedText === second.translatedText) children.push(nodeParagraph(second, second.translatedText!, undefined, index))
-    else children.push(nodeParagraph(second, '', wordLevelDiff(first.translatedText!, second.translatedText!).map(token => new TextRun({
-      text: token.text,
+    else children.push(nodeParagraph(second, '', wordLevelDiff(decodeVisibleEntities(first.translatedText!), decodeVisibleEntities(second.translatedText!)).map(token => new TextRun({
+      text: decodeVisibleEntities(token.text),
       strike: token.kind === 'delete',
       highlight: token.kind === 'same' ? undefined : 'yellow',
     })), index))
@@ -112,8 +130,51 @@ export async function buildSemanticReviewDocx(pass1: SemanticDocumentV2, pass2: 
   return deterministicDocx(Buffer.from(await Packer.toBuffer(new Document({ styles: semanticStyles(), sections: [{ properties: { page: { margin: BOOKLINGUA_CLEAN_BOOK_STYLE.pageMarginsTwips } }, children }] }))))
 }
 
+const CORE_EPUB_IMAGE_TYPES = new Set(['image/jpeg', 'image/png', 'image/gif', 'image/svg+xml'])
+
+/** Convert non-core raster images and rewrite every EPUB reference before validation. */
+export async function normalizeEpubImages(buffer: Buffer): Promise<Buffer> {
+  const zip: any = new AdmZip(buffer)
+  const opfEntry = zip.getEntries().find((entry: any) => /\.opf$/i.test(entry.entryName))
+  if (!opfEntry) throw new Error('EPUB OPF missing while normalizing images')
+  let opf = opfEntry.getData().toString('utf8')
+  const opfDir = path.posix.dirname(opfEntry.entryName) === '.' ? '' : path.posix.dirname(opfEntry.entryName)
+  const replacements = new Map<string, string>()
+  const itemPattern = /<item\b[^>]*\bhref=(['"])(.*?)\1[^>]*\bmedia-type=(['"])(.*?)\3[^>]*\/?\s*>/gi
+  for (const match of Array.from(opf.matchAll(itemPattern)) as RegExpMatchArray[]) {
+    const href = match[2], mediaType = match[4].toLowerCase()
+    if (!mediaType.startsWith('image/') || CORE_EPUB_IMAGE_TYPES.has(mediaType)) continue
+    const oldPath = path.posix.normalize(path.posix.join(opfDir, decodeURIComponent(href)))
+    const entry = zip.getEntry(oldPath)
+    if (!entry) throw new Error(`EPUB image declared in OPF is missing: ${oldPath}`)
+    const newPath = oldPath.replace(/\.[^./]+$/, '') + '.png'
+    const png = await sharp(entry.getData(), { pages: 1 }).png().toBuffer()
+    zip.addFile(newPath, png)
+    zip.deleteFile(oldPath)
+    replacements.set(oldPath, newPath)
+  }
+  if (!replacements.size) return buffer
+  for (const entry of zip.getEntries()) {
+    if (!/\.(?:opf|xhtml?|html|css|ncx)$/i.test(entry.entryName)) continue
+    let text = entry.getData().toString('utf8')
+    for (const [oldPath, newPath] of Array.from(replacements.entries())) {
+      const relativeOld = path.posix.relative(path.posix.dirname(entry.entryName), oldPath)
+      const relativeNew = path.posix.relative(path.posix.dirname(entry.entryName), newPath)
+      text = text.split(relativeOld).join(relativeNew).split(encodeURI(relativeOld)).join(encodeURI(relativeNew))
+      if (entry.entryName === opfEntry.entryName) text = text.replace(new RegExp(`(href=["'])${relativeNew.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(["'][^>]*media-type=["'])image/[^"']+`, 'g'), (_match: string, prefix: string, suffix: string) => `${prefix}${relativeNew}${suffix}image/png`)
+    }
+    zip.updateFile(entry.entryName, Buffer.from(text))
+  }
+  const output: any = new (AdmZip as any)(undefined, { noSort: true })
+  const mimetype = zip.getEntry('mimetype')
+  if (!mimetype) throw new Error('EPUB mimetype missing while normalizing images')
+  output.addFile('mimetype', mimetype.getData()); output.getEntry('mimetype').header.method = 0
+  for (const entry of zip.getEntries()) if (entry.entryName !== 'mimetype') output.addFile(entry.entryName, entry.getData())
+  return output.toBuffer()
+}
+
 function escapeXml(text: string): string {
-  return text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+  return decodeVisibleEntities(text).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
 }
 
 function decodeXml(text: string): string {
@@ -126,10 +187,24 @@ function replaceDocxParagraphText(inner: string, translated: string): string {
   const sourceWeights=matches.map(match=>decodeXml(match[2]).trim().split(/\s+/).filter(Boolean).length)
   const words=translated.trim().split(/\s+/);let offset=0;const total=Math.max(1,sourceWeights.reduce((a,b)=>a+b,0));let index=0
   return inner.replace(textPattern,(_full:string,attrs:string)=>{
-    const remaining=words.length-offset,count=index===matches.length-1?remaining:Math.max(0,Math.min(remaining,Math.round(words.length*(sourceWeights[index++]||0)/total)))
-    const value=words.slice(offset,offset+count).join(' ');offset+=count
+    const current=index++
+    const remaining=words.length-offset,count=current===matches.length-1?remaining:Math.max(0,Math.min(remaining,Math.round(words.length*(sourceWeights[current]||0)/total)))
+    let value=words.slice(offset,offset+count).join(' ');offset+=count
+    // Word normally stores boundary whitespace inside one of the adjacent
+    // text runs. Repartitioning translated words must restore that boundary.
+    if(value && offset < words.length)value += ' '
     return `<w:t${attrs}${/^\s|\s$/.test(value)&&!attrs.includes('xml:space')?' xml:space="preserve"':''}>${escapeXml(value)}</w:t>`
   })
+}
+
+function applySemanticParagraphStyle(inner:string,node:SemanticNodeV2):string{
+  if(node.type!=='heading')return inner
+  const style=`Heading${Math.max(1,Math.min(3,node.headingLevel||1))}`
+  if(/<w:pPr\b[^>]*>/.test(inner)){
+    if(/<w:pStyle\b[^>]*\/?\s*>/.test(inner))return inner.replace(/<w:pStyle\b[^>]*\/?\s*>/,`<w:pStyle w:val="${style}"/>`)
+    return inner.replace(/<w:pPr\b([^>]*)>/,`<w:pPr$1><w:pStyle w:val="${style}"/>`)
+  }
+  return `<w:pPr><w:pStyle w:val="${style}"/></w:pPr>${inner}`
 }
 
 export async function buildSemanticDocxPreservingSource(source:Buffer,document:SemanticDocumentV2):Promise<Buffer>{
@@ -144,10 +219,17 @@ export async function buildSemanticDocxPreservingSource(source:Buffer,document:S
     const node=document.nodes[nodeIndex]
     if(!node||normalize(node.sourceText)!==sourceText)throw new Error(`DOCX source presentation does not align at semantic node ${nodeIndex+1}`)
     nodeIndex++
-    return `<w:p${attrs}>${replaceDocxParagraphText(inner,node.translatedText!)}</w:p>`
+    return `<w:p${attrs}>${applySemanticParagraphStyle(replaceDocxParagraphText(inner,node.translatedText!),node)}</w:p>`
   })
   if(nodeIndex!==document.nodes.length)throw new Error('DOCX source presentation has incomplete semantic coverage')
   zip.updateFile('word/document.xml',Buffer.from(xml))
+  const stylesEntry=zip.getEntry('word/styles.xml')
+  if(stylesEntry){
+    let styles=stylesEntry.getData().toString('utf8')
+    const missing=[1,2,3].filter(level=>!new RegExp(`w:styleId=["']Heading${level}["']`).test(styles))
+    if(missing.length)styles=styles.replace(/<\/w:styles>\s*$/,`${missing.map(level=>`<w:style w:type="paragraph" w:styleId="Heading${level}"><w:name w:val="heading ${level}"/><w:basedOn w:val="Default"/><w:next w:val="Default"/><w:qFormat/><w:pPr><w:keepNext/><w:keepLines/><w:outlineLvl w:val="${level-1}"/></w:pPr><w:rPr><w:b/><w:sz w:val="${level===1?32:28}"/></w:rPr></w:style>`).join('')}</w:styles>`)
+    zip.updateFile('word/styles.xml',Buffer.from(styles))
+  }
   return deterministicDocx(zip.toBuffer())
 }
 
@@ -172,10 +254,10 @@ function replaceTextPreservingInline(inner: string, translated: string): string 
     const leading = tokens[tokenIndex].match(/^\s*/)?.[0] || ''; const trailing = tokens[tokenIndex].match(/\s*$/)?.[0] || ''
     tokens[tokenIndex] = `${leading}${escapeXml(words.slice(offset,offset+count).join(' '))}${trailing}`; offset += count
   })
-  return tokens.join('')
+  return tokens.join('').replace(/<\/(?:b|strong|i|em)>(?=[A-Za-zÀ-ÖØ-öø-ÿ0-9])/g,match=>`${match} `)
 }
 
-export function buildSemanticEpub(source: Buffer, document: SemanticDocumentV2, titleAuthority?: TitleAuthority): Buffer {
+export function buildSemanticEpub(source: Buffer, document: SemanticDocumentV2, titleAuthority?: TitleAuthority, language?:string): Buffer {
   assertTranslated(document)
   if (document.sourceFormat !== 'epub') throw new Error('EPUB output requires an EPUB semantic source')
   const zip: any = new AdmZip(source)
@@ -206,8 +288,18 @@ export function buildSemanticEpub(source: Buffer, document: SemanticDocumentV2, 
     for (const [sourceText, translatedText] of Array.from(headingMap.entries())) xml = xml.split(`>${sourceText}<`).join(`>${escapeXml(translatedText)}<`)
     zip.updateFile(entry.entryName, Buffer.from(xml))
   }
-  if (titleAuthority?.translatedValue) for (const entry of zip.getEntries().filter((e: any) => /\.opf$/i.test(e.entryName))) {
-    const xml = entry.getData().toString('utf8').replace(/<dc:title(?:\s[^>]*)?>[\s\S]*?<\/dc:title>/i, (match: string) => match.replace(/>[^<]*</, `>${escapeXml(titleAuthority.translatedValue!)}<`))
+  if (titleAuthority?.translatedValue || language) for (const entry of zip.getEntries().filter((e: any) => /\.opf$/i.test(e.entryName))) {
+    let xml = entry.getData().toString('utf8')
+    if(titleAuthority?.translatedValue)xml=xml.replace(/<dc:title(?:\s[^>]*)?>[\s\S]*?<\/dc:title>/i, (match: string) => match.replace(/>[^<]*</, `>${escapeXml(titleAuthority.translatedValue!)}<`))
+    if(language){
+      xml=/<dc:language(?:\s[^>]*)?>/i.test(xml)?xml.replace(/<dc:language(?:\s[^>]*)?>[\s\S]*?<\/dc:language>/gi,`<dc:language>${escapeXml(language)}</dc:language>`):xml.replace(/<metadata\b([^>]*)>/i,`<metadata$1><dc:language>${escapeXml(language)}</dc:language>`)
+      xml=xml.replace(/<meta\b([^>]*property=["']dcterms:language["'][^>]*)>[\s\S]*?<\/meta>/gi,`<meta$1>${escapeXml(language)}</meta>`)
+    }
+    const copyright=document.nodes.find(node=>/^Copyright\b/i.test(decodeVisibleEntities(node.sourceText)))?.translatedText
+    if(copyright){
+      xml=xml.replace(/<dc:rights(?:\s[^>]*)?>[\s\S]*?<\/dc:rights>/gi,`<dc:rights>${escapeXml(copyright)}</dc:rights>`)
+      xml=xml.replace(/<meta\b([^>]*property=["']dcterms:rights["'][^>]*)>[\s\S]*?<\/meta>/gi,`<meta$1>${escapeXml(copyright)}</meta>`)
+    }
     zip.updateFile(entry.entryName, Buffer.from(xml))
   }
   // Repack instead of serializing the mutated source archive directly. Some
@@ -230,8 +322,9 @@ export function buildSemanticEpub(source: Buffer, document: SemanticDocumentV2, 
 
 export function buildSemanticEpubFromDocument(document: SemanticDocumentV2, title: string): Buffer {
   assertTranslated(document)
-  const zip: any = new AdmZip()
+  const zip: any = new (AdmZip as any)(undefined, { noSort: true })
   zip.addFile('mimetype', Buffer.from('application/epub+zip'))
+  zip.getEntry('mimetype').header.method = 0
   zip.addFile('META-INF/container.xml', Buffer.from('<?xml version="1.0"?><container xmlns="urn:oasis:names:tc:opendocument:xmlns:container"><rootfiles><rootfile full-path="OPS/book.opf" media-type="application/oebps-package+xml"/></rootfiles></container>'))
   const chapters: Array<{ id: string; title: string; nodes: SemanticNodeV2[] }> = []
   for (const node of document.nodes) {
