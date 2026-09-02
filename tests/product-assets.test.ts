@@ -11,7 +11,7 @@ import { researchFields } from './launch-pack-fixture'
 
 function validLaunchPack(): LaunchPackV1 {
   return {
-    schemaVersion: '3.0', locale: 'fr', language: 'French', market: 'France', amazonDomain: 'amazon.fr', currency: 'EUR',
+    schemaVersion: '3.1', locale: 'fr', language: 'French', market: 'France', amazonDomain: 'amazon.fr', currency: 'EUR',
     backendKeywords: Array.from({ length: 7 }, (_, index) => `mot clé ${index + 1}`),
     adKeywords: Array.from({ length: 20 }, (_, index) => `publicité ${index + 1}`),
     categories: ['Catégorie A', 'Catégorie B', 'Catégorie C'],

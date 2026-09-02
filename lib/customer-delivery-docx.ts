@@ -78,7 +78,7 @@ export async function renderCustomerLaunchPackDocx(bytes:Buffer,bookTitle:string
   const topOpportunityRows=[new TableRow({tableHeader:true,children:['# / Opportunity','Why it fits','Effort / Cost','Next action'].map(label=>cell([paragraph(label,{bold:true,color:DARK,after:0})],{fill:LAVENDER,width:2250}))}),...launchPack.topOpportunities.map(item=>new TableRow({cantSplit:true,children:[cell([paragraph(`${item.rank}. ${item.opportunity}`,{bold:true,after:50}),link('Open',item.url)],{width:2250}),cell([paragraph(authorCopy(item.whyItFits),{after:0})],{width:2250}),cell([paragraph(`${item.effort} / ${item.likelyCost}`,{after:0})],{width:2250}),cell([paragraph(authorCopy(item.recommendedAction),{after:0})],{width:2250})]}))]
   const outreachRows=[new TableRow({tableHeader:true,children:['Opportunity','Type / Fit','Cost / Permission','Priority / URL'].map(label=>cell([paragraph(label,{bold:true,color:DARK,after:0})],{fill:LAVENDER,width:2250}))}),...launchPack.opportunities.map(item=>new TableRow({cantSplit:true,children:[cell([paragraph(item.name,{bold:true,after:0})],{width:2250}),cell([paragraph(`${item.type}: ${authorCopy(item.fit)}`,{after:0})],{width:2250}),cell([paragraph(`${item.cost}; ${authorCopy(item.promotionAllowed)}`,{after:0})],{width:2250}),cell([paragraph(item.priority,{bold:true,after:50}),link('Open',item.url)],{width:2250})]}))]
   const priorities=launchPack.topOpportunities.slice(0,3)
-  const bestHook=launchPack.marketingHooks[0]?.frenchPromotionalLine||launchPack.marketingHooks[0]?.hook||''
+  const bestHook=launchPack.marketingHooks[0]?.promotionalLine||launchPack.marketingHooks[0]?.hook||''
   const coverPanel=table([new TableRow({cantSplit:true,children:[cell([
     ...(authorName?[paragraph(`Prepared for ${authorName}`,{bold:true,color:DARK,after:80,alignment:AlignmentType.CENTER})]:[]),
     paragraph(`${launchPack.market} market · Research completed ${launchPack.research.completedAt}`,{color:GRAY,after:0,alignment:AlignmentType.CENTER}),
@@ -120,9 +120,9 @@ export async function renderCustomerLaunchPackDocx(bytes:Buffer,bookTitle:string
     ...launchPack.launchPlan30Day.phases.flatMap(phase=>[heading(phase.timing),...phase.actions.map(item=>bullet(authorCopy(item)))]),
     heading('If you want to push harder'),...launchPack.launchPlan30Day.pushHarder.map(item=>bullet(authorCopy(item))),
     pageBreak(),heading('Book-Specific Marketing Hooks',HeadingLevel.TITLE),
-    ...launchPack.marketingHooks.flatMap(item=>[heading(item.hook),paragraph(authorCopy(item.readerAppeal)),table([new TableRow({cantSplit:true,children:[cell([paragraph(`${launchPack.language.toUpperCase()} COPY — READY TO USE`,{bold:true,color:PURPLE}),paragraph(item.frenchPromotionalLine)],{fill:PALE,width:9000})]})],[9000])]),
+    ...launchPack.marketingHooks.flatMap(item=>[heading(item.hook),paragraph(authorCopy(item.readerAppeal)),table([new TableRow({cantSplit:true,children:[cell([paragraph(`${launchPack.language.toUpperCase()} COPY — READY TO USE`,{bold:true,color:PURPLE}),paragraph(item.promotionalLine)],{fill:PALE,width:9000})]})],[9000])]),
     pageBreak(),heading('Social Content Ideas',HeadingLevel.TITLE),
-    ...launchPack.socialContentIdeas.flatMap(item=>[heading(`${item.concept} · ${item.format}`),paragraph(authorCopy(item.explanation)),paragraph(item.frenchCaption,{italics:true}),paragraph(item.hashtags.join(' '),{color:PURPLE})]),
+    ...launchPack.socialContentIdeas.flatMap(item=>[heading(`${item.concept} · ${item.format}`),paragraph(authorCopy(item.explanation)),paragraph(item.caption,{italics:true}),paragraph(item.hashtags.join(' '),{color:PURPLE})]),
     pageBreak(),heading('Amazon Ads & Meta Positioning',HeadingLevel.TITLE),paragraph(authorCopy(launchPack.amazonAdsStrategy.startingStrategy)),
     heading('Comparable targets'),...launchPack.amazonAdsStrategy.comparableTargets.map(item=>bullet(authorCopy(item))),
     heading('Targeting ideas'),...launchPack.amazonAdsStrategy.targetingIdeas.map(item=>bullet(authorCopy(item))),

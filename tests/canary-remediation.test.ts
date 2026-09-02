@@ -67,7 +67,7 @@ test('validated Launch Pack is generated once and reused on whole-job retry', as
   const rows:any[]=[]
   const db:any={from(){let filters:any={};const chain:any={select:()=>chain,eq:(k:string,v:any)=>{filters[k]=v;return chain},maybeSingle:async()=>({data:rows.find(r=>Object.entries(filters).every(([k,v])=>r[k]===v))||null,error:null}),insert:async(row:any)=>{rows.push(row);return{error:null}}};return chain}}
   let calls=0
-  const generate=async()=>{calls++;const market=launchMarket('fr');return {schemaVersion:'3.0',...market,backendKeywords:['1','2','3','4','5','6','7'],adKeywords:Array.from({length:20},(_,i)=>`a${i}`),categories:['a','b','c'],pricingRecommendation:{ebook:'€1',paperback:'€2',reasoning:'test'},bookDescription:'test',reviewStrategy:['test'],kdpUploadChecklist:['test'],...researchFields} as any}
+  const generate=async()=>{calls++;const market=launchMarket('fr');return {schemaVersion:'3.1',...market,backendKeywords:['1','2','3','4','5','6','7'],adKeywords:Array.from({length:20},(_,i)=>`a${i}`),categories:['a','b','c'],pricingRecommendation:{ebook:'€1',paperback:'€2',reasoning:'test'},bookDescription:'test',reviewStrategy:['test'],kdpUploadChecklist:['test'],...researchFields} as any}
   const identity={orderId:'o',language:'fr',targetLanguage:'French',targetMarket:'France',sourceFingerprint:'source',buildId:'build-1',briefRevision:1,briefSchemaVersion:'1.0',briefFingerprint:'brief',bookTitle:'Title',authorName:'Author',genre:'fantasy',description:'Description',modelId:'claude-opus-5',schemaVersion:'3.0',entitled:true,researchFingerprint:'research-v3'}
   const input={supabase:db,identity,generate}
   assert.equal((await cachedLaunchPack(input)).cached,false)
@@ -96,7 +96,7 @@ test('Launch Pack cache and request identities bind every material generation in
   let calls=0
   for(const identity of identities.slice(0,-1)){
     const market=launchMarket('fr')
-    const result=await cachedLaunchPack({supabase:db,identity,generate:async()=>{calls++;return {schemaVersion:'3.0',...market,backendKeywords:['1','2','3','4','5','6','7'],adKeywords:Array.from({length:20},(_,i)=>`a${i}`),categories:['a','b','c'],pricingRecommendation:{ebook:'€1',paperback:'€2',reasoning:'test'},bookDescription:'test',reviewStrategy:['test'],kdpUploadChecklist:['test'],...researchFields} as any}})
+    const result=await cachedLaunchPack({supabase:db,identity,generate:async()=>{calls++;return {schemaVersion:'3.1',...market,backendKeywords:['1','2','3','4','5','6','7'],adKeywords:Array.from({length:20},(_,i)=>`a${i}`),categories:['a','b','c'],pricingRecommendation:{ebook:'€1',paperback:'€2',reasoning:'test'},bookDescription:'test',reviewStrategy:['test'],kdpUploadChecklist:['test'],...researchFields} as any}})
     assert.equal(result.cached,false)
   }
   assert.equal(calls,identities.length-1)
