@@ -58,13 +58,14 @@ export function extractSourceMetadataTitle(source:Buffer,format:SemanticDocument
 }
 
 export function resolveTitleAuthority(input:{document:SemanticDocumentV2;checkoutTitle:string;source:Buffer}):TitleAuthority{
-  const semantic=input.document.nodes.find(node=>node.type==='heading'&&Boolean(node.translatedText?.trim())&&isVerifiedSemanticTitle(node.sourceText,input.checkoutTitle))
+  const checkoutTitle=cleanBookTitle(input.checkoutTitle)
+  const semantic=input.document.nodes.find(node=>node.type==='heading'&&Boolean(node.translatedText?.trim())&&isVerifiedSemanticTitle(node.sourceText,checkoutTitle))
   if(semantic?.translatedText)return{
     sourceKind:'semantic_title_node',sourceValue:semantic.sourceText,translatedValue:semantic.translatedText.trim(),effectiveValue:semantic.translatedText.trim(),
     confidence:'verified',fallbackUsed:false,semanticNodeId:semantic.id,
   }
   const metadata=extractSourceMetadataTitle(input.source,input.document.sourceFormat)
-  const sourceValue=cleanBookTitle(metadata?.value||input.checkoutTitle)
+  const sourceValue=cleanBookTitle(metadata?.value||checkoutTitle)
   return{
     sourceKind:metadata?.kind||'checkout_metadata',sourceValue,effectiveValue:sourceValue,confidence:'preserved',fallbackUsed:true,
     warning:{code:'TITLE_TRANSLATION_UNAVAILABLE',message:'No verified translated title authority was available; the original title was preserved for review.'},

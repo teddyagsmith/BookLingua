@@ -44,6 +44,10 @@ test('metadata-only EPUB preserves its title and never treats first H1 Chapter 1
 
 test('internal upload labels are stripped from title fallback',()=>{
   assert.equal(cleanBookTitle('Updated eBook Reclaim Your Longevity'),'Reclaim Your Longevity')
+  const doc=document([{sourceText:'Reclaim Your Longevity',translatedText:'Recupera tu longevidad'}])
+  const authority=resolveTitleAuthority({document:doc,checkoutTitle:'Updated eBook Reclaim Your Longevity',source:epub('Reclaim Your Longevity')})
+  assert.equal(authority.sourceKind,'semantic_title_node')
+  assert.equal(authority.translatedValue,'Recupera tu longevidad')
 })
 
 test('safe title matching accepts subtitle, punctuation and apostrophe variation without fuzzy heading guesses',()=>{
