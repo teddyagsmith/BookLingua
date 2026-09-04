@@ -203,3 +203,37 @@ test('semantic canary activation is explicit and never selects legacy orders', (
   assert.equal(semanticV2AllowedForOrder('canary-1','semantic-v2'),true); assert.equal(semanticV2AllowedForOrder('other','semantic-v2'),false); assert.equal(semanticV2AllowedForOrder('canary-1','legacy-v1'),false)
   g===undefined?delete process.env.PIPELINE_VERSION:process.env.PIPELINE_VERSION=g; c===undefined?delete process.env.SEMANTIC_V2_CANARY_ORDER_IDS:process.env.SEMANTIC_V2_CANARY_ORDER_IDS=c
 })
+
+/** InDesign, Vellum, Atticus and Word exports mark headings with styled paragraphs, not <h> tags. */
+function styledParagraphEpub(): Buffer {
+  const zip: any = new (AdmZip as any)(undefined, { noSort: true })
+  zip.addFile('mimetype', Buffer.from('application/epub+zip'))
+  zip.getEntry('mimetype').header.method = 0
+  zip.addFile('META-INF/container.xml', Buffer.from('<container><rootfiles><rootfile full-path="OEBPS/content.opf"/></rootfiles></container>'))
+  zip.addFile('OEBPS/content.opf', Buffer.from('<package><manifest><item id="c1" href="1.xhtml" media-type="application/xhtml+xml"/><item id="css" href="s.css" media-type="text/css"/></manifest><spine><itemref idref="c1"/></spine></package>'))
+  zip.addFile('OEBPS/s.css', Buffer.from('.Chap-heading{font-size:2.667em}.Heading{font-size:1.5em}.Sub-haeding{font-size:1em}.Pull-quote{font-size:0.792em}.Body-text{font-size:0.792em}'))
+  const body = Array.from({ length: 60 }, (_, index) => `<p class="Body-text">Body sentence number ${index + 1}.</p>`).join('')
+  zip.addFile('OEBPS/1.xhtml', Buffer.from(`<html><body><p class="Chap-heading">Chapter One</p><p class="Heading">A Section</p><p class="Sub-haeding">A Subsection</p><p class="Pull-quote">quoted fragment carried over</p>${body}</body></html>`))
+  return zip.toBuffer()
+}
+
+test('styled-paragraph headings are recovered with levels and pull quotes are not promoted', () => {
+  const parsed = parseSemanticEpub(styledParagraphEpub(), 'hash')
+  const headings = parsed.nodes.filter(node => node.type === 'heading')
+  assert.deepEqual(headings.map(node => [node.sourceText, node.headingLevel]), [
+    ['Chapter One', 1],
+    ['A Section', 2],
+    ['A Subsection', 3],
+  ])
+  // Body-sized text stays body text however it is styled or named.
+  assert.equal(parsed.nodes.find(node => node.sourceText.startsWith('quoted'))?.type, 'paragraph')
+})
+
+test('parser confidence reflects structure that was actually found, not an assumption', () => {
+  assert.ok(parseSemanticEpub(styledParagraphEpub(), 'hash').parserConfidence >= 0.9)
+  const flat: any = new AdmZip(styledParagraphEpub())
+  const stripped = flat.getEntry('OEBPS/1.xhtml').getData().toString('utf8').replace(/class="(Chap-heading|Heading|Sub-haeding)"/g, 'class="Body-text"')
+  flat.updateFile('OEBPS/1.xhtml', Buffer.from(stripped))
+  // A book whose structure could not be recovered must not claim high confidence.
+  assert.equal(parseSemanticEpub(flat.toBuffer(), 'hash').parserConfidence, 0.3)
+})

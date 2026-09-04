@@ -1,6 +1,7 @@
 import AdmZip from 'adm-zip'
 import { extractDocxSegments, extractTxtSegments, Segment } from './extract-segments'
 import { SemanticDocumentV2, SemanticNodeV2, extractSourceChapterNumber } from './semantic-document'
+import { buildHeadingModel, headingLevelFor, HeadingModel, parseClassStyles, structuralConfidence } from './epub-structure'
 import path from 'path'
 
 function attributes(tag: string): Record<string, string> {
@@ -51,23 +52,54 @@ function nodesFromSegments(input: {
   }
 }
 
-function htmlToSegments(html: string, startId: number): Segment[] {
+const BLOCK_PATTERN = /<(h[1-6]|p|li)\b([^>]*)>([\s\S]*?)<\/\1>/gi
+
+/** Class names used by block elements, for building the heading model. */
+export function collectBlockClasses(html: string): Map<string, number> {
+  const counts = new Map<string, number>()
+  for (const match of Array.from(html.matchAll(BLOCK_PATTERN))) {
+    const className = attributes(`<x${match[2]}>`).class
+    if (!className) continue
+    for (const name of className.split(/\s+/)) {
+      const key = name.toLowerCase()
+      if (key) counts.set(key, (counts.get(key) || 0) + 1)
+    }
+  }
+  return counts
+}
+
+function htmlToSegments(html: string, startId: number, model?: HeadingModel): Segment[] {
   const blocks: Segment[] = []
-  const blockPattern = /<(h[1-6]|p|li)\b[^>]*>([\s\S]*?)<\/\1>/gi
   let match: RegExpExecArray | null
   let id = startId
-  while ((match = blockPattern.exec(html)) !== null) {
+  BLOCK_PATTERN.lastIndex = 0
+  while ((match = BLOCK_PATTERN.exec(html)) !== null) {
     const tag = match[1].toLowerCase()
-    const text = match[2].replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim()
+    const className = attributes(`<x${match[2]}>`).class
+    const text = match[3].replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim()
     if (!text) continue
+    const level = model
+      ? headingLevelFor(tag, className, text, model)
+      : tag.startsWith('h') ? Math.min(3, Number(tag.slice(1))) : 0
     blocks.push({
       id: id++,
-      type: tag.startsWith('h') ? 'heading' : tag === 'li' ? 'listitem' : 'paragraph',
-      level: tag.startsWith('h') ? Number(tag.slice(1)) : 0,
+      type: level ? 'heading' : tag === 'li' ? 'listitem' : 'paragraph',
+      level,
       text,
+      styleName: className,
     })
   }
   return blocks
+}
+
+/** Chapter-level entries the book itself advertises, used to sanity-check detection. */
+function countNavEntries(entries: Array<{ entryName: string; getData(): Buffer }>): number {
+  const nav = entries.find(entry => /toc\.ncx$/i.test(entry.entryName) || /nav\.xhtml$/i.test(entry.entryName) || /toc\.xhtml$/i.test(entry.entryName))
+  if (!nav) return 0
+  const text = nav.getData().toString('utf8')
+  const navPoints = (text.match(/<navPoint\b/gi) || []).length
+  if (navPoints) return navPoints
+  return (text.match(/<a\b[^>]*href=/gi) || []).length
 }
 
 export function parseSemanticEpub(buffer: Buffer, sourceHash: string): SemanticDocumentV2 {
@@ -87,20 +119,40 @@ export function parseSemanticEpub(buffer: Buffer, sourceHash: string): SemanticD
   const spine = Array.from(opf.matchAll(/<itemref\b[^>]*>/gi)).map(match => attributes(match[0]).idref).filter(Boolean)
   if (!spine.length) throw new Error('EPUB spine missing')
 
-  const segments: Segment[] = []
-  const locations: string[] = []
+  // Most books mark headings with styled paragraphs rather than <h> tags, so the
+  // heading model is derived from the book's own classes and stylesheets first.
+  const documents: Array<{ contentPath: string; html: string }> = []
   for (const idref of spine) {
     const href = manifest.get(idref)
     if (!href) continue
     const contentPath = safeRelative(opfDir, href)
     const html = entries.find(entry => entry.entryName === contentPath)?.getData().toString('utf8')
-    if (!html) continue
-    const parsed = htmlToSegments(html, segments.length)
+    if (html) documents.push({ contentPath, html })
+  }
+  const css = entries
+    .filter(entry => entry.entryName.toLowerCase().endsWith('.css'))
+    .map(entry => entry.getData().toString('utf8'))
+    .join('\n')
+  const classCounts = new Map<string, number>()
+  for (const item of documents) {
+    for (const [name, count] of Array.from(collectBlockClasses(item.html))) {
+      classCounts.set(name, (classCounts.get(name) || 0) + count)
+    }
+  }
+  const model = buildHeadingModel(classCounts, parseClassStyles(css))
+
+  const segments: Segment[] = []
+  const locations: string[] = []
+  for (const item of documents) {
+    const parsed = htmlToSegments(item.html, segments.length, model)
     segments.push(...parsed)
-    locations.push(...parsed.map((_, index) => `${contentPath}:block:${index}`))
+    locations.push(...parsed.map((_, index) => `${item.contentPath}:block:${index}`))
   }
   if (!segments.length) throw new Error('EPUB spine contains no readable textual nodes')
-  return nodesFromSegments({ segments, locations, sourceHash, sourceFormat: 'epub', parserConfidence: 0.95 })
+  const navEntries = countNavEntries(entries)
+  const headings = segments.filter(segment => segment.type === 'heading').length
+  const parserConfidence = structuralConfidence({ blocks: segments.length, headings, candidateBlocks: model.candidateBlocks, navEntries })
+  return nodesFromSegments({ segments, locations, sourceHash, sourceFormat: 'epub', parserConfidence })
 }
 
 export async function parseSemanticDocx(buffer: Buffer, sourceHash: string): Promise<SemanticDocumentV2> {
