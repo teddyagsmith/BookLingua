@@ -120,6 +120,20 @@ test('hardened behavior defaults disabled and admin supports both review states'
   assert.match(approve, /pending_review', 'ready_for_review/)
 })
 
+test('large source uploads bypass Vercel and DOCX word count is server-authoritative', () => {
+  const root = process.cwd()
+  const page = fs.readFileSync(path.join(root, 'app/page.tsx'), 'utf8')
+  const init = fs.readFileSync(path.join(root, 'app/api/upload/init/route.ts'), 'utf8')
+  const finalize = fs.readFileSync(path.join(root, 'app/api/upload/route.ts'), 'utf8')
+  assert.match(page, /uploadToSignedUrl/)
+  assert.match(page, /\/api\/upload\/init/)
+  assert.doesNotMatch(page, /ext === '\.txt' \|\| ext === '\.docx'/)
+  assert.match(init, /createSignedUploadUrl/)
+  assert.match(finalize, /verifyUploadIdentity/)
+  assert.match(finalize, /downloadOriginalBinary/)
+  assert.match(finalize, /binary\.length !== declaredSize/)
+})
+
 test('current build identity is enforced at every package authority boundary', () => {
   const root = process.cwd()
   const state = fs.readFileSync(path.join(root, 'supabase/migrations/202608120002_pipeline_hardening_state.sql'), 'utf8')
@@ -141,11 +155,15 @@ test('hardened external delivery is fail-closed and cannot be enabled by truthy 
   assert.match(approve, /delivery_events/)
 })
 
-test('hardened downloads require approval and accept the delivery-pending state', () => {
+test('hardened downloads allow internal review while customer delivery remains approval-gated', () => {
   const download = fs.readFileSync(path.join(process.cwd(), 'app/api/download/[orderId]/[lang]/route.ts'), 'utf8')
-  assert.match(download, /\['completed', 'pending_review', 'ready_for_review', 'delivery_pending'\]/)
+  assert.match(download, /\['completed', 'pending_review', 'ready_for_review', 'reader_review_pending', 'delivery_pending'\]/)
   assert.match(download, /order\.status === 'delivery_pending'/)
   assert.match(download, /order\.status === 'ready_for_review'/)
+  assert.match(download, /order\.status === 'reader_review_pending'/)
+  assert.match(download, /customerScope && !\['completed','delivery_pending'\]\.includes\(order\.status\)/)
+  assert.match(download, /if\(artifactType==='launch_pack'\)/)
+  assert.match(download, /const renderedDocx=artifactType==='launch_pack'/)
 })
 
 test('hardened email paths use deterministic provider idempotency keys', () => {
@@ -156,6 +174,18 @@ test('hardened email paths use deterministic provider idempotency keys', () => {
 test('real semantic job wires Launch Pack and dual-format entitlements', () => {
   const job=fs.readFileSync(path.join(process.cwd(),'lib/translate-job.ts'),'utf8'); const pipeline=fs.readFileSync(path.join(process.cwd(),'lib/semantic-pipeline.ts'),'utf8')
   assert.match(job,/toCanonicalLaunchPack/); assert.match(job,/launchPack, dualFormat:/); assert.match(pipeline,/buildSemanticEpubFromDocument/)
+})
+
+test('translation runs are serialized per paid order before any model work', () => {
+  const job=fs.readFileSync(path.join(process.cwd(),'lib/translate-job.ts'),'utf8')
+  assert.match(job,/concurrency:\s*\{\s*limit:\s*1,\s*key:\s*'event\.data\.orderId'\s*\}/)
+})
+
+test('manually managed orders can complete without contacting internal reviewers', () => {
+  const job=fs.readFileSync(path.join(process.cwd(),'lib/translate-job.ts'),'utf8')
+  const finalization=fs.readFileSync(path.join(process.cwd(),'lib/semantic-finalization.ts'),'utf8')
+  assert.match(job,/\[INTERNAL_REVIEW_EMAIL_HOLD\]/)
+  assert.match(finalization,/if \(input\.suppressInternalReview\)[\s\S]*emailSent: false/)
 })
 
 test('completed semantic retry checks authoritative package before any model call', () => {

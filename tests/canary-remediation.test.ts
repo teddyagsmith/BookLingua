@@ -1,5 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
+import fs from 'node:fs'
+import path from 'node:path'
 import { extractLaunchPackText, generateLaunchStrategy, parseLaunchStrategyText, toCanonicalLaunchPack } from '../lib/launch-strategy'
 import { finalizeSemanticOrder } from '../lib/semantic-finalization'
 import { PackageArtifact, PackageManifestV1, requiredArtifactTypes } from '../lib/package-manifest'
@@ -23,6 +25,12 @@ test('Launch Pack selects the first non-empty text block regardless of preceding
   assert.throws(() => extractLaunchPackText([{ type: 'text', text: '  ' } as any]), /no non-empty text block/)
 })
 
+test('Launch Pack generation reserves enough output budget and enforces compact JSON', () => {
+  const source=fs.readFileSync(path.join(process.cwd(),'lib/launch-strategy.ts'),'utf8')
+  assert.match(source,/max_tokens:\s*32768/)
+  assert.match(source,/complete response below 60,000 characters/)
+})
+
 test('Launch Pack parsing fails closed for malformed text and unsupported locale', () => {
   assert.throws(() => parseLaunchStrategyText('{bad'), /malformed JSON/)
   assert.throws(() => toCanonicalLaunchPack(strategy, 'xx', true), /Unsupported Launch Pack locale/)
@@ -40,6 +48,19 @@ test('Launch Pack captures successful and failed attempt metadata', async () => 
     attempt: 3, onMetadata: record => { records.push(record) }, createMessage: async () => { throw new Error('provider failed') },
   }), /provider failed/)
   assert.equal(records[1].attempt, 3); assert.equal(records[1].success, false); assert.equal(records[1].modelId, 'claude-opus-5')
+})
+
+test('Launch Pack generation supports an identity-bound model fallback', async () => {
+  let requestedModel = ''
+  await generateLaunchStrategy({ bookTitle: 'Synthetic', authorName: 'Author', genre: 'fantasy', bookDescription: 'Synthetic', targetLanguage: 'Portuguese', targetMarket: 'Portugal' }, {
+    modelId: 'claude-sonnet-5',
+    requestId: 'order:pt-pt:launch-pack:fallback',
+    createMessage: async params => {
+      requestedModel = params.model
+      return { id: 'msg-fallback', model: params.model, usage: { input_tokens: 1, output_tokens: 1 }, content: [{ type: 'text', text: json }] } as any
+    },
+  })
+  assert.equal(requestedModel, 'claude-sonnet-5')
 })
 
 test('validated Launch Pack is generated once and reused on whole-job retry', async () => {

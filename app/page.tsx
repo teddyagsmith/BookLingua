@@ -3,6 +3,10 @@
 import { useState, useCallback, useRef, useEffect } from 'react'
 import Image from 'next/image'
 import EmailSignupPopup from '@/components/EmailSignupPopup'
+import { getSupabase } from '@/lib/supabase'
+import { bundleDiscountPercent } from '@/lib/bundle-pricing'
+import ResourcesMenu from '@/components/ResourcesMenu'
+import SiteFooter from '@/components/SiteFooter'
 
 // GA4 event helper for CTA buttons
 function trackStartTranslation(location: string) {
@@ -26,11 +30,11 @@ const WORD_TIERS = {
 
 const BUNDLE_DISCOUNTS = {
   1: { discount: 0, label: '1 Language' },
-  2: { discount: 12, label: '2 Languages' },
-  3: { discount: 25, label: '3 Languages' },
-  4: { discount: 30, label: '4 Languages' },
-  5: { discount: 35, label: '5 Languages' },
-  6: { discount: 40, label: 'All 6 Languages' },
+  2: { discount: 7, label: '2 Languages' },
+  3: { discount: 10, label: '3 Languages' },
+  4: { discount: 12, label: '4 Languages' },
+  5: { discount: 15, label: '5 Languages' },
+  6: { discount: 20, label: '6+ Languages' },
 }
 
 const CORE_LANGUAGES = [
@@ -269,9 +273,8 @@ export default function Home() {
   const calculatePrice = (tier: 'small' | 'medium' | 'large' | null, numLanguages: number) => {
     if (!tier || numLanguages === 0) return '0.00'
     const tierInfo = WORD_TIERS[tier]
-    const discountInfo = BUNDLE_DISCOUNTS[Math.min(numLanguages, 6) as keyof typeof BUNDLE_DISCOUNTS]
     const baseTotal = tierInfo.basePrice * numLanguages
-    const discount = baseTotal * (discountInfo.discount / 100)
+    const discount = baseTotal * (bundleDiscountPercent(numLanguages) / 100)
     return (baseTotal - discount).toFixed(2)
   }
 
@@ -440,24 +443,36 @@ export default function Home() {
 
       let words = 0
 
-      if (ext === '.txt' || ext === '.docx') {
+      if (ext === '.txt') {
         const text = await file.text()
         words = text.trim().split(/\s+/).filter(word => word.length > 0).length
-      } else if (ext === '.epub') {
-        words = Math.round(file.size / 6)
       }
 
       setWordCount(words)
-      setSelectedTier(determineTier(words))
+      setSelectedTier(words ? determineTier(words) : null)
 
       const titleFromFile = file.name.replace(/\.[^/.]+$/, '').replace(/_/g, ' ')
       setBookTitle(titleFromFile)
 
-      // Upload file to server so it's available after payment
+      // Upload the source directly to private Supabase storage. Sending book
+      // binaries through a Vercel function hits its request-body limit for
+      // image-heavy DOCX files.
       try {
-        const formData = new FormData()
-        formData.append('file', file)
-        const res = await fetch('/api/upload', { method: 'POST', body: formData })
+        const initRes = await fetch('/api/upload/init', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ fileName: file.name, fileSize: file.size }),
+        })
+        if (!initRes.ok) throw new Error((await initRes.json().catch(() => null))?.error || 'Upload could not be started')
+        const init = await initRes.json()
+        const contentType = ext === '.epub' ? 'application/epub+zip'
+          : ext === '.docx' ? 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' : 'text/plain'
+        const stored = await getSupabase().storage.from(init.storageBucket)
+          .uploadToSignedUrl(init.storagePath, init.signedUploadToken, file, { contentType })
+        if (stored.error) throw new Error(stored.error.message)
+        const res = await fetch('/api/upload', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ uploadId: init.uploadId, uploadToken: init.uploadToken, fileName: file.name, fileSize: file.size }),
+        })
         if (!res.ok) throw new Error('Upload failed')
         const result = await res.json()
         sessionIdRef.current = result.sessionId
@@ -656,14 +671,12 @@ export default function Home() {
             <div className="absolute top-40 right-20 w-96 h-96 bg-brand-light rounded-full blur-3xl" />
           </div>
 
-          <nav className="relative z-10 flex items-center justify-between px-4 sm:px-8 py-6 max-w-7xl mx-auto">
+          <nav className="relative z-10 flex items-center justify-between px-4 sm:px-8 py-3 max-w-7xl mx-auto">
             <div className="flex items-center gap-3 min-w-0">
               <Logo size="lg" />
             </div>
             <div className="flex items-center gap-3 sm:gap-6">
-              <a href="/blog" className="text-gray-600 hover:text-brand-dark font-medium transition-colors hidden sm:block">
-                Guides
-              </a>
+              <ResourcesMenu />
               <a href="/examples" className="text-gray-600 hover:text-brand-dark font-medium transition-colors hidden sm:block">
                 Examples
               </a>
@@ -679,12 +692,12 @@ export default function Home() {
             </div>
           </nav>
 
-          <div className="relative z-10 max-w-7xl mx-auto px-8 pt-12 pb-20">
-            <div className="grid lg:grid-cols-2 gap-16 items-center">
+          <div className="relative z-10 max-w-7xl mx-auto px-8 pt-2 pb-12">
+            <div className="grid lg:grid-cols-2 gap-10 items-center">
               <div>
-                <div className="inline-flex items-center gap-2 px-4 py-2 bg-white/80 rounded-full text-sm font-medium text-brand-dark mb-8">
+                <div className="inline-flex items-center gap-2 px-4 py-2 bg-white/80 rounded-full text-sm font-medium text-brand-dark mb-4">
                   <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
-                  From $99 per language · Editorial review included
+                  From $99 per language · AI editorial review + human check included
                 </div>
 
                 <h1 className="text-6xl font-bold text-gray-900 leading-tight mb-6" style={serifFont}>
@@ -694,11 +707,11 @@ export default function Home() {
                   </span>
                 </h1>
 
-                <p className="text-xl text-gray-600 leading-relaxed mb-10 max-w-lg">
-                  Professional AI translation for indie authors. From $99 per language - vs $5,000-$20,000 with a human agency. Smart cultural scan + two-pass editorial review included.
+                <p className="text-xl text-gray-600 leading-relaxed mb-6 max-w-lg">
+                  Professional AI translation for independent authors, with editorial review and a native-speaker proofreading check included.
                 </p>
 
-                <div className="flex flex-wrap gap-3 mb-8">
+                <div className="flex flex-wrap gap-3 mb-6">
                   {SUPPORTED_FORMATS.map(format => (
                     <span key={format.ext} className="px-3 py-1.5 bg-white/80 rounded-full text-sm font-medium text-gray-700 flex items-center gap-2">
                       {format.icon} {format.name}
@@ -721,8 +734,22 @@ export default function Home() {
                   </a>
                 </div>
 
+                <div className="relative mt-8 lg:hidden">
+                  <div className="absolute -inset-3 bg-gradient-to-r from-amber-300/20 to-brand/20 rounded-3xl blur-xl" />
+                  <div className="relative overflow-hidden rounded-2xl bg-gray-950 shadow-xl border border-brand-light/50 aspect-video">
+                    <iframe
+                      className="absolute inset-0 h-full w-full"
+                      src="https://www.youtube-nocookie.com/embed/EXuoqUyNJtg?rel=0"
+                      title="An introduction to BookLingua from Teddy Smith"
+                      allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                      referrerPolicy="strict-origin-when-cross-origin"
+                      allowFullScreen
+                    />
+                  </div>
+                </div>
+
                 {/* Supported languages */}
-                <div className="mt-8">
+                <div className="mt-6">
                   <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">Available languages</p>
                   <div className="flex flex-wrap gap-2">
                     {CORE_LANGUAGES.map(l => (
@@ -735,51 +762,75 @@ export default function Home() {
                 </div>
               </div>
 
-              <div className="relative">
+              <div className="relative hidden lg:block">
                 <div className="absolute -inset-4 bg-gradient-to-r from-amber-300/20 to-brand/20 rounded-3xl blur-2xl" />
-                <div className="relative bg-white rounded-3xl shadow-2xl p-8 border border-brand-light/50">
-                  <div className="flex items-center gap-4 mb-6">
-                    <div className="w-16 h-20 bg-gradient-to-br from-brand to-brand-dark rounded-lg shadow-lg flex items-center justify-center">
-                      <span className="text-white text-2xl">📘</span>
-                    </div>
-                    <div>
-                      <h3 className="font-bold text-gray-900" style={serifFont}>The Art of Clear Thinking</h3>
-                      <p className="text-sm text-gray-500">65,000 words · Non-Fiction · EPUB</p>
-                    </div>
-                  </div>
+                <div className="relative overflow-hidden rounded-3xl bg-gray-950 shadow-2xl border border-brand-light/50 aspect-video">
+                  <iframe
+                    className="absolute inset-0 h-full w-full"
+                    src="https://www.youtube-nocookie.com/embed/EXuoqUyNJtg?rel=0"
+                    title="An introduction to BookLingua from Teddy Smith"
+                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                    referrerPolicy="strict-origin-when-cross-origin"
+                    allowFullScreen
+                  />
+                </div>
+                <p className="mt-4 text-center text-sm text-gray-500">
+                  Meet Teddy and see how BookLingua helps authors reach readers worldwide.
+                </p>
+              </div>
+            </div>
+          </div>
+        </header>
 
-                  <div className="flex items-center gap-2 mb-4">
-                    {CORE_LANGUAGES.slice(0, 4).map(l => (
-                      <span key={l.code} className="text-2xl">{l.flag}</span>
-                    ))}
-                    <span className="text-lg">+</span>
-                    <span className="ml-1 px-2 py-1 bg-brand-light text-brand-dark text-xs font-semibold rounded-full">
-                      6 Languages
-                    </span>
+        {/* Example pricing */}
+        <section className="pb-16 bg-cream">
+          <div className="max-w-4xl mx-auto px-8">
+            <div className="relative">
+              <div className="absolute -inset-4 bg-gradient-to-r from-amber-300/20 to-brand/20 rounded-3xl blur-2xl" />
+              <div className="relative bg-white rounded-3xl shadow-xl p-6 sm:p-8 border border-brand-light/50">
+                <div className="flex items-center gap-4 mb-6">
+                  <div className="w-16 h-20 flex-shrink-0 bg-gradient-to-br from-brand to-brand-dark rounded-lg shadow-lg flex items-center justify-center">
+                    <span className="text-white text-2xl">📘</span>
                   </div>
-
-                  <div className="flex justify-between items-center py-3 border-t border-gray-100">
-                    <div>
-                      <span className="text-gray-600 text-sm block">Translation + Editorial Review</span>
-                      <span className="text-xs text-green-600 font-medium">40% bundle discount applied when you translate to 6 languages</span>
-                    </div>
-                    <div className="text-right">
-                      <span className="font-bold text-2xl text-brand">$89</span>
-                      <span className="text-xs text-gray-400 line-through block">$149</span>
-                      <span className="text-xs text-gray-500 block">per language</span>
-                    </div>
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-wider text-brand mb-1">Example translation</p>
+                    <h2 className="text-2xl font-bold text-gray-900" style={serifFont}>The Art of Clear Thinking</h2>
+                    <p className="text-sm text-gray-500">65,000 words · Non-Fiction · EPUB</p>
                   </div>
+                </div>
 
-                  <div className="bg-green-50 rounded-xl p-4 border border-green-200 mt-4">
-                    <div className="flex items-center gap-2 text-green-700 font-medium text-sm">
-                      <span>✓</span> Formatting preserved · Changes highlighted · vs $8,000+ with a human translator
-                    </div>
+                <div className="flex items-center gap-2 mb-4">
+                  {CORE_LANGUAGES.slice(0, 4).map(l => (
+                    <span key={l.code} className="text-2xl">{l.flag}</span>
+                  ))}
+                  <span className="text-lg">+</span>
+                  <span className="ml-1 px-2 py-1 bg-brand-light text-brand-dark text-xs font-semibold rounded-full">
+                    6+ Languages
+                  </span>
+                </div>
+
+                <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4 py-4 border-t border-gray-100">
+                  <div>
+                    <span className="text-gray-600 text-sm block">AI Translation + AI Editorial Review + Human Proofreading Check</span>
+                    <span className="text-xs text-green-600 font-medium">20% bundle discount applied when you translate to 6 or more languages</span>
+                  </div>
+                  <div className="sm:text-right flex-shrink-0">
+                    <span className="font-bold text-2xl text-brand">$119</span>
+                    <span className="text-xs text-gray-400 line-through block">$149</span>
+                    <span className="text-xs text-gray-500 block">per language</span>
+                  </div>
+                </div>
+
+                <div className="bg-green-50 rounded-xl p-4 border border-green-200 mt-2">
+                  <div className="flex items-start gap-2 text-green-700 font-medium text-sm">
+                    <span>✓</span>
+                    <span>Formatting preserved · Changes highlighted · vs $8,000+ with a human translator</span>
                   </div>
                 </div>
               </div>
             </div>
           </div>
-        </header>
+        </section>
 
         {/* Trust Bar */}
         <section className="py-8 bg-white border-b border-gray-100">
@@ -794,8 +845,11 @@ export default function Home() {
                 <span>Delivered in hours</span>
               </div>
               <div className="flex items-center gap-3 text-gray-700 font-semibold text-lg">
-                <span className="text-2xl">✏️</span>
-                <span>Editorial review included</span>
+                <span className="text-2xl">👤</span>
+                <span>
+                  Human proofreading check included
+                  <span className="block text-sm font-normal text-gray-500">Reviewed by a native speaker</span>
+                </span>
               </div>
               <div className="flex items-center gap-3 text-gray-700 font-semibold text-lg">
                 <span className="text-2xl">🔒</span>
@@ -810,13 +864,13 @@ export default function Home() {
           <div className="max-w-7xl mx-auto px-8">
             <div className="text-center mb-16">
               <h2 className="text-4xl font-bold text-gray-900 mb-4" style={serifFont}>How BookLingua Works</h2>
-              <p className="text-xl text-gray-600">Three steps from upload to a translation that reads naturally in any language</p>
+              <p className="text-xl text-gray-600">Four distinct stages: cultural scan → AI translation → AI editorial review → native-speaker proofreading check</p>
             </div>
 
-            <div className="grid md:grid-cols-3 gap-6 mb-16">
+            <div className="grid md:grid-cols-2 xl:grid-cols-4 gap-6 mb-16">
               <div className="bg-gradient-to-br from-amber-50 to-orange-50 rounded-3xl p-8 border border-amber-200">
                 <div className="flex items-center gap-4 mb-6">
-                  <div className="w-14 h-14 bg-amber-500 rounded-2xl flex items-center justify-center text-white text-2xl font-bold shadow-lg">1</div>
+                  <div className="w-14 h-14 flex-shrink-0 bg-amber-500 rounded-2xl flex items-center justify-center text-white text-2xl font-bold shadow-lg">1</div>
                   <div>
                     <h3 className="text-xl font-bold text-gray-900" style={serifFont}>Pre-Translation Scan</h3>
                     <p className="text-sm text-amber-600">Smart cultural detection</p>
@@ -836,7 +890,7 @@ export default function Home() {
 
               <div className="bg-gradient-to-br from-[#F3F0F8] to-brand-light rounded-3xl p-8 border border-brand-light">
                 <div className="flex items-center gap-4 mb-6">
-                  <div className="w-14 h-14 bg-brand rounded-2xl flex items-center justify-center text-white text-2xl font-bold shadow-lg">2</div>
+                  <div className="w-14 h-14 flex-shrink-0 bg-brand rounded-2xl flex items-center justify-center text-white text-2xl font-bold shadow-lg">2</div>
                   <div>
                     <h3 className="text-xl font-bold text-gray-900" style={serifFont}>Translation Pass</h3>
                     <p className="text-sm text-brand">AI-powered accuracy</p>
@@ -854,12 +908,12 @@ export default function Home() {
                 </ul>
               </div>
 
-              <div className="bg-gradient-to-br from-violet-50 to-violet-100 rounded-3xl p-8 border border-brand-light">
+              <div className="bg-gradient-to-br from-sky-50 to-blue-100 rounded-3xl p-8 border border-blue-200">
                 <div className="flex items-center gap-4 mb-6">
-                  <div className="w-14 h-14 bg-brand rounded-2xl flex items-center justify-center text-white text-2xl font-bold shadow-lg">3</div>
+                  <div className="w-14 h-14 flex-shrink-0 bg-blue-600 rounded-2xl flex items-center justify-center text-white text-2xl font-bold shadow-lg">3</div>
                   <div>
-                    <h3 className="text-xl font-bold text-gray-900" style={serifFont}>Editorial Review</h3>
-                    <p className="text-sm text-brand">Premium quality check</p>
+                    <h3 className="text-xl font-bold text-gray-900" style={serifFont}>AI Editorial Review</h3>
+                    <p className="text-sm text-blue-700">AI refinement pass</p>
                   </div>
                 </div>
                 <p className="text-gray-700 mb-4">
@@ -868,7 +922,30 @@ export default function Home() {
                 <ul className="space-y-2">
                   {['Matches your book\'s tone', 'Region-specific language settings', 'Natural phrasing & idioms', 'All changes highlighted in yellow'].map((item, i) => (
                     <li key={i} className="flex items-center gap-2 text-gray-700 text-sm">
-                      <span className="text-brand">✓</span>{item}
+                      <span className="text-blue-700">✓</span>{item}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+
+              <div className="relative bg-gradient-to-br from-emerald-50 to-green-100 rounded-3xl p-8 border-2 border-emerald-300">
+                <span className="absolute -top-3 right-5 px-3 py-1 bg-emerald-700 text-white text-xs font-bold tracking-wide rounded-full shadow-sm">
+                  HUMAN REVIEW INCLUDED
+                </span>
+                <div className="flex items-center gap-4 mb-6">
+                  <div className="w-14 h-14 flex-shrink-0 bg-emerald-700 rounded-2xl flex items-center justify-center text-white text-2xl font-bold shadow-lg">4</div>
+                  <div>
+                    <h3 className="text-xl font-bold text-gray-900" style={serifFont}>Native-Speaker Proofreading Check</h3>
+                    <p className="text-sm text-emerald-700">Independent human assessment</p>
+                  </div>
+                </div>
+                <p className="text-gray-700 mb-4">
+                  A real human proofreader reviews the translation and provides an independent report on how it reads in the target language.
+                </p>
+                <ul className="space-y-2">
+                  {['Checks whether the language sounds natural', 'Flags awkward or overly literal wording', 'Reviews tone and regional language', 'Gives you an independent native-speaker assessment'].map((item, i) => (
+                    <li key={i} className="flex items-start gap-2 text-gray-700 text-sm">
+                      <span className="text-emerald-700">✓</span>{item}
                     </li>
                   ))}
                 </ul>
@@ -879,7 +956,7 @@ export default function Home() {
             <div className="max-w-3xl mx-auto">
               <div className="text-center mb-6">
                 <h3 className="text-xl font-bold text-gray-900 mb-2" style={serifFont}>See Editorial Changes in Action</h3>
-                <p className="text-gray-600">Every improvement is highlighted in yellow so you can review and approve</p>
+                <p className="text-gray-600">Every AI editorial improvement is highlighted in yellow so you can review and approve it</p>
               </div>
               <div className="bg-white rounded-2xl border-2 border-gray-200 overflow-hidden shadow-xl">
                 <div className="bg-gray-100 px-4 py-2 border-b border-gray-200 flex items-center gap-2">
@@ -904,9 +981,57 @@ export default function Home() {
                 </div>
                 <div className="bg-[#F3F0F8] px-4 py-3 border-t border-violet-100">
                   <p className="text-sm text-brand-dark">
-                    <span className="font-semibold">💡 2 editorial improvements highlighted</span> - Review and approve each change
+                    <span className="font-semibold">💡 2 AI editorial improvements highlighted</span> - Review and approve each change
                   </p>
                 </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        {/* Founder */}
+        <section className="py-16 bg-white">
+          <div className="max-w-5xl mx-auto px-8">
+            <div className="grid md:grid-cols-[220px_1fr] gap-8 md:gap-12 items-center bg-[#F3F0F8] rounded-3xl p-6 md:p-10 border border-brand-light">
+              <div className="mx-auto md:mx-0">
+                <Image
+                  src="/images/teddy-smith-headshot.jpeg"
+                  alt="Teddy Smith, founder of BookLingua"
+                  width={220}
+                  height={275}
+                  className="w-44 md:w-full h-auto rounded-2xl object-cover shadow-lg"
+                />
+              </div>
+              <div>
+                <p className="text-sm font-bold uppercase tracking-wider text-brand mb-2">Founder-led publishing experience</p>
+                <h2 className="text-3xl md:text-4xl font-bold text-gray-900 mb-4" style={serifFont}>
+                  Built by someone who understands authors
+                </h2>
+                <div className="space-y-4 text-gray-700 leading-relaxed">
+                  <p>
+                    BookLingua was founded by Teddy Smith, an author, publishing marketer and host of <em>The Publishing Performance Show</em>. Through the romance book-discovery newsletter{' '}
+                    <a
+                      href="https://myromancereads.com/"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="font-semibold text-brand-dark underline decoration-brand-light underline-offset-2 hover:text-brand transition-colors"
+                    >
+                      My Romance Reads
+                    </a>
+                    , he has also built an audience of more than 18,000 romance readers and helped independent authors promote their books.
+                  </p>
+                  <p>
+                    Teddy created BookLingua to give authors a faster, more affordable way to reach international readers—without losing the voice and personality that made their books worth translating in the first place.
+                  </p>
+                </div>
+                <a
+                  href="https://teddyagsmith.com/"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-2 mt-5 text-brand-dark font-semibold hover:text-brand transition-colors"
+                >
+                  Meet Teddy <span aria-hidden="true">→</span>
+                </a>
               </div>
             </div>
           </div>
@@ -917,7 +1042,7 @@ export default function Home() {
           <div className="max-w-4xl mx-auto px-8">
             <div className="text-center mb-10">
               <h2 className="text-2xl font-bold text-gray-900 mb-2" style={serifFont}>What You Get Back</h2>
-              <p className="text-gray-600">Depending on what you upload</p>
+              <p className="text-gray-600">Your translated files, AI editorial highlights and native-speaker proofreading report</p>
             </div>
             <div className="grid md:grid-cols-2 gap-6">
               <div className="bg-gradient-to-br from-blue-50 to-white rounded-2xl p-6 border border-[#EBE6F4]">
@@ -949,11 +1074,11 @@ export default function Home() {
         </section>
 
         {/* Pricing */}
-        <section className="py-24 bg-gradient-to-b from-white to-cream">
+        <section id="pricing" className="py-24 bg-gradient-to-b from-white to-cream scroll-mt-8">
           <div className="max-w-7xl mx-auto px-8">
             <div className="text-center mb-16">
               <h2 className="text-4xl font-bold text-gray-900 mb-4" style={serifFont}>Simple, transparent pricing</h2>
-              <p className="text-xl text-gray-600">Per language • Includes editorial review</p>
+              <p className="text-xl text-gray-600">Per language • Includes AI editorial review and a native-speaker proofreading check</p>
               <p className="text-lg text-brand font-medium mt-3">Upload your book and we automatically calculate your exact price — no need to pick a tier</p>
             </div>
 
@@ -1003,7 +1128,7 @@ export default function Home() {
                 ))}
               </div>
               <p className="text-center text-gray-600 mt-6">
-                Example: 80k novel → All 6 languages = <span className="font-bold text-brand">${(149 * 6 * 0.60).toFixed(0)}</span> <span className="text-gray-400 line-through">${149 * 6}</span> (40% bundle discount)
+                Example: 80k novel → 6 languages = <span className="font-bold text-brand">${(149 * 6 * 0.80).toFixed(0)}</span> <span className="text-gray-400 line-through">${149 * 6}</span> (20% bundle discount)
               </p>
             </div>
 
@@ -1029,7 +1154,7 @@ export default function Home() {
               {[
                 {
                   q: 'Is this better than Google Translate?',
-                  a: 'Yes - significantly. BookLingua uses a proprietary two-pass system: the first pass produces a faithful translation; the second is an editorial review that refines idioms, adapts cultural context, and ensures your book reads naturally to native speakers. Every change is highlighted so you stay in control.',
+                  a: 'Yes - significantly. BookLingua uses a specialist AI translation pass followed by a separate AI editorial-review stage that refines idioms, adapts cultural context, and improves natural phrasing. Every AI editorial change is highlighted so you stay in control. A native-speaker proofreader then carries out an independent human quality check and provides a report.',
                 },
                 {
                   q: 'What file formats do you support?',
@@ -1055,11 +1180,11 @@ export default function Home() {
                 },
                 {
                   q: 'How much does AI book translation cost?',
-                  a: 'Our pricing is based on word count: $99 for up to 40k words, $149 for up to 80k words, and $199 for up to 150k words — per language. If you translate into multiple languages, bundle discounts apply automatically, up to 40% off when you translate into all 6 core languages.',
+                  a: 'Our pricing is based on word count: $99 for up to 40k words, $149 for up to 80k words, and $199 for up to 150k words — per language. If you translate into multiple languages, bundle discounts apply automatically, up to 20% off when you translate into 6 or more languages.',
                 },
                 {
                   q: 'Is AI book translation good enough to publish?',
-                  a: 'It can be — with the right process. BookLingua runs a cultural scan, a two-pass editorial review, consistency checks, and optional native-language proofreading so the final manuscript is ready for publication.',
+                  a: 'It can be — with the right process. BookLingua combines a cultural scan, AI translation, a separate AI editorial-review pass, consistency checks, and an included native-speaker proofreading report. The human proofreader assesses how the translation reads rather than rewriting every sentence.',
                 },
                 {
                   q: 'What languages can I translate my book into?',
@@ -1067,15 +1192,15 @@ export default function Home() {
                 },
                 {
                   q: 'Can AI translate fiction and keep my author voice?',
-                  a: 'Yes. We use genre-specific prompts and a translation brief to preserve your tone, style, character voices, and narrative pacing. The editorial review then refines idioms, dialogue, and cultural references so the book reads naturally.',
+                  a: 'Yes. We use genre-specific prompts and a translation brief to preserve your tone, style, character voices, and narrative pacing. The AI editorial-review stage then refines idioms, dialogue, and cultural references, before a native-speaker proofreader provides an independent assessment.',
                 },
                 {
                   q: 'Will my manuscript formatting be preserved?',
                   a: 'DOCX gives the best formatting preservation. EPUB comes back ebook-ready. TXT is supported for plain text. PDF is not supported because formatting is lost during conversion.',
                 },
                 {
-                  q: 'Do you include human proofreading?',
-                  a: 'Every order includes a human editorial review with a proofreading report. You receive a Review DOCX showing every change highlighted in yellow, plus a final clean file ready to publish.',
+                  q: 'Is every translation checked by a human?',
+                  a: 'Yes. After BookLingua completes its translation and AI editorial-review stages, a native-speaker proofreader carries out an independent quality check. You receive their report alongside your translated files, so you can see how the book reads to a real person in the target language.',
                 },
                 {
                   q: 'Can I translate my whole book series?',
@@ -1106,7 +1231,7 @@ export default function Home() {
                     name: 'Is this better than Google Translate?',
                     acceptedAnswer: {
                       '@type': 'Answer',
-                      text: "Yes - significantly. BookLingua uses a proprietary two-pass system: the first pass produces a faithful translation; the second is an editorial review that refines idioms, adapts cultural context, and ensures your book reads naturally to native speakers. Every change is highlighted so you stay in control.",
+                      text: "Yes - significantly. BookLingua uses a specialist AI translation pass followed by a separate AI editorial-review stage. Every AI editorial change is highlighted. A native-speaker proofreader then carries out an independent human quality check and provides a report.",
                     },
                   },
                   {
@@ -1154,7 +1279,7 @@ export default function Home() {
                     name: 'How much does AI book translation cost?',
                     acceptedAnswer: {
                       '@type': 'Answer',
-                      text: 'Our pricing is based on word count: $99 for up to 40k words, $149 for up to 80k words, and $199 for up to 150k words — per language. Bundle discounts apply automatically, up to 40% off for all 6 languages.',
+                      text: 'Our pricing is based on word count: $99 for up to 40k words, $149 for up to 80k words, and $199 for up to 150k words — per language. Bundle discounts apply automatically, up to 20% off for 6 or more languages.',
                     },
                   },
                   {
@@ -1162,7 +1287,7 @@ export default function Home() {
                     name: 'Is AI book translation good enough to publish?',
                     acceptedAnswer: {
                       '@type': 'Answer',
-                      text: 'It can be — with the right process. BookLingua runs a cultural scan, a two-pass editorial review, consistency checks, and optional native-language proofreading so the final manuscript is ready for publication.',
+                      text: 'It can be — with the right process. BookLingua combines a cultural scan, AI translation, a separate AI editorial-review pass, consistency checks, and an included native-speaker proofreading report. The human proofreader assesses how the translation reads rather than rewriting every sentence.',
                     },
                   },
                   {
@@ -1178,7 +1303,7 @@ export default function Home() {
                     name: 'Can AI translate fiction and keep my author voice?',
                     acceptedAnswer: {
                       '@type': 'Answer',
-                      text: 'Yes. We use genre-specific prompts and a translation brief to preserve your tone, style, character voices, and narrative pacing. The editorial review then refines idioms, dialogue, and cultural references.',
+                      text: 'Yes. We use genre-specific prompts and a translation brief to preserve your tone, style, character voices, and narrative pacing. The AI editorial-review stage refines idioms, dialogue, and cultural references, before a native-speaker proofreader provides an independent assessment.',
                     },
                   },
                   {
@@ -1191,10 +1316,10 @@ export default function Home() {
                   },
                   {
                     '@type': 'Question',
-                    name: 'Do you include human proofreading?',
+                    name: 'Is every translation checked by a human?',
                     acceptedAnswer: {
                       '@type': 'Answer',
-                      text: 'Every order includes a human editorial review with a proofreading report. You receive a Review DOCX showing every change highlighted in yellow, plus a final clean file ready to publish.',
+                      text: 'Yes. After BookLingua completes its translation and AI editorial-review stages, a native-speaker proofreader carries out an independent quality check. You receive their report alongside your translated files, so you can see how the book reads to a real person in the target language.',
                     },
                   },
                   {
@@ -1212,23 +1337,11 @@ export default function Home() {
         </section>
 
         {/* Footer */}
-        <footer className="bg-gray-900 text-gray-400">
+        <div className="bg-gray-900 text-gray-400">
           {/* Newsletter signup strip */}
           <FooterSignup serifFont={serifFont} />
-
-          <div className="max-w-7xl mx-auto px-8 py-10 text-center border-t border-gray-800">
-            <div className="flex items-center justify-center gap-3 mb-4">
-              <Logo size="md" />
-            </div>
-            <p className="mb-2">
-              Questions? Email us at{' '}
-              <a href="mailto:hello@booklingua.io" className="text-amber-400 hover:text-amber-300 transition-colors">
-                hello@booklingua.io
-              </a>
-            </p>
-            <p>© 2026 BookLingua. All rights reserved.</p>
-          </div>
-        </footer>
+          <SiteFooter />
+        </div>
       </div>
     )
   }
@@ -1590,14 +1703,14 @@ export default function Home() {
               <div className="bg-brand rounded-2xl p-6 mb-8 text-white">
                 <div className="flex items-center justify-between">
                   <div>
-                    <h3 className="text-xl font-bold mb-1">🎉 Bundle All 6 Languages & Save 40%</h3>
-                    <p className="text-white/80">Spanish, French, German, Italian, Polish, Japanese & Portuguese</p>
+                    <h3 className="text-xl font-bold mb-1">🎉 Choose 6+ Languages & Save 20%</h3>
+                    <p className="text-white/80">Choose from all available Spanish, French, German, Italian, Polish, Japanese and Portuguese markets</p>
                   </div>
                   <button
                     onClick={selectAllCore}
                     className="px-6 py-3 bg-white text-brand rounded-xl font-bold hover:shadow-lg transition-all"
                   >
-                    Select All 6
+                    Select All 9
                   </button>
                 </div>
               </div>

@@ -3,7 +3,7 @@ import assert from 'node:assert/strict'
 import {readFileSync} from 'node:fs'
 import { PackageArtifact,PackageManifestV1 } from '../lib/package-manifest'
 import { CUSTOMER_ARTIFACT_TYPES,customerArtifactFilename,customerContentDisposition,customerDeliveryAllowed,customerVisibleArtifacts,resolveCustomerDeliveryOrigin,sanitizeCustomerFilenamePart } from '../lib/customer-delivery'
-import { buildCustomerArtifactDownloadUrl,buildCustomerPortalUrl,verifyCustomerArtifactToken,verifyCustomerPortalToken } from '../lib/download-token'
+import { buildCustomerArtifactDownloadUrl,buildCustomerPortalUrl,buildReviewArtifactDownloadUrl,buildReviewPortalUrl,verifyCustomerArtifactToken,verifyCustomerPortalToken,verifyReviewArtifactToken,verifyReviewPortalToken } from '../lib/download-token'
 import { renderCustomerPackageEmail } from '../lib/email-templates'
 
 function artifact(type:PackageArtifact['type'],filename=`${type}.docx`):PackageArtifact{return{id:`id-${type}`,buildId:'build',type,required:true,filename,storageBucket:'private',storagePath:`secret/${type}`,sha256:'a'.repeat(64),sizeBytes:10,validationStatus:'pass'}}
@@ -37,6 +37,11 @@ test('customer tokens are scoped to the portal or one visible artifact',()=>{
     const url=buildCustomerArtifactDownloadUrl('order','fr','final_docx','https://booklingua.test'),token=new URL(url).searchParams.get('token')!
     assert.equal(verifyCustomerArtifactToken('order','fr','final_docx',token),true)
     assert.equal(verifyCustomerArtifactToken('order','fr','pass1_docx',token),false)
+    const reviewPortal=buildReviewPortalUrl('order','https://booklingua.test'),reviewPortalToken=new URL(reviewPortal).searchParams.get('token')!
+    assert.equal(verifyReviewPortalToken('order',reviewPortalToken),true);assert.equal(verifyCustomerPortalToken('order',reviewPortalToken),false)
+    const reviewUrl=buildReviewArtifactDownloadUrl('order','fr','launch_pack','https://booklingua.test'),reviewToken=new URL(reviewUrl).searchParams.get('token')!
+    assert.equal(verifyReviewArtifactToken('order','fr','launch_pack',reviewToken),true)
+    assert.equal(verifyCustomerArtifactToken('order','fr','launch_pack',reviewToken),false)
   }finally{if(old===undefined)delete process.env.STRIPE_WEBHOOK_SECRET;else process.env.STRIPE_WEBHOOK_SECRET=old}
 })
 
@@ -76,5 +81,6 @@ test('preview resend is staging-only, exact-recipient, provider-idempotent and l
   const source=readFileSync('app/api/admin/orders/[orderId]/preview-delivery/route.ts','utf8')
   assert.match(source,/BOOKLINGUA_DELIVERY_ENV!=='staging'/);assert.match(source,/BOOKLINGUA_ALLOW_PREVIEW_DELIVERY!=='enabled'/)
   assert.match(source,/BOOKLINGUA_STAGING_DELIVERY_RECIPIENT/);assert.match(source,/delivery-preview-v3/)
+  assert.match(source,/internal-customer-preview-v1/);assert.match(source,/gilly@myromancereads\.com/);assert.match(source,/buildReviewPortalUrl/)
   assert.doesNotMatch(source,/from\('delivery_events'\)|begin_hardened_delivery/)
 })

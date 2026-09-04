@@ -80,6 +80,18 @@ test('EPUB navigation mismatch and malformed spine fail', () => {
   assert.ok(codes.includes('EPUB_NAV_MISMATCH'))
 })
 
+test('styled-paragraph EPUB navigation fails closed when semantic headings cannot be verified', () => {
+  const zip: any = new AdmZip()
+  zip.addFile('mimetype', Buffer.from('application/epub+zip'))
+  zip.addFile('META-INF/container.xml', Buffer.from(`<container><rootfile full-path="OEBPS/content.opf"/></container>`))
+  zip.addFile('OEBPS/content.opf', Buffer.from(`<package><manifest><item id="c" href="c.xhtml" media-type="application/xhtml+xml"/><item id="n" href="nav.xhtml" media-type="application/xhtml+xml" properties="nav"/></manifest><spine><itemref idref="c"/></spine></package>`))
+  zip.addFile('OEBPS/c.xhtml', Buffer.from(`<html><body><p class="chapter-title">Capítulo 1</p><p>Body.</p></body></html>`))
+  zip.addFile('OEBPS/nav.xhtml', Buffer.from(`<html><body><nav><a href="c.xhtml">Chapter 1</a></nav></body></html>`))
+  const result = validateArtifact(zip.toBuffer(), 'epub')
+  assert.equal(result.passed, false)
+  assert.ok(result.errors.some(issue => issue.code === 'EPUB_NAV_CONTENT_UNVERIFIABLE'))
+})
+
 test('DOCX reconstructs markers and markdown split across runs and validates relationships', () => {
   const zip: any = new AdmZip()
   zip.addFile('[Content_Types].xml', Buffer.from(`<Types><Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/></Types>`))

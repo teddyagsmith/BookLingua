@@ -29,6 +29,7 @@ export async function finalizeSemanticOrder(input: {
   genre?: string
   customerPackageVersion?: string
   readerPanelEnabled?: boolean
+  suppressInternalReview?: boolean
 }): Promise<{ status: string; reviewEventCreated: boolean; emailSent: boolean }> {
   const { data: status, error: gateError } = await input.supabase.rpc('resolve_order_package_gate', { p_order_id: input.orderId })
   if (gateError) throw new Error(`Aggregate package gate failed: ${gateError.message}`)
@@ -41,6 +42,13 @@ export async function finalizeSemanticOrder(input: {
   const manifests = input.languages.map(language => rows?.find((row: any) => row.language === language)?.manifest as PackageManifestV1 | undefined)
   if (manifests.some(manifest => !manifest || evaluatePackageManifest(manifest).status !== 'pass')) {
     throw new Error('Aggregate gate returned ready without every authoritative PASS manifest')
+  }
+
+  // Translation completion and external review contact are separate actions.
+  // Manually managed orders can finish and remain ready for review without
+  // sending anything until an operator explicitly releases the hold.
+  if (input.suppressInternalReview) {
+    return { status, reviewEventCreated: false, emailSent: false }
   }
 
   const buildIdentity = manifests.map(manifest => `${manifest!.language}:${manifest!.buildId}`).sort().join('|')

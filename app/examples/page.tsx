@@ -3,6 +3,8 @@
 import { useState } from 'react'
 import Image from 'next/image'
 import Link from 'next/link'
+import ResourcesMenu from '@/components/ResourcesMenu'
+import SiteFooter from '@/components/SiteFooter'
 
 const serifFont = { fontFamily: "'EB Garamond', Georgia, serif" }
 
@@ -766,9 +768,7 @@ export default function ExamplesPage() {
           <Logo size="lg" />
         </Link>
         <div className="flex items-center gap-3 sm:gap-6">
-          <Link href="/blog" className="text-gray-600 hover:text-brand-dark font-medium transition-colors hidden sm:block">
-            Guides
-          </Link>
+          <ResourcesMenu />
           <Link href="/publishers" className="text-gray-600 hover:text-brand-dark font-medium transition-colors hidden sm:block">
             Publishers
           </Link>
@@ -1064,23 +1064,13 @@ export default function ExamplesPage() {
             <span>✓ EPUB, DOCX, TXT</span>
             <span>✓ Formatting preserved</span>
             <span>✓ 4 languages available</span>
-            <span>✓ Bundle & save up to 37%</span>
+            <span>✓ Bundle & save up to 20%</span>
           </div>
         </div>
       </section>
 
       {/* Footer */}
-      <footer className="bg-gray-900 text-gray-400 py-12">
-        <div className="max-w-7xl mx-auto px-8 text-center">
-          <div className="flex items-center justify-center gap-3 mb-4">
-            <Logo size="md" />
-          </div>
-          <p className="mb-2">© 2026 BookLingua. All rights reserved.</p>
-          <p className="text-xs text-gray-600">
-            Sample text: <em>Dracula</em> by Bram Stoker (1897) — public domain
-          </p>
-        </div>
-      </footer>
+      <SiteFooter note={<>Sample text: <em>Dracula</em> by Bram Stoker (1897) — public domain</>} />
     </div>
   )
 }

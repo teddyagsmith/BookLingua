@@ -92,6 +92,7 @@ export async function generateLaunchStrategy(
   execution: {
     attempt?: number
     requestId?: string
+    modelId?: string
     onMetadata?: (metadata: LaunchPackExecutionMetadata) => Promise<void> | void
     createMessage?: (params: MessageCreateParamsNonStreaming) => Promise<AnthropicMessage>
   } = {},
@@ -101,10 +102,11 @@ export async function generateLaunchStrategy(
   let response: AnthropicMessage | undefined
   try {
   response = await (execution.createMessage || ((params) => anthropic.messages.create(params)))({
-    model: BOOKLINGUA_MODEL_CONFIG.launchPack,
+    model: execution.modelId || BOOKLINGUA_MODEL_CONFIG.launchPack,
     // Opus may spend part of this budget on thinking blocks before emitting the
-    // canonical JSON text block. 4,000 truncated valid Launch Packs in staging.
-    max_tokens: 24576,
+    // canonical JSON text block. Complex non-fiction packs can otherwise reach
+    // the response ceiling before the closing JSON object is emitted.
+    max_tokens: 32768,
     messages: [
       {
         role: 'user',
@@ -211,6 +213,7 @@ Generate the following in JSON format. All author-facing explanations and instru
 IMPORTANT: 
 - Explanations/instructions are English; copy-ready material is ${input.targetLanguage}
 - Include at least 12 strong verified opportunities, exactly 10 ranked opportunities, 5+ hooks, 8-12 social concepts, and 10+ cited sources
+- Return a compact object: keep every string below 240 characters except bookDescription (maximum 1,400 characters), use no prose outside JSON, and keep the complete response below 60,000 characters
 - Keep every field concise enough that the complete JSON fits the response; quality and specificity matter more than long prose
 - Backend keywords must each be under 50 characters
 - Be specific to ${input.targetMarket} market, not generic advice

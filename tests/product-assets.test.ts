@@ -4,7 +4,7 @@ import { existsSync, readFileSync } from 'fs'
 import { createHash } from 'crypto'
 import { join } from 'path'
 import AdmZip from 'adm-zip'
-import { LaunchPackV1, validateLaunchPack } from '../lib/launch-pack-schema'
+import { LaunchPackV1, launchMarket, validateLaunchPack } from '../lib/launch-pack-schema'
 import { parseLegacyTranslationNotes, renderTranslationNotes, validateTranslationNotes } from '../lib/translation-notes'
 import { UPLOAD_GUIDE_ASSET_PATH, UPLOAD_GUIDE_SHA256, UPLOAD_GUIDE_VERSION } from '../lib/upload-guide'
 import { researchFields } from './launch-pack-fixture'
@@ -23,6 +23,10 @@ function validLaunchPack(): LaunchPackV1 {
 test('Launch Pack validation enforces entitlement, locale and required sections', () => {
   assert.deepEqual(validateLaunchPack({ pack: validLaunchPack(), expectedLocale: 'fr', purchased: true }), [])
   assert.match(validateLaunchPack({ pack: validLaunchPack(), expectedLocale: 'de', purchased: false }).join(' '), /not entitled/)
+})
+
+test('Launch Pack markets cover every currently sold European locale',()=>{
+  for(const locale of ['es-es','fr','de','it','pt-pt','pl'])assert.equal(launchMarket(locale).locale,locale)
 })
 
 test('legacy notes can migrate into a validated structured schema and render', () => {
