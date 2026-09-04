@@ -68,7 +68,7 @@ export interface SemanticPipelineInput {
  * leaving the delivered files untouched.
  */
 export const SEMANTIC_PROMPT_SIGNATURE = `${TRANSLATION_PROMPT_VERSION}+${EDITORIAL_PROMPT_VERSION}`
-export const SEMANTIC_BUILD_POLICY_VERSION = 'semantic-v2-title-authority-clean-v3'
+export const SEMANTIC_BUILD_POLICY_VERSION = 'semantic-v2-consolidated-heading-parity-v4'
 
 export function deterministicSemanticBuildId(orderId: string, language: string, sourceHash: string, briefRevision: number, promptSignature: string = SEMANTIC_PROMPT_SIGNATURE): string {
   const hex = createHash('sha256').update(`${orderId}:${language}:${sourceHash}:${briefRevision}:${SEMANTIC_BUILD_POLICY_VERSION}:${promptSignature}`).digest('hex').slice(0, 32).split('')
@@ -220,7 +220,10 @@ export async function runSemanticPipeline(input: SemanticPipelineInput) {
   if (buildError) throw new Error(`Build allocation failed: ${buildError.message}`)
   const pass1 = { ...sourceDocument, nodes: await runBatchedPass(input, sourceDocument.nodes, 1) }
   assertSourceAwareDuplicateParity(sourceDocument.nodes, pass1.nodes)
-  assertSourceAwareHeadingDuplicateParity(sourceDocument.nodes, pass1.nodes)
+  // Display headings can be split across adjacent EPUB blocks. Compare the same
+  // consolidated headings that customer artifacts use, otherwise a repeated short
+  // fragment (for example "Creating Your") is mistaken for a duplicate heading.
+  assertSourceAwareHeadingDuplicateParity(consolidatedArtifactNodes(sourceDocument), consolidatedArtifactNodes(pass1))
   await persistSemantic(input.supabase, { orderId: input.orderId, language: input.language, buildId, pass: 'pass1', document: pass1, eligibility: eligibility.status })
   const rawPass2 = { ...pass1, nodes: await runBatchedPass(input, pass1.nodes, 2) }
   let titleAuthority = resolveTitleAuthority({ document: rawPass2, checkoutTitle: input.title, source: input.source })
@@ -251,7 +254,7 @@ export async function runSemanticPipeline(input: SemanticPipelineInput) {
   if (!editorialPassed) throw new Error(editorialErrors[0].message)
   await validationReport(input.supabase, { orderId: input.orderId, language: input.language, buildId, stage: 'title_authority', passed: true, metrics: { titleAuthority } })
   assertSourceAwareDuplicateParity(sourceDocument.nodes, pass2.nodes)
-  assertSourceAwareHeadingDuplicateParity(sourceDocument.nodes, pass2.nodes)
+  assertSourceAwareHeadingDuplicateParity(consolidatedArtifactNodes(sourceDocument), consolidatedArtifactNodes(pass2))
   await persistSemantic(input.supabase, { orderId: input.orderId, language: input.language, buildId, pass: 'pass2', document: pass2, eligibility: eligibility.status })
 
   // A completed build is immutable. Retries must reuse its validated package rather
