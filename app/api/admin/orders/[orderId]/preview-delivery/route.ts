@@ -35,7 +35,7 @@ export async function POST(request:NextRequest,{params}:{params:{orderId:string}
   const subject=internalReview?`[CUSTOMER EMAIL PREVIEW — APPROVAL] ${email.subject}`:`[BOOKLINGUA STAGING TEST] ${email.subject}`
   const {data,error}=await new Resend(process.env.RESEND_API_KEY!).emails.send({
     from:'BookLingua <orders@booklingua.io>',to:[exactRecipient],subject,html:email.html,text:email.text,
-  },{idempotencyKey:`${internalReview?'internal-customer-preview-v1':'delivery-preview-v3'}/${order.id}/${originIdentity}`})
+  },{idempotencyKey:`${internalReview?'internal-customer-preview-v2':'delivery-preview-v3'}/${order.id}/${originIdentity}`})
   if(error)return NextResponse.json({error:'Preview customer email failed'},{status:502})
   return NextResponse.json({success:true,recipient:exactRecipient,subject,ctaUrl,providerMessageId:data?.id||null})
 }

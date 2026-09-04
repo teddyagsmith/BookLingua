@@ -81,7 +81,7 @@ test('preview resend is staging-only, exact-recipient, provider-idempotent and l
   const source=readFileSync('app/api/admin/orders/[orderId]/preview-delivery/route.ts','utf8')
   assert.match(source,/BOOKLINGUA_DELIVERY_ENV!=='staging'/);assert.match(source,/BOOKLINGUA_ALLOW_PREVIEW_DELIVERY!=='enabled'/)
   assert.match(source,/BOOKLINGUA_STAGING_DELIVERY_RECIPIENT/);assert.match(source,/delivery-preview-v3/)
-  assert.match(source,/internal-customer-preview-v1/);assert.match(source,/gilly@myromancereads\.com/);assert.match(source,/buildReviewPortalUrl/)
+  assert.match(source,/internal-customer-preview-v2/);assert.match(source,/gilly@myromancereads\.com/);assert.match(source,/buildReviewPortalUrl/)
   assert.match(source,/bookTitle:cleanBookTitle\(order\.book_title\)/)
   assert.doesNotMatch(source,/from\('delivery_events'\)|begin_hardened_delivery/)
 })
