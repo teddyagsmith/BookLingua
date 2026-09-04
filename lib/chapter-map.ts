@@ -3,7 +3,7 @@ import { brandedDocumentHeader } from './branded-document-header'
 import { SemanticDocumentV2 } from './semantic-document'
 import { deterministicDocx } from './deterministic-docx'
 import { BOOKLINGUA_CLEAN_BOOK_STYLE } from './formatting-policy'
-import { consolidatedArtifactNodes, decodeVisibleEntities } from './semantic-artifacts'
+import { consolidatedArtifactNodes, decodeVisibleEntities, ensureDefaultNormalStyle } from './semantic-artifacts'
 
 export interface ChapterMapRow {
   chapterId: string
@@ -64,7 +64,7 @@ export async function renderChapterMapDocx(rows: ChapterMapRow[], options: { boo
     ] })),
   ]
   const title=options.bookTitle?`${options.bookTitle} — Chapter Map`:'BookLingua Chapter Map'
-  return deterministicDocx(Buffer.from(await Packer.toBuffer(new Document({
+  return deterministicDocx(ensureDefaultNormalStyle(Buffer.from(await Packer.toBuffer(new Document({
     styles:{default:{document:{run:{font:'Georgia',size:BOOKLINGUA_CLEAN_BOOK_STYLE.bodySizeHalfPoints}}}},
     sections: [{properties:{page:{margin:BOOKLINGUA_CLEAN_BOOK_STYLE.pageMarginsTwips}},footers:{default:new Footer({children:[new Paragraph({alignment:AlignmentType.CENTER,children:[new TextRun({text:'BookLingua · Translate your book in hours, not months · ',font:'Georgia',color:'6B7280',size:18}),new TextRun({children:[PageNumber.CURRENT],font:'Georgia',color:'6B7280',size:18})]})]})},children: [
       ...brandedDocumentHeader(),
@@ -73,5 +73,5 @@ export async function renderChapterMapDocx(rows: ChapterMapRow[], options: { boo
       new Paragraph({text:'Use this Chapter Map to match chapters in your original manuscript with their translated equivalents when editing or uploading your translated book.',alignment:AlignmentType.CENTER,spacing:{after:240}}),
       new Table({ rows: tableRows, width:{size:9000,type:WidthType.DXA},columnWidths:[1200,800,1700,2650,2650],layout:TableLayoutType.FIXED,borders:{top:{style:BorderStyle.SINGLE,size:2,color:'D1D5DB'},bottom:{style:BorderStyle.SINGLE,size:2,color:'D1D5DB'},left:{style:BorderStyle.SINGLE,size:2,color:'D1D5DB'},right:{style:BorderStyle.SINGLE,size:2,color:'D1D5DB'},insideHorizontal:{style:BorderStyle.SINGLE,size:1,color:'E5E7EB'},insideVertical:{style:BorderStyle.SINGLE,size:1,color:'E5E7EB'}} }),
     ]}]
-  }))))
+  })))))
 }

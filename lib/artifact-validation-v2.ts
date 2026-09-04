@@ -154,7 +154,10 @@ export function validateArtifact(buffer: Buffer, kind: ArtifactKind, options: Ar
           const landmarks=localizedLandmarks[options.expectedLanguage||'']||new Set<string>()
           const unmatched=navigationHeadings.filter(value=>{const normalized=value.normalize('NFKC').toLocaleLowerCase().replace(/\s+/g,' ').trim();return!landmarks.has(normalized)&&!normalizedContent.has(normalized)&&!chapterNumbers([value]).some(number=>contentNumbers.has(number))})
           if(headings.length&&unmatched.length)errors.push({code:'EPUB_NAV_TEXT_MISMATCH',message:`Navigation labels do not resolve to content headings: ${unmatched.slice(0,5).join(' | ')}`})
-          if(options.expectedLanguage&&options.expectedLanguage!=='en'&&navigationHeadings.some(value=>/^(?:chapter|introduction|table of contents|cover)\b/i.test(value)))errors.push({code:'EPUB_NAV_WRONG_LANGUAGE',message:`Navigation contains English labels for ${options.expectedLanguage}`})
+          const forbiddenEnglishNav = options.expectedLanguage === 'fr'
+            ? /^(?:chapter|table of contents|cover)\b/i // "Introduction" is valid French.
+            : /^(?:chapter|introduction|table of contents|cover)\b/i
+          if(options.expectedLanguage&&options.expectedLanguage!=='en'&&navigationHeadings.some(value=>forbiddenEnglishNav.test(value)))errors.push({code:'EPUB_NAV_WRONG_LANGUAGE',message:`Navigation contains English labels for ${options.expectedLanguage}`})
           for (const sequence of navSequences) {
             if (!sequence.length) continue
             // Some valid publisher EPUBs encode chapter labels as styled

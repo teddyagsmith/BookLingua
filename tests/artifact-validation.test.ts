@@ -48,6 +48,14 @@ test('EPUB navigation headings are not counted as content chapters', () => {
   assert.equal(result.passed, true, JSON.stringify(result.errors))
 })
 
+test('French Introduction is not misclassified as an English navigation leak', () => {
+  const result=validateArtifact(syntheticEpub([
+    {heading:'Introduction',body:'Texte liminaire.'},
+    {heading:'Chapitre 1',body:'Corps du chapitre.'},
+  ]),'epub',{expectedLanguage:'fr'})
+  assert.equal(result.errors.some(error=>error.code==='EPUB_NAV_WRONG_LANGUAGE'),false)
+})
+
 test('empty chapter and Roman/Arabic duplicate identity fail', () => {
   const empty = validateArtifact(syntheticEpub([{ heading: 'Chapter I', body: '' }]), 'epub')
   assert.ok(empty.errors.some(issue => issue.code === 'EMPTY_CHAPTER'))
