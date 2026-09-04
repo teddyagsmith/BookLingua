@@ -68,6 +68,21 @@ export function collectBlockClasses(html: string): Map<string, number> {
   return counts
 }
 
+/**
+ * Flatten one block's inner HTML to text.
+ *
+ * Inline elements carry no whitespace in HTML, so stripping every tag to a space
+ * inserts spurious gaps: "believed<span>1</span>." becomes "believed 1 ." and an
+ * inline span inside a word splits it. Only block-level boundaries imply a space.
+ */
+export function blockText(inner: string): string {
+  return inner
+    .replace(/<\/?(?:br|div|p|li|tr|td|th|h[1-6]|blockquote|section|article|figure)\b[^>]*>/gi, ' ')
+    .replace(/<[^>]+>/g, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+
 function htmlToSegments(html: string, startId: number, model?: HeadingModel): Segment[] {
   const blocks: Segment[] = []
   let match: RegExpExecArray | null
@@ -76,7 +91,7 @@ function htmlToSegments(html: string, startId: number, model?: HeadingModel): Se
   while ((match = BLOCK_PATTERN.exec(html)) !== null) {
     const tag = match[1].toLowerCase()
     const className = attributes(`<x${match[2]}>`).class
-    const text = match[3].replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim()
+    const text = blockText(match[3])
     if (!text) continue
     const level = model
       ? headingLevelFor(tag, className, text, model)

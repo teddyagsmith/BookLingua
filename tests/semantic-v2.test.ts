@@ -271,3 +271,24 @@ test('verified editorial overrides are exact and node-bound',()=>{
   assert.equal(corrected.nodes[0].translatedText,'avant phrase corrigée après')
   assert.throws(()=>applyVerifiedEditorialOverrides(document,[{nodeId:'n2',before:'mauvaise phrase',after:'phrase corrigée'}]),/node missing/)
 })
+
+test('inline markup does not inject spaces into sentences or split words', () => {
+  const zip: any = new (AdmZip as any)(undefined, { noSort: true })
+  zip.addFile('mimetype', Buffer.from('application/epub+zip'))
+  zip.getEntry('mimetype').header.method = 0
+  zip.addFile('META-INF/container.xml', Buffer.from('<container><rootfiles><rootfile full-path="OEBPS/content.opf"/></rootfiles></container>'))
+  zip.addFile('OEBPS/content.opf', Buffer.from('<package><manifest><item id="c1" href="1.xhtml" media-type="application/xhtml+xml"/></manifest><spine><itemref idref="c1"/></spine></package>'))
+  zip.addFile('OEBPS/1.xhtml', Buffer.from('<html><body>' +
+    '<p>Genes load the gun, as believed<span class="ref">1</span>. Lifestyle pulls it.</p>' +
+    '<p>The po<span class="kern">wer</span> of habit compounds over many years of steady practice.</p>' +
+    '<p>First line<br/>second line follows here with enough words to be a real block.</p>' +
+    '</body></html>'))
+  const nodes = parseSemanticEpub(zip.toBuffer(), 'hash').nodes
+  // Footnote markers and punctuation stay attached to the word they belong to.
+  assert.match(nodes[0].sourceText, /believed1\. Lifestyle/)
+  assert.doesNotMatch(nodes[0].sourceText, /believed 1 \./)
+  // An inline span inside a word must not split it.
+  assert.match(nodes[1].sourceText, /\bpower\b/)
+  // Line breaks are real separators and still become a space.
+  assert.match(nodes[2].sourceText, /First line second line/)
+})
