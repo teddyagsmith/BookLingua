@@ -1,7 +1,7 @@
 import AdmZip from 'adm-zip'
 import path from 'path'
 
-export const ARTIFACT_VALIDATOR_VERSION = '1.4'
+export const ARTIFACT_VALIDATOR_VERSION = '1.5'
 export type ArtifactKind = 'epub' | 'docx'
 export interface ArtifactValidationIssue { code: string; message: string; location?: string }
 export interface ArtifactValidationResult {
@@ -175,6 +175,10 @@ export function validateArtifact(buffer: Buffer, kind: ArtifactKind, options: Ar
         const rootRels = entries.get('_rels/.rels')?.getData().toString('utf8')
         if (!rootRels || !/Type=["'][^"']*officeDocument["']/i.test(rootRels) || !/Target=["']\/?word\/document\.xml["']/i.test(rootRels) || !entries.has('word/_rels/document.xml.rels')) errors.push({ code: 'DOCX_RELATIONSHIPS', message: 'DOCX main document relationships are missing or invalid' })
         const document = entries.get('word/document.xml')
+        const stylesMarkup = entries.get('word/styles.xml')?.getData().toString('utf8') || ''
+        const semanticStyleIds = Array.from(stylesMarkup.matchAll(/<w:style\b[^>]*\bw:styleId=["'](Title|Heading[1-6])["']/gi), match => match[1].toLowerCase())
+        const duplicateStyleId = semanticStyleIds.find((id, index) => semanticStyleIds.indexOf(id) !== index)
+        if (duplicateStyleId) errors.push({ code: 'DOCX_DUPLICATE_STYLE_ID', message: `DOCX defines the semantic style ${duplicateStyleId} more than once, so viewers may render inconsistent fonts and spacing` })
         if (!document) errors.push({ code: 'DOCX_DOCUMENT_MISSING', message: 'DOCX word/document.xml is missing' })
         else {
           const rawMarkup=document.getData().toString('utf8');doubleEscapedEntity=/&amp;(?:quot|apos|amp|lt|gt|#\d+|#x[0-9a-f]+);/i.test(rawMarkup)

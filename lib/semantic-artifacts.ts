@@ -40,16 +40,19 @@ function nodeParagraph(node: SemanticNodeV2, text: string, runs?: TextRun[], ind
 
 function semanticStyles() {
   return {
-    default: { document: { run: { font: BOOKLINGUA_CLEAN_BOOK_STYLE.bodyFont, size: BOOKLINGUA_CLEAN_BOOK_STYLE.bodySizeHalfPoints } } },
-    paragraphStyles: [
-      { id: 'Title', name: 'Title', basedOn: 'Normal', next: 'Normal', run: { font: BOOKLINGUA_CLEAN_BOOK_STYLE.bodyFont, size: BOOKLINGUA_CLEAN_BOOK_STYLE.titleSizeHalfPoints, bold: true }, paragraph: { alignment: AlignmentType.CENTER, spacing: { after: 480 } } },
-      { id: 'Heading1', name: 'Heading 1', basedOn: 'Normal', next: 'Normal', run: { font: BOOKLINGUA_CLEAN_BOOK_STYLE.chapterHeadingFont, size: BOOKLINGUA_CLEAN_BOOK_STYLE.chapterHeadingSizeHalfPoints, bold: true }, paragraph: { alignment: AlignmentType.CENTER, spacing: { before: 360, after: 360 } } },
-      { id: 'Heading2', name: 'Heading 2', basedOn: 'Normal', next: 'Normal', run: { font: BOOKLINGUA_CLEAN_BOOK_STYLE.chapterHeadingFont, size: 30, bold: true }, paragraph: { spacing: { before: 300, after: 180 } } },
-      { id: 'Heading3', name: 'Heading 3', basedOn: 'Normal', next: 'Normal', run: { font: BOOKLINGUA_CLEAN_BOOK_STYLE.chapterHeadingFont, size: 26, bold: true }, paragraph: { spacing: { before: 240, after: 160 } } },
-      { id: 'Heading4', name: 'Heading 4', basedOn: 'Normal', next: 'Normal', run: { font: BOOKLINGUA_CLEAN_BOOK_STYLE.chapterHeadingFont, size: 24, bold: true }, paragraph: { spacing: { before: 200, after: 140 } } },
-      { id: 'Heading5', name: 'Heading 5', basedOn: 'Normal', next: 'Normal', run: { font: BOOKLINGUA_CLEAN_BOOK_STYLE.chapterHeadingFont, size: 22, bold: true }, paragraph: { spacing: { before: 180, after: 120 } } },
-      { id: 'Heading6', name: 'Heading 6', basedOn: 'Normal', next: 'Normal', run: { font: BOOKLINGUA_CLEAN_BOOK_STYLE.chapterHeadingFont, size: 22, bold: true }, paragraph: { spacing: { before: 160, after: 100 } } },
-    ],
+    // Override docx's built-in semantic styles in place. Adding Title/Heading1
+    // again through paragraphStyles creates duplicate style IDs; Word and Drive
+    // are then free to choose the oversized built-in definition.
+    default: {
+      document: { run: { font: BOOKLINGUA_CLEAN_BOOK_STYLE.bodyFont, size: BOOKLINGUA_CLEAN_BOOK_STYLE.bodySizeHalfPoints } },
+      title: { run: { font: BOOKLINGUA_CLEAN_BOOK_STYLE.bodyFont, size: BOOKLINGUA_CLEAN_BOOK_STYLE.titleSizeHalfPoints, bold: true }, paragraph: { alignment: AlignmentType.CENTER, spacing: { after: 240 } } },
+      heading1: { run: { font: BOOKLINGUA_CLEAN_BOOK_STYLE.chapterHeadingFont, size: BOOKLINGUA_CLEAN_BOOK_STYLE.chapterHeadingSizeHalfPoints, bold: true }, paragraph: { alignment: AlignmentType.CENTER, spacing: { before: 240, after: 200 } } },
+      heading2: { run: { font: BOOKLINGUA_CLEAN_BOOK_STYLE.chapterHeadingFont, size: 30, bold: true }, paragraph: { spacing: { before: 200, after: 120 } } },
+      heading3: { run: { font: BOOKLINGUA_CLEAN_BOOK_STYLE.chapterHeadingFont, size: 26, bold: true }, paragraph: { spacing: { before: 160, after: 100 } } },
+      heading4: { run: { font: BOOKLINGUA_CLEAN_BOOK_STYLE.chapterHeadingFont, size: 24, bold: true }, paragraph: { spacing: { before: 140, after: 80 } } },
+      heading5: { run: { font: BOOKLINGUA_CLEAN_BOOK_STYLE.chapterHeadingFont, size: 22, bold: true }, paragraph: { spacing: { before: 120, after: 60 } } },
+      heading6: { run: { font: BOOKLINGUA_CLEAN_BOOK_STYLE.chapterHeadingFont, size: 22, bold: true }, paragraph: { spacing: { before: 120, after: 60 } } },
+    },
   }
 }
 
