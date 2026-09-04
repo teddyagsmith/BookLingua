@@ -22,10 +22,14 @@ import { assertCompleteBatchCoverage, createDeterministicSemanticBatches, semant
 import { recordModelTelemetry } from './model-telemetry'
 import { assertSourceAwareDuplicateParity, assertSourceAwareHeadingDuplicateParity } from './semantic-duplicate-validation'
 
+/** Below this share of nodes changed, an editorial pass is treated as having done nothing. */
+export const EDITORIAL_MIN_CHANGE_RATIO = 0.01
+
 export type SemanticTranslator = (input: NodeTranslationInput, context: {
   pass: 1 | 2
   language: string
   brief: TranslationBriefV1
+  genre?: string
   batchId: string
   batchIndex: number
   batchCount: number
@@ -39,6 +43,7 @@ export interface SemanticPipelineInput {
   source: Buffer
   title: string
   authorName?: string
+  genre?: string
   brief: TranslationBriefV1
   notes: TranslationNotesV1
   translate: SemanticTranslator
@@ -125,7 +130,7 @@ async function cachedTranslation(input: SemanticPipelineInput, batch: NodeTransl
       requestIdentity:`${batchId}:cache-hit`,provider:modelProvider,modelId,success:true,inputTokens:0,outputTokens:0,cacheStatus:'hit'})
     return validateAndMergeNodeOutput(authoritativeNodes, JSON.parse(existing.content), batch.sourceFingerprint)
   }
-  const output = await input.translate(batch,{pass,language:input.language,brief:input.brief,batchId,batchIndex,batchCount})
+  const output = await input.translate(batch,{pass,language:input.language,brief:input.brief,genre:input.genre,batchId,batchIndex,batchCount})
   const validated = validateAndMergeNodeOutput(authoritativeNodes, output, batch.sourceFingerprint)
   const { error } = await input.supabase.from('translation_chunks').upsert({ order_id:input.orderId,lang_code:input.language,chunk_index:batchIndex,pass:`semantic-pass${pass}`,content:JSON.stringify(output),pipeline_version:'semantic-v2',schema_version:batch.schemaVersion,structure_fingerprint:batchId,model_provider:modelProvider,model_id:modelId,model_stage:modelStage },{onConflict:'order_id,lang_code,chunk_index,pass,pipeline_version,schema_version,structure_fingerprint,model_id'})
   if (error) throw new Error(`Semantic cache persistence failed: ${error.message}`)
@@ -148,7 +153,7 @@ async function runBatchedPass(input: SemanticPipelineInput, authoritative: Seman
       const index = nextBatch++
       if (index >= batches.length) return
       const batch = batches[index]
-    const batchInput = createNodeTranslationInput(batch.nodes)
+    const batchInput = createNodeTranslationInput(batch.nodes, pass === 2)
     const batchId = semanticBatchIdentity({
       orderId: input.orderId,
       language: input.language,
@@ -213,6 +218,16 @@ export async function runSemanticPipeline(input: SemanticPipelineInput) {
   }
   const titleResult = applyTitleAuthority(rawPass2, input.title, titleAuthority)
   const pass2 = titleResult.document
+  // An editorial pass that changes almost nothing has not reviewed the translation, it has
+  // echoed it. Record that rather than presenting the build as edited.
+  const editedNodes = pass1.nodes.filter((node, index) => node.translatedText !== rawPass2.nodes[index]?.translatedText).length
+  const editedRatio = pass1.nodes.length ? editedNodes / pass1.nodes.length : 0
+  await validationReport(input.supabase, {
+    orderId: input.orderId, language: input.language, buildId, stage: 'editorial_pass',
+    passed: editedRatio >= EDITORIAL_MIN_CHANGE_RATIO,
+    errors: editedRatio >= EDITORIAL_MIN_CHANGE_RATIO ? undefined : [{ code: 'EDITORIAL_PASS_INEFFECTIVE', message: `Editorial pass changed ${editedNodes} of ${pass1.nodes.length} nodes (${(editedRatio*100).toFixed(1)}%), below the ${(EDITORIAL_MIN_CHANGE_RATIO*100).toFixed(1)}% threshold` }],
+    metrics: { editedNodes, totalNodes: pass1.nodes.length, editedRatio },
+  })
   await validationReport(input.supabase, { orderId: input.orderId, language: input.language, buildId, stage: 'title_authority', passed: true, metrics: { titleAuthority } })
   assertSourceAwareDuplicateParity(sourceDocument.nodes, pass2.nodes)
   assertSourceAwareHeadingDuplicateParity(sourceDocument.nodes, pass2.nodes)

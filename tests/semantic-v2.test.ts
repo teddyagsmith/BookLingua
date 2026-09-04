@@ -10,6 +10,7 @@ import { evaluateSemanticEligibility } from '../lib/semantic-document'
 import { buildSemanticDocx, buildSemanticEpub, buildSemanticEpubFromDocument, buildSemanticReviewDocx, consolidatedArtifactNodes, normalizeEpubImages, resolveBookAuthor } from '../lib/semantic-artifacts'
 import { validateArtifact } from '../lib/artifact-validation-v2'
 import { deterministicSemanticBuildId } from '../lib/semantic-pipeline'
+import { editorialSystemPrompt } from '../lib/editorial-prompt'
 import { semanticV2AllowedForOrder } from '../lib/semantic-canary'
 
 function epubFixture(): Buffer {
@@ -236,4 +237,20 @@ test('parser confidence reflects structure that was actually found, not an assum
   flat.updateFile('OEBPS/1.xhtml', Buffer.from(stripped))
   // A book whose structure could not be recovered must not claim high confidence.
   assert.equal(parseSemanticEpub(flat.toBuffer(), 'hash').parserConfidence, 0.3)
+})
+test('editorial pass receives the original text and a proofreading brief, not a translate instruction', () => {
+  const nodes: any = [{ id: 'n1', sourceText: 'The cat sat.', translatedText: 'Le chat s’assit.' }]
+  // Pass 1 sends only what must come back; pass 2 also carries the original to check against.
+  assert.equal(createNodeTranslationInput(nodes).sources, undefined)
+  assert.deepEqual(createNodeTranslationInput(nodes, true).sources, [{ id: 'n1', text: 'The cat sat.' }])
+  // Adding the source must not disturb the fingerprint the output is validated against.
+  assert.equal(createNodeTranslationInput(nodes, true).sourceFingerprint, createNodeTranslationInput(nodes).sourceFingerprint)
+
+  const prompt = editorialSystemPrompt('French', 'Non-fiction')
+  assert.match(prompt, /native French proofreader and editor/)
+  assert.match(prompt, /Non-fiction book/)
+  assert.doesNotMatch(prompt, /Translate all textual node values/)
+  // The regression that prompted this: pass 2 was replacing typographic apostrophes.
+  assert.match(prompt, /Never replace a typographic apostrophe/)
+  assert.match(editorialSystemPrompt('German'), /a book for publication/)
 })

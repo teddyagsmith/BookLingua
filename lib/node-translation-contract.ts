@@ -7,6 +7,12 @@ export interface NodeTranslationInput {
   schemaVersion: typeof NODE_BATCH_SCHEMA_VERSION
   sourceFingerprint: string
   nodes: Array<{ id: string; text: string }>
+  /**
+   * Original-language text for the same nodes, supplied on the editorial pass so the
+   * editor can check fidelity rather than only fluency. Deliberately excluded from the
+   * fingerprint, which stays keyed on the text the model must return.
+   */
+  sources?: Array<{ id: string; text: string }>
 }
 
 export interface NodeTranslationOutput {
@@ -19,9 +25,11 @@ export function nodeBatchFingerprint(nodes: Array<{ id: string; text: string }>)
   return createHash('sha256').update(JSON.stringify(nodes)).digest('hex')
 }
 
-export function createNodeTranslationInput(nodes: SemanticNodeV2[]): NodeTranslationInput {
+export function createNodeTranslationInput(nodes: SemanticNodeV2[], includeSource = false): NodeTranslationInput {
   const translatable = nodes.map(node => ({ id: node.id, text: node.translatedText ?? node.sourceText }))
-  return { schemaVersion: NODE_BATCH_SCHEMA_VERSION, sourceFingerprint: nodeBatchFingerprint(translatable), nodes: translatable }
+  const input: NodeTranslationInput = { schemaVersion: NODE_BATCH_SCHEMA_VERSION, sourceFingerprint: nodeBatchFingerprint(translatable), nodes: translatable }
+  if (includeSource) input.sources = nodes.map(node => ({ id: node.id, text: node.sourceText }))
+  return input
 }
 
 export function validateAndMergeNodeOutput(

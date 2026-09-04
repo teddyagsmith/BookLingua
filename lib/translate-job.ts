@@ -18,6 +18,7 @@ import { toCanonicalLaunchPack } from './launch-strategy'
 import { LAUNCH_PACK_SCHEMA_VERSION, launchMarket } from './launch-pack-schema'
 import { BOOKLINGUA_MODEL_CONFIG } from './model-config'
 import { finalizeSemanticOrder } from './semantic-finalization'
+import { editorialSystemPrompt, TRANSLATION_SYSTEM_PROMPT } from './editorial-prompt'
 import { cachedLaunchPack, launchPackRequestIdentity } from './launch-pack-cache'
 import { recordModelTelemetry } from './model-telemetry'
 import { translateWithDeterministicJsonRecovery } from './semantic-model-recovery'
@@ -342,16 +343,16 @@ export const translateBook = inngest.createFunction(
           const result = await runSemanticPipeline({
             supabase: getSupabaseAdmin(), orderId, language, sourceFormat: format, source,
             title: order.book_title, authorName: order.author_name, brief, notes, buildId: deterministicSemanticBuildId(orderId,language,crypto.createHash('sha256').update(source).digest('hex'),brief.revision), allowReviewedStructure: order.semantic_structure_approved === true,
-            launchPack, dualFormat: (order.upsells || []).includes('dual-format'),
+            launchPack, dualFormat: (order.upsells || []).includes('dual-format'), genre: order.genre || undefined,
             translate: async (batch, context) => {
               const stage=context.pass===1?'translation':'editorial';const requestIdentity=`${orderId}:${language}:${stage}:${context.batchId}`
               return translateWithDeterministicJsonRecovery(batch, requestIdentity, async (requestBatch, recovery) => {
                 let response: any
                 try{
                   response = await anthropic.messages.create({
-                    model: BOOKLINGUA_MODEL_CONFIG.translation, max_tokens: 8192,
-                    system: 'Return only valid JSON matching the supplied schema. Preserve every node id and order exactly. Translate all textual node values; never omit or add nodes.',
-                    messages: [{ role: 'user', content: `${renderTranslationBriefPrompt(context.brief)}\nPass ${context.pass}; target language ${context.language}.\n${JSON.stringify(requestBatch)}` }],
+                    model: context.pass === 1 ? BOOKLINGUA_MODEL_CONFIG.translation : BOOKLINGUA_MODEL_CONFIG.editorial, max_tokens: 8192,
+                    system: context.pass === 1 ? TRANSLATION_SYSTEM_PROMPT : editorialSystemPrompt(LANGUAGE_NAMES[context.language] || context.language, context.genre),
+                    messages: [{ role: 'user', content: `${renderTranslationBriefPrompt(context.brief)}\n${context.pass === 1 ? 'Translation pass' : 'Editorial pass'}; target language ${context.language}.\n${JSON.stringify(requestBatch)}` }],
                   })
                   const text = response.content.find((block:any) => block.type === 'text')
                   if (!text || text.type !== 'text') throw new Error('Semantic model returned no JSON text')
