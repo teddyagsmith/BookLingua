@@ -56,6 +56,21 @@ function semanticStyles() {
   }
 }
 
+/** Ensure every renderer has one concrete baseline for otherwise unstyled body paragraphs. */
+export function ensureDefaultNormalStyle(buffer: Buffer): Buffer {
+  const zip: any = new AdmZip(buffer)
+  const stylesEntry = zip.getEntry('word/styles.xml')
+  if (!stylesEntry) return buffer
+  let styles = stylesEntry.getData().toString('utf8')
+  const defaultParagraphStyles = Array.from(styles.matchAll(/<w:style\b[^>]*\bw:type=["']paragraph["'][^>]*\bw:default=["']1["']|<w:style\b[^>]*\bw:default=["']1["'][^>]*\bw:type=["']paragraph["']/gi))
+  if (defaultParagraphStyles.length === 0) {
+    const normalStyle=`<w:style w:type="paragraph" w:default="1" w:styleId="Normal"><w:name w:val="Normal"/><w:qFormat/><w:pPr><w:spacing w:line="${BOOKLINGUA_CLEAN_BOOK_STYLE.bodyLineSpacingTwips}" w:lineRule="auto"/></w:pPr><w:rPr><w:sz w:val="${BOOKLINGUA_CLEAN_BOOK_STYLE.bodySizeHalfPoints}"/><w:szCs w:val="${BOOKLINGUA_CLEAN_BOOK_STYLE.bodySizeHalfPoints}"/><w:rFonts w:ascii="${BOOKLINGUA_CLEAN_BOOK_STYLE.bodyFont}" w:cs="${BOOKLINGUA_CLEAN_BOOK_STYLE.bodyFont}" w:eastAsia="${BOOKLINGUA_CLEAN_BOOK_STYLE.bodyFont}" w:hAnsi="${BOOKLINGUA_CLEAN_BOOK_STYLE.bodyFont}"/></w:rPr></w:style>`
+    styles=styles.replace(/(<w:styles\b[^>]*>)/,`$1${normalStyle}`)
+    zip.updateFile('word/styles.xml',Buffer.from(styles))
+  }
+  return zip.toBuffer()
+}
+
 function translatedTitleAlreadyPresent(document: SemanticDocumentV2, title: string): boolean {
   const normalized = (value: string) => value.normalize('NFKC').toLocaleLowerCase().replace(/[^\w\u00c0-\u024f]+/g, ' ').trim()
   return document.nodes.some(node => node.type === 'heading' && normalized(node.translatedText || '') === normalized(title))
@@ -122,10 +137,10 @@ export async function buildSemanticDocx(document: SemanticDocumentV2, title: str
   const children: Paragraph[] = []
   if (!translatedTitleAlreadyPresent(document, title)) children.push(new Paragraph({ text: title, heading: HeadingLevel.TITLE }))
   documentNodesWithGeneratedToc(document).forEach((node, index) => children.push(nodeParagraph(node, node.translatedText!, undefined, index)))
-  return deterministicDocx(Buffer.from(await Packer.toBuffer(new Document({
+  return deterministicDocx(ensureDefaultNormalStyle(Buffer.from(await Packer.toBuffer(new Document({
     styles: semanticStyles(),
     sections: [{ properties: { page: { margin: BOOKLINGUA_CLEAN_BOOK_STYLE.pageMarginsTwips } }, children }],
-  }))))
+  })))))
 }
 
 type DiffToken = { text: string; kind: 'same' | 'delete' | 'insert' }
@@ -180,7 +195,7 @@ export async function buildSemanticReviewDocx(pass1: SemanticDocumentV2, pass2: 
       highlight: token.kind === 'same' ? undefined : 'yellow',
     })), index))
   })
-  return deterministicDocx(Buffer.from(await Packer.toBuffer(new Document({ styles: semanticStyles(), sections: [{ properties: { page: { margin: BOOKLINGUA_CLEAN_BOOK_STYLE.pageMarginsTwips } }, children }] }))))
+  return deterministicDocx(ensureDefaultNormalStyle(Buffer.from(await Packer.toBuffer(new Document({ styles: semanticStyles(), sections: [{ properties: { page: { margin: BOOKLINGUA_CLEAN_BOOK_STYLE.pageMarginsTwips } }, children }] })))))
 }
 
 const CORE_EPUB_IMAGE_TYPES = new Set(['image/jpeg', 'image/png', 'image/gif', 'image/svg+xml'])
@@ -283,16 +298,11 @@ export async function buildSemanticDocxPreservingSource(source:Buffer,document:S
     // never actually defined (no styleId="Normal", nothing flagged w:default). Different
     // renderers guess differently when that reference dangles (Word/Pages can fall back to
     // bold+centered), so guarantee a real default paragraph style exists before shipping.
-    const hasDefaultParagraphStyle=/<w:style\b[^>]*w:type=["']paragraph["'][^>]*w:default=["']1["']/.test(styles)||/<w:style\b[^>]*w:default=["']1["'][^>]*w:type=["']paragraph["']/.test(styles)
-    if(!hasDefaultParagraphStyle){
-      const normalStyle=`<w:style w:type="paragraph" w:default="1" w:styleId="Normal"><w:name w:val="Normal"/><w:qFormat/><w:pPr><w:spacing w:line="${BOOKLINGUA_CLEAN_BOOK_STYLE.bodyLineSpacingTwips}" w:lineRule="auto"/></w:pPr><w:rPr><w:sz w:val="${BOOKLINGUA_CLEAN_BOOK_STYLE.bodySizeHalfPoints}"/><w:szCs w:val="${BOOKLINGUA_CLEAN_BOOK_STYLE.bodySizeHalfPoints}"/><w:rFonts w:ascii="${BOOKLINGUA_CLEAN_BOOK_STYLE.bodyFont}" w:cs="${BOOKLINGUA_CLEAN_BOOK_STYLE.bodyFont}" w:eastAsia="${BOOKLINGUA_CLEAN_BOOK_STYLE.bodyFont}" w:hAnsi="${BOOKLINGUA_CLEAN_BOOK_STYLE.bodyFont}"/></w:rPr></w:style>`
-      styles=styles.replace(/(<w:styles\b[^>]*>)/,`$1${normalStyle}`)
-    }
     const missing=[1,2,3].filter(level=>!new RegExp(`w:styleId=["']Heading${level}["']`).test(styles))
     if(missing.length)styles=styles.replace(/<\/w:styles>\s*$/,`${missing.map(level=>`<w:style w:type="paragraph" w:styleId="Heading${level}"><w:name w:val="heading ${level}"/><w:basedOn w:val="Normal"/><w:next w:val="Normal"/><w:qFormat/><w:pPr><w:keepNext/><w:keepLines/><w:outlineLvl w:val="${level-1}"/></w:pPr><w:rPr><w:b/><w:sz w:val="${level===1?32:28}"/></w:rPr></w:style>`).join('')}</w:styles>`)
     zip.updateFile('word/styles.xml',Buffer.from(styles))
   }
-  return deterministicDocx(zip.toBuffer())
+  return deterministicDocx(ensureDefaultNormalStyle(zip.toBuffer()))
 }
 
 export async function buildFinalSemanticDocx(source:Buffer,document:SemanticDocumentV2,title:string):Promise<Buffer>{

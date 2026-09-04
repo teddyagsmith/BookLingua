@@ -176,6 +176,8 @@ export function validateArtifact(buffer: Buffer, kind: ArtifactKind, options: Ar
         if (!rootRels || !/Type=["'][^"']*officeDocument["']/i.test(rootRels) || !/Target=["']\/?word\/document\.xml["']/i.test(rootRels) || !entries.has('word/_rels/document.xml.rels')) errors.push({ code: 'DOCX_RELATIONSHIPS', message: 'DOCX main document relationships are missing or invalid' })
         const document = entries.get('word/document.xml')
         const stylesMarkup = entries.get('word/styles.xml')?.getData().toString('utf8') || ''
+        const defaultParagraphStyles = Array.from(stylesMarkup.matchAll(/<w:style\b[^>]*\bw:type=["']paragraph["'][^>]*\bw:default=["']1["']|<w:style\b[^>]*\bw:default=["']1["'][^>]*\bw:type=["']paragraph["']/gi))
+        if (defaultParagraphStyles.length !== 1) errors.push({ code: 'DOCX_DEFAULT_PARAGRAPH_STYLE', message: `DOCX must define exactly one default paragraph style; found ${defaultParagraphStyles.length}` })
         const semanticStyleIds = Array.from(stylesMarkup.matchAll(/<w:style\b[^>]*\bw:styleId=["'](Title|Heading[1-6])["']/gi), match => match[1].toLowerCase())
         const duplicateStyleId = semanticStyleIds.find((id, index) => semanticStyleIds.indexOf(id) !== index)
         if (duplicateStyleId) errors.push({ code: 'DOCX_DUPLICATE_STYLE_ID', message: `DOCX defines the semantic style ${duplicateStyleId} more than once, so viewers may render inconsistent fonts and spacing` })

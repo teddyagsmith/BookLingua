@@ -3,6 +3,7 @@ import assert from 'node:assert/strict'
 import AdmZip from 'adm-zip'
 import { Document, HeadingLevel, Packer, Paragraph } from 'docx'
 import { validateArtifact, validateExpectedChapterSequence } from '../lib/artifact-validation-v2'
+import { ensureDefaultNormalStyle } from '../lib/semantic-artifacts'
 
 function syntheticEpub(chapters: Array<{ heading: string; body: string }>): Buffer {
   const zip: any = new (AdmZip as any)(undefined, { noSort: true })
@@ -25,7 +26,7 @@ async function syntheticDocx(chapters: Array<{ heading: string; body: string }>)
     new Paragraph({ text: chapter.heading, heading: HeadingLevel.HEADING_1 }),
     new Paragraph(chapter.body),
   ])
-  return Packer.toBuffer(new Document({ sections: [{ children }] }))
+  return ensureDefaultNormalStyle(Buffer.from(await Packer.toBuffer(new Document({ sections: [{ children }] }))))
 }
 
 test('known-good EPUB and DOCX preserve Chapter 10/11 sequence', async () => {
