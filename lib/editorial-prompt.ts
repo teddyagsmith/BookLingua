@@ -7,6 +7,14 @@
  * ASCII ones. It now gets a proofreader's brief and the original text to check against.
  */
 
+/**
+ * Bump when a pass's prompt changes. The batch cache is keyed on this, so a reworded
+ * prompt actually re-runs instead of silently returning the previous output. Bumping one
+ * pass leaves the other pass's cached work intact.
+ */
+export const TRANSLATION_PROMPT_VERSION = 'translation-v1'
+export const EDITORIAL_PROMPT_VERSION = 'editorial-v2-native-proofreader'
+
 export const TRANSLATION_SYSTEM_PROMPT =
   'Return only valid JSON matching the supplied schema. Preserve every node id and order exactly. Translate all textual node values; never omit or add nodes.'
 

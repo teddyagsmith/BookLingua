@@ -55,13 +55,17 @@ test('coverage rejects missing, duplicate, overlap, gap, and reorder', () => {
   assert.throws(() => assertCompleteBatchCoverage(source, reordered), /global node order/)
 })
 
-test('batch identity invalidates on pass, model, schema, or brief change', () => {
-  const base = { orderId:'o',language:'fr',documentFingerprint:'doc',pass:1 as const,orderedNodeIds:['n1'],briefRevision:1,briefFingerprint:'brief',modelId:'model',schemaVersion:'2.0' }
+test('batch identity invalidates on pass, model, schema, brief, or prompt change', () => {
+  const base = { orderId:'o',language:'fr',documentFingerprint:'doc',pass:1 as const,orderedNodeIds:['n1'],briefRevision:1,briefFingerprint:'brief',modelId:'model',schemaVersion:'2.0',promptVersion:'p1' }
   const identity = semanticBatchIdentity(base)
   assert.notEqual(identity, semanticBatchIdentity({...base,pass:2}))
   assert.notEqual(identity, semanticBatchIdentity({...base,modelId:'other'}))
   assert.notEqual(identity, semanticBatchIdentity({...base,schemaVersion:'3.0'}))
   assert.notEqual(identity, semanticBatchIdentity({...base,briefFingerprint:'other'}))
+  // A reworded prompt must re-run rather than return the previous cached output.
+  assert.notEqual(identity, semanticBatchIdentity({...base,promptVersion:'p2'}))
+  // and must not disturb the other pass's cached work
+  assert.equal(semanticBatchIdentity({...base,pass:2,promptVersion:'p2'}), semanticBatchIdentity({...base,pass:2,promptVersion:'p2'}))
 })
 
 test('full 1,760-node aggregate has exact identity and order', () => {

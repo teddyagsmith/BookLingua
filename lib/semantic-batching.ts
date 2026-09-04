@@ -61,6 +61,7 @@ export function semanticBatchIdentity(input: {
   briefFingerprint: string
   modelId: string
   schemaVersion: string
+  promptVersion: string
 }): string {
   return createHash('sha256').update(JSON.stringify({
     policy: SEMANTIC_BATCH_POLICY_VERSION,
@@ -73,6 +74,7 @@ export function semanticBatchIdentity(input: {
     briefFingerprint: input.briefFingerprint,
     modelId: input.modelId,
     schemaVersion: input.schemaVersion,
+    promptVersion: input.promptVersion,
   })).digest('hex')
 }
 

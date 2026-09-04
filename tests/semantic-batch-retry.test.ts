@@ -10,7 +10,7 @@ function plan() {
 
 test('truncated middle batch fails closed and retry invokes only the missing identity', async () => {
   const batches = plan(), cache = new Map<string, string>(), calls = new Map<string, number>()
-  const identity = (batch: typeof batches[number]) => semanticBatchIdentity({ orderId:'order',language:'fr',documentFingerprint:'document',pass:1,orderedNodeIds:batch.orderedNodeIds,briefRevision:1,briefFingerprint:'brief',modelId:'sonnet',schemaVersion:'2.0' })
+  const identity = (batch: typeof batches[number]) => semanticBatchIdentity({ orderId:'order',language:'fr',documentFingerprint:'document',pass:1,orderedNodeIds:batch.orderedNodeIds,briefRevision:1,briefFingerprint:'brief',modelId:'sonnet',schemaVersion:'2.0',promptVersion:'p1' })
   async function run(failIdentity?: string) {
     for (const batch of batches) {
       const id = identity(batch)
@@ -32,7 +32,7 @@ test('truncated middle batch fails closed and retry invokes only the missing ide
 
 test('cache identities cannot cross language, pass, model, brief, or source changes', () => {
   const batch = plan()[0]
-  const base = { orderId:'order',language:'fr',documentFingerprint:'document',pass:1 as const,orderedNodeIds:batch.orderedNodeIds,briefRevision:1,briefFingerprint:'brief',modelId:'sonnet',schemaVersion:'2.0' }
+  const base = { orderId:'order',language:'fr',documentFingerprint:'document',pass:1 as const,orderedNodeIds:batch.orderedNodeIds,briefRevision:1,briefFingerprint:'brief',modelId:'sonnet',schemaVersion:'2.0',promptVersion:'p1' }
   const original = semanticBatchIdentity(base)
   for (const changed of [
     { ...base, language:'de' }, { ...base, pass:2 as const }, { ...base, modelId:'other' },

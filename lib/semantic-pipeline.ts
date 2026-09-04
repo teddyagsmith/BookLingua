@@ -21,6 +21,7 @@ import { BOOKLINGUA_MODEL_CONFIG } from './model-config'
 import { assertCompleteBatchCoverage, createDeterministicSemanticBatches, semanticBatchIdentity } from './semantic-batching'
 import { recordModelTelemetry } from './model-telemetry'
 import { assertSourceAwareDuplicateParity, assertSourceAwareHeadingDuplicateParity } from './semantic-duplicate-validation'
+import { EDITORIAL_PROMPT_VERSION, TRANSLATION_PROMPT_VERSION } from './editorial-prompt'
 
 /** Below this share of nodes changed, an editorial pass is treated as having done nothing. */
 export const EDITORIAL_MIN_CHANGE_RATIO = 0.01
@@ -163,6 +164,7 @@ async function runBatchedPass(input: SemanticPipelineInput, authoritative: Seman
       briefRevision: input.brief.revision,
       briefFingerprint,
       modelId,
+      promptVersion: pass === 1 ? TRANSLATION_PROMPT_VERSION : EDITORIAL_PROMPT_VERSION,
       schemaVersion: batchInput.schemaVersion,
     })
       try {
