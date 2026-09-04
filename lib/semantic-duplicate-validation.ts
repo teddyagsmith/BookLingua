@@ -61,7 +61,12 @@ export function assertSourceAwareHeadingDuplicateParity(
     const a=headings[left],b=headings[right]
     if(sourceNodes[a].id!==translatedNodes[a]?.id||sourceNodes[b].id!==translatedNodes[b]?.id)throw new Error('Heading duplicate parity requires exact semantic node identity')
     const translatedA=normalize(translatedNodes[a].translatedText||''),translatedB=normalize(translatedNodes[b].translatedText||'')
-    if(translatedA&&translatedA===translatedB&&normalize(sourceNodes[a].sourceText)!==normalize(sourceNodes[b].sourceText)){
+    const sourceA=normalize(sourceNodes[a].sourceText),sourceB=normalize(sourceNodes[b].sourceText)
+    // Split display headings often repeat an opening fragment elsewhere (for example
+    // "Creating Your" and "Creating Your Personal"). A translation may legitimately
+    // render that shared prefix identically; unrelated headings must still differ.
+    const sourcePrefix=sourceA.startsWith(`${sourceB} `)||sourceB.startsWith(`${sourceA} `)
+    if(translatedA&&translatedA===translatedB&&sourceA!==sourceB&&!sourcePrefix){
       throw new Error(`Translation introduced duplicate heading at nodes ${sourceNodes[a].id}, ${sourceNodes[b].id}`)
     }
   }

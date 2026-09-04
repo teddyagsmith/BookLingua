@@ -60,3 +60,8 @@ test('different source headings may not collapse to one translated heading',()=>
   const source=nodes(['Antibacterial findings','Cancer findings']);source[0].type='heading';source[1].type='heading'
   assert.throws(()=>assertSourceAwareHeadingDuplicateParity(source,translated(source,['Ergebnisse','Ergebnisse'])),/introduced duplicate heading/)
 })
+
+test('shared source heading fragments may retain the same translated prefix',()=>{
+  const source=nodes(['Creating Your Personal','Creating Your']);source[0].type='heading';source[1].type='heading'
+  assert.doesNotThrow(()=>assertSourceAwareHeadingDuplicateParity(source,translated(source,['Créer votre','Créer votre'])))
+})
