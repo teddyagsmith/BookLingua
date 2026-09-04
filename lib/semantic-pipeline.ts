@@ -59,8 +59,16 @@ export interface SemanticPipelineInput {
   maxBatchConcurrency?: number
 }
 
-export function deterministicSemanticBuildId(orderId: string, language: string, sourceHash: string, briefRevision: number): string {
-  const hex = createHash('sha256').update(`${orderId}:${language}:${sourceHash}:${briefRevision}:semantic-v2`).digest('hex').slice(0, 32).split('')
+/**
+ * A build is immutable once its package passes, so the identity must cover everything
+ * that changes the output. Prompt versions are included: without them, re-running after
+ * a prompt change persists new passes but returns the previously completed package,
+ * leaving the delivered files untouched.
+ */
+export const SEMANTIC_PROMPT_SIGNATURE = `${TRANSLATION_PROMPT_VERSION}+${EDITORIAL_PROMPT_VERSION}`
+
+export function deterministicSemanticBuildId(orderId: string, language: string, sourceHash: string, briefRevision: number, promptSignature: string = SEMANTIC_PROMPT_SIGNATURE): string {
+  const hex = createHash('sha256').update(`${orderId}:${language}:${sourceHash}:${briefRevision}:semantic-v2:${promptSignature}`).digest('hex').slice(0, 32).split('')
   hex[12] = '5'; hex[16] = ((parseInt(hex[16], 16) & 3) | 8).toString(16)
   return `${hex.slice(0,8).join('')}-${hex.slice(8,12).join('')}-${hex.slice(12,16).join('')}-${hex.slice(16,20).join('')}-${hex.slice(20).join('')}`
 }

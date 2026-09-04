@@ -254,3 +254,11 @@ test('editorial pass receives the original text and a proofreading brief, not a 
   assert.match(prompt, /Never replace a typographic apostrophe/)
   assert.match(editorialSystemPrompt('German'), /a book for publication/)
 })
+
+test('build identity changes when a prompt changes, so completed packages are rebuilt', () => {
+  const base = deterministicSemanticBuildId('order', 'fr', 'source', 1)
+  assert.equal(base, deterministicSemanticBuildId('order', 'fr', 'source', 1))
+  // Without this, a prompt change persists new passes but returns the old package
+  // and the customer's files never change.
+  assert.notEqual(base, deterministicSemanticBuildId('order', 'fr', 'source', 1, 'translation-v1+editorial-v3'))
+})
