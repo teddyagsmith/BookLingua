@@ -35,6 +35,16 @@ test('legacy notes can migrate into a validated structured schema and render', (
   assert.match(renderTranslationNotes(notes), /Moonroot/)
 })
 
+test('rendered translation notes decode visible and double-escaped entities', () => {
+  const rendered = renderTranslationNotes({
+    schemaVersion: '1.0', language: 'Spanish', approach: 'Preserve voice &amp; tone.',
+    sections: [{ id: 'quotes', title: 'Quotes', entries: [{ source: '&amp;quot;Hello&amp;quot;', target: '«Hola»', reason: 'Natural dialogue.' }] }],
+  })
+  assert.match(rendered, /"Hello"/)
+  assert.match(rendered, /Preserve voice & tone/)
+  assert.doesNotMatch(rendered, /&(?:amp|quot|apos|lt|gt|#)/)
+})
+
 test('versioned upload guide asset exists with the recorded hash', () => {
   const path = join(process.cwd(), 'public', UPLOAD_GUIDE_ASSET_PATH.replace(/^\//, ''))
   assert.equal(existsSync(path), true)

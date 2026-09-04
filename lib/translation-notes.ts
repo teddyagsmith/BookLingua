@@ -19,6 +19,21 @@ export interface TranslationNotesV1 {
   sections: TranslationNotesSection[]
 }
 
+function decodeVisibleEntities(value: string): string {
+  let previous = ''
+  let output = value
+  for (let index = 0; index < 3 && output !== previous; index++) {
+    previous = output
+    output = output
+      .replace(/&#x([0-9a-f]+);/gi, (_match, hex) => String.fromCodePoint(parseInt(hex, 16)))
+      .replace(/&#(\d+);/g, (_match, decimal) => String.fromCodePoint(parseInt(decimal, 10)))
+      .replace(/&(?:amp|apos|quot|lt|gt|nbsp);/g, entity => ({
+        '&amp;': '&', '&apos;': "'", '&quot;': '"', '&lt;': '<', '&gt;': '>', '&nbsp;': '\u00a0',
+      }[entity]!))
+  }
+  return output
+}
+
 export function validateTranslationNotes(notes: TranslationNotesV1): string[] {
   const errors: string[] = []
   if (notes.schemaVersion !== TRANSLATION_NOTES_SCHEMA_VERSION) errors.push('Unexpected translation-notes schema version')
@@ -51,14 +66,14 @@ export function parseLegacyTranslationNotes(text: string, language: string): Tra
 }
 
 export function renderTranslationNotes(notes: TranslationNotesV1): string {
-  return [
+  return decodeVisibleEntities([
     `Translation Notes — ${notes.language}`,
     notes.approach,
     ...notes.sections.flatMap(section => [
       `\n${section.title}`,
       ...section.entries.map(entry => `${entry.source} → ${entry.target}\nReason: ${entry.reason}`),
     ]),
-  ].join('\n')
+  ].join('\n'))
 }
 
 export function deriveEditorialTranslationNotes(input: {
