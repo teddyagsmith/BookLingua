@@ -753,6 +753,8 @@ export async function GET(
           : `attachment; filename="${responseFilename}"`,
         'Cache-Control':'private, no-store',
         'X-BookLingua-Artifact': 'stored-validated',
+        'X-BookLingua-Build-Id': storedArtifact.build_id,
+        'X-BookLingua-SHA256': storedArtifact.sha256,
       } })
     }
     if (type === 'pass1') return NextResponse.json({ error: 'Pass 1 artifact unavailable for this legacy order' }, { status: 404 })
