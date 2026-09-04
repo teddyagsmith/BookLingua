@@ -6,6 +6,7 @@ import { assemblePackageManifest,evaluatePackageManifest } from '@/lib/package-m
 import { customerLanguageName,resolveCustomerDeliveryOrigin } from '@/lib/customer-delivery'
 import { buildCustomerPortalUrl,buildReviewPortalUrl } from '@/lib/download-token'
 import { renderCustomerPackageEmail } from '@/lib/email-templates'
+import { cleanBookTitle } from '@/lib/authoritative-title'
 
 export async function POST(request:NextRequest,{params}:{params:{orderId:string}}){
   if(request.headers.get('x-admin-password')!==process.env.ADMIN_PASSWORD)return NextResponse.json({error:'Unauthorized'},{status:401})
@@ -28,7 +29,7 @@ export async function POST(request:NextRequest,{params}:{params:{orderId:string}
   }
   const ctaUrl=internalReview?buildReviewPortalUrl(order.id,origin):buildCustomerPortalUrl(order.id,origin)
   if(/(?:127\.0\.0\.1|localhost|0\.0\.0\.0)/i.test(ctaUrl))return NextResponse.json({error:'External preview URL is not public'},{status:409})
-  const email=renderCustomerPackageEmail({authorName:order.author_name||'there',bookTitle:order.book_title,languages:manifests.map(item=>customerLanguageName(item.language)),downloadPageUrl:ctaUrl})
+  const email=renderCustomerPackageEmail({authorName:order.author_name||'there',bookTitle:cleanBookTitle(order.book_title),languages:manifests.map(item=>customerLanguageName(item.language)),downloadPageUrl:ctaUrl})
   const buildIdentity=manifests.map(item=>`${item.language}:${item.buildId}`).sort().join('|')
   const originIdentity=createHash('sha256').update(`${origin}:${buildIdentity}`).digest('hex').slice(0,16)
   const subject=internalReview?`[CUSTOMER EMAIL PREVIEW — APPROVAL] ${email.subject}`:`[BOOKLINGUA STAGING TEST] ${email.subject}`
