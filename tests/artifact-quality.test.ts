@@ -147,3 +147,22 @@ test('translation notes are derived from real editorial changes and remain schem
   assert.equal(notes.sections[0].entries.length,2)
   assert.match(notes.sections[0].entries[1].reason,/editorial review/)
 })
+
+test('preserved DOCX gains a real default Normal style when the source stylesheet leaves it dangling',async()=>{
+  const source=Buffer.from(await Packer.toBuffer(new Document({sections:[{children:[
+    new Paragraph({heading:HeadingLevel.HEADING_1,children:[new TextRun('Chapter 1')]}),
+    new Paragraph({children:[new TextRun('Body text.')]}),
+  ]}]})))
+  // Simulate a customer manuscript whose own styles.xml never defines "Normal" even though
+  // every style references it — the exact shape that shipped a bold/centered ES delivery.
+  const brokenZip:any=new AdmZip(source)
+  const strippedStyles=brokenZip.getEntry('word/styles.xml').getData().toString('utf8').replace(/<w:style\b[^>]*w:styleId=["']Normal["'][\s\S]*?<\/w:style>/,'')
+  assert.doesNotMatch(strippedStyles,/w:styleId="Normal"/)
+  brokenZip.updateFile('word/styles.xml',Buffer.from(strippedStyles))
+  const brokenSource=brokenZip.toBuffer()
+  const parsed=await parseSemanticDocx(brokenSource,'docx-source');parsed.nodes.forEach((node,index)=>{node.translatedText=index?'Corps du texte.':'Chapitre 1'})
+  const preserved=await buildSemanticDocxPreservingSource(brokenSource,parsed)
+  const outputZip:any=new AdmZip(preserved)
+  const stylesXml=outputZip.getEntry('word/styles.xml').getData().toString('utf8')
+  assert.match(stylesXml,/<w:style\b[^>]*w:type="paragraph"[^>]*w:default="1"/)
+})

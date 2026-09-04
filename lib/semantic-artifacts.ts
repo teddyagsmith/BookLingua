@@ -279,8 +279,17 @@ export async function buildSemanticDocxPreservingSource(source:Buffer,document:S
   const stylesEntry=zip.getEntry('word/styles.xml')
   if(stylesEntry){
     let styles=stylesEntry.getData().toString('utf8')
+    // Preserved source stylesheets sometimes point every style at a "Normal" base that is
+    // never actually defined (no styleId="Normal", nothing flagged w:default). Different
+    // renderers guess differently when that reference dangles (Word/Pages can fall back to
+    // bold+centered), so guarantee a real default paragraph style exists before shipping.
+    const hasDefaultParagraphStyle=/<w:style\b[^>]*w:type=["']paragraph["'][^>]*w:default=["']1["']/.test(styles)||/<w:style\b[^>]*w:default=["']1["'][^>]*w:type=["']paragraph["']/.test(styles)
+    if(!hasDefaultParagraphStyle){
+      const normalStyle=`<w:style w:type="paragraph" w:default="1" w:styleId="Normal"><w:name w:val="Normal"/><w:qFormat/><w:pPr><w:spacing w:line="${BOOKLINGUA_CLEAN_BOOK_STYLE.bodyLineSpacingTwips}" w:lineRule="auto"/></w:pPr><w:rPr><w:sz w:val="${BOOKLINGUA_CLEAN_BOOK_STYLE.bodySizeHalfPoints}"/><w:szCs w:val="${BOOKLINGUA_CLEAN_BOOK_STYLE.bodySizeHalfPoints}"/><w:rFonts w:ascii="${BOOKLINGUA_CLEAN_BOOK_STYLE.bodyFont}" w:cs="${BOOKLINGUA_CLEAN_BOOK_STYLE.bodyFont}" w:eastAsia="${BOOKLINGUA_CLEAN_BOOK_STYLE.bodyFont}" w:hAnsi="${BOOKLINGUA_CLEAN_BOOK_STYLE.bodyFont}"/></w:rPr></w:style>`
+      styles=styles.replace(/(<w:styles\b[^>]*>)/,`$1${normalStyle}`)
+    }
     const missing=[1,2,3].filter(level=>!new RegExp(`w:styleId=["']Heading${level}["']`).test(styles))
-    if(missing.length)styles=styles.replace(/<\/w:styles>\s*$/,`${missing.map(level=>`<w:style w:type="paragraph" w:styleId="Heading${level}"><w:name w:val="heading ${level}"/><w:basedOn w:val="Default"/><w:next w:val="Default"/><w:qFormat/><w:pPr><w:keepNext/><w:keepLines/><w:outlineLvl w:val="${level-1}"/></w:pPr><w:rPr><w:b/><w:sz w:val="${level===1?32:28}"/></w:rPr></w:style>`).join('')}</w:styles>`)
+    if(missing.length)styles=styles.replace(/<\/w:styles>\s*$/,`${missing.map(level=>`<w:style w:type="paragraph" w:styleId="Heading${level}"><w:name w:val="heading ${level}"/><w:basedOn w:val="Normal"/><w:next w:val="Normal"/><w:qFormat/><w:pPr><w:keepNext/><w:keepLines/><w:outlineLvl w:val="${level-1}"/></w:pPr><w:rPr><w:b/><w:sz w:val="${level===1?32:28}"/></w:rPr></w:style>`).join('')}</w:styles>`)
     zip.updateFile('word/styles.xml',Buffer.from(styles))
   }
   return deterministicDocx(zip.toBuffer())
