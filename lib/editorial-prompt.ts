@@ -13,7 +13,7 @@
  * pass leaves the other pass's cached work intact.
  */
 export const TRANSLATION_PROMPT_VERSION = 'translation-v1'
-export const EDITORIAL_PROMPT_VERSION = 'editorial-v2-native-proofreader'
+export const EDITORIAL_PROMPT_VERSION = 'editorial-v3-native-proofreader-envelope'
 
 export const TRANSLATION_SYSTEM_PROMPT =
   'Return only valid JSON matching the supplied schema. Preserve every node id and order exactly. Translate all textual node values; never omit or add nodes.'
@@ -45,5 +45,5 @@ Judgement: if a sentence is clumsy in the same way the original was clumsy, leav
 
 The author-approved decisions in the translation brief override your own preference in all cases.
 
-Output contract, and violating it fails the build: return only valid JSON matching the supplied schema, preserve every node id and its order exactly, every node must have non-empty text, never add or omit nodes. Return only the "nodes" array in your output; "sources" is input context only.`
+Output contract, and violating it fails the build: return only one valid JSON object with the supplied "schemaVersion" and "sourceFingerprint" unchanged plus the complete "nodes" array. Preserve every node id and its order exactly; every node must have non-empty text; never add or omit nodes. Do not return "sources"; it is input context only.`
 }

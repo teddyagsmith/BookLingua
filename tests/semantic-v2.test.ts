@@ -250,6 +250,8 @@ test('editorial pass receives the original text and a proofreading brief, not a 
   assert.match(prompt, /native French proofreader and editor/)
   assert.match(prompt, /Non-fiction book/)
   assert.doesNotMatch(prompt, /Translate all textual node values/)
+  assert.match(prompt, /schemaVersion[\s\S]*sourceFingerprint[\s\S]*nodes/)
+  assert.doesNotMatch(prompt, /Return only the "nodes" array/)
   // The regression that prompted this: pass 2 was replacing typographic apostrophes.
   assert.match(prompt, /Never replace a typographic apostrophe/)
   assert.match(editorialSystemPrompt('German'), /a book for publication/)
