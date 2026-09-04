@@ -232,12 +232,15 @@ export async function runSemanticPipeline(input: SemanticPipelineInput) {
   // echoed it. Record that rather than presenting the build as edited.
   const editedNodes = pass1.nodes.filter((node, index) => node.translatedText !== rawPass2.nodes[index]?.translatedText).length
   const editedRatio = pass1.nodes.length ? editedNodes / pass1.nodes.length : 0
+  const editorialPassed = editedRatio >= EDITORIAL_MIN_CHANGE_RATIO
+  const editorialErrors = editorialPassed ? [] : [{ code: 'EDITORIAL_PASS_INEFFECTIVE', message: `Editorial pass changed ${editedNodes} of ${pass1.nodes.length} nodes (${(editedRatio*100).toFixed(1)}%), below the ${(EDITORIAL_MIN_CHANGE_RATIO*100).toFixed(1)}% threshold` }]
   await validationReport(input.supabase, {
     orderId: input.orderId, language: input.language, buildId, stage: 'editorial_pass',
-    passed: editedRatio >= EDITORIAL_MIN_CHANGE_RATIO,
-    errors: editedRatio >= EDITORIAL_MIN_CHANGE_RATIO ? undefined : [{ code: 'EDITORIAL_PASS_INEFFECTIVE', message: `Editorial pass changed ${editedNodes} of ${pass1.nodes.length} nodes (${(editedRatio*100).toFixed(1)}%), below the ${(EDITORIAL_MIN_CHANGE_RATIO*100).toFixed(1)}% threshold` }],
+    passed: editorialPassed,
+    errors: editorialErrors,
     metrics: { editedNodes, totalNodes: pass1.nodes.length, editedRatio },
   })
+  if (!editorialPassed) throw new Error(editorialErrors[0].message)
   await validationReport(input.supabase, { orderId: input.orderId, language: input.language, buildId, stage: 'title_authority', passed: true, metrics: { titleAuthority } })
   assertSourceAwareDuplicateParity(sourceDocument.nodes, pass2.nodes)
   assertSourceAwareHeadingDuplicateParity(sourceDocument.nodes, pass2.nodes)
