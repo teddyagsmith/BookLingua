@@ -25,7 +25,13 @@ export function getSupabaseAdmin(): SupabaseClient {
     if (!url || !key) {
       throw new Error('NEXT_PUBLIC_SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are required')
     }
-    _supabaseAdmin = createClient(url, key)
+    _supabaseAdmin = createClient(url, key, {
+      global: {
+        // Package/build authority is mutable operational state. Next/Vercel
+        // must not reuse a cached PostgREST GET after a rebuild is promoted.
+        fetch: (input, init) => fetch(input, { ...init, cache: 'no-store' }),
+      },
+    })
   }
   return _supabaseAdmin
 }
