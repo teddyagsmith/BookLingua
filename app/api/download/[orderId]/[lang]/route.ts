@@ -686,7 +686,9 @@ export async function GET(
       : type === 'review' ? 'review_docx'
         : effectiveFormat === '.epub' ? 'final_epub' : 'final_docx')) as ArtifactType
     let storedArtifact: any = null
-    if (HARDENED_V1_ENABLED && (order.status === 'ready_for_review' || order.status === 'reader_review_pending' || order.status === 'delivery_pending' || (order.status === 'completed' && Boolean(order.source_linked_at)))) {
+    // Scoped review/customer links are generated from an immutable manifest and
+    // must never fall back to the legacy dynamic builder because of a rollout flag.
+    if ((reviewScope || customerScope || HARDENED_V1_ENABLED) && (order.status === 'ready_for_review' || order.status === 'reader_review_pending' || order.status === 'delivery_pending' || (order.status === 'completed' && Boolean(order.source_linked_at)))) {
       const { data: currentBuild } = await getSupabaseAdmin().from('order_language_builds')
         .select('id').eq('order_id', orderId).eq('language', lang).eq('is_current', true).maybeSingle()
       if (!currentBuild) return NextResponse.json({ error: 'Current validated build unavailable' }, { status: 409 })
