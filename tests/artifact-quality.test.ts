@@ -4,7 +4,7 @@ import AdmZip from 'adm-zip'
 import { Document, HeadingLevel, Packer, Paragraph, TextRun } from 'docx'
 import { applyTitleAuthority, cleanBookTitle, resolveTitleAuthority } from '../lib/authoritative-title'
 import { assessSourceFormatting } from '../lib/formatting-policy'
-import { buildFinalSemanticDocx, buildSemanticDocxPreservingSource, buildSemanticEpub, buildSemanticReviewDocx, wordLevelDiff } from '../lib/semantic-artifacts'
+import { buildFinalSemanticDocx, buildSemanticDocx, buildSemanticDocxPreservingSource, buildSemanticEpub, buildSemanticReviewDocx, wordLevelDiff } from '../lib/semantic-artifacts'
 import { deriveEditorialTranslationNotes, validateTranslationNotes } from '../lib/translation-notes'
 import { parseSemanticDocx, parseSemanticTxt } from '../lib/semantic-parser'
 import { inferHeadingsFromContents } from '../lib/extract-segments'
@@ -93,6 +93,17 @@ test('formatting policy preserves sound structured sources and falls back for we
   assert.equal(assessSourceFormatting({sourceFormat:'epub',parserConfidence:1,hasHeadings:true,hasPresentationMetadata:true}).disposition,'preserve')
   assert.equal(assessSourceFormatting({sourceFormat:'docx',parserConfidence:.85,hasHeadings:true,hasPresentationMetadata:false}).disposition,'preserve-and-normalize')
   assert.equal(assessSourceFormatting({sourceFormat:'txt',parserConfidence:.4,hasHeadings:false,hasPresentationMetadata:false}).disposition,'clean-fallback')
+})
+
+test('clean DOCX output uses the approved Calibri house-style hierarchy', async () => {
+  const input=document([{sourceText:'Chapter 1',translatedText:'Capítulo 1'},{sourceText:'Body.',translatedText:'Cuerpo.'}])
+  const zip:any=new AdmZip(await buildSemanticDocx(input,'Título','final'))
+  const styles=zip.getEntry('word/styles.xml')!.getData().toString('utf8')
+  assert.match(styles,/<w:docDefaults>[\s\S]*?w:ascii="Calibri"[\s\S]*?<w:sz w:val="22"/)
+  assert.match(styles,/w:styleId="Title"[\s\S]*?<w:sz w:val="52"/)
+  for(const [level,size] of [[1,36],[2,30],[3,26],[4,24],[5,22],[6,22]]){
+    assert.match(styles,new RegExp(`w:styleId="Heading${level}"[\\s\\S]*?w:ascii="Calibri"[\\s\\S]*?<w:sz w:val="${size}"`))
+  }
 })
 
 test('well-structured DOCX retains its source presentation while weak text uses clean fallback', async()=>{

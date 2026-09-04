@@ -2,14 +2,14 @@ export const SOURCE_FORMATTING_POLICY_VERSION = '1.0'
 
 export const BOOKLINGUA_CLEAN_BOOK_STYLE = {
   version: '1.0',
-  bodyFont: 'Georgia',
+  bodyFont: 'Calibri',
   bodySizeHalfPoints: 22,
   bodyLineSpacingTwips: 276,
   firstLineIndentTwips: 360,
   pageMarginsTwips: { top: 1080, right: 1080, bottom: 1080, left: 1080 },
-  chapterHeadingFont: 'Georgia',
-  chapterHeadingSizeHalfPoints: 32,
-  titleSizeHalfPoints: 40,
+  chapterHeadingFont: 'Calibri',
+  chapterHeadingSizeHalfPoints: 36,
+  titleSizeHalfPoints: 52,
 } as const
 
 export type SourceFormattingDisposition = 'preserve' | 'preserve-and-normalize' | 'clean-fallback'
