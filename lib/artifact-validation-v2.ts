@@ -17,6 +17,7 @@ export interface ArtifactValidationOptions {
   semanticDuplicateParityValidated?: boolean
   semanticHeadingDuplicateParityValidated?: boolean
   expectedLanguage?: string
+  expectedCreator?: string
 }
 
 const INTERNAL_MARKER = /===SEGMENT(?:_|:|===)|===TRANSLATION_NOTES===|###CHAPTER:|###H[1-6]:/i
@@ -122,6 +123,7 @@ export function validateArtifact(buffer: Buffer, kind: ArtifactKind, options: Ar
           if(options.expectedLanguage){
             if(language.toLowerCase()!==options.expectedLanguage.toLowerCase())errors.push({code:'EPUB_LANGUAGE',message:`EPUB language ${language||'(missing)'} does not match ${options.expectedLanguage}`})
             if(!creator)errors.push({code:'EPUB_CREATOR',message:'EPUB dc:creator is missing or empty'})
+            else if(options.expectedCreator&&creator.normalize('NFKC').trim()!==options.expectedCreator.normalize('NFKC').trim())errors.push({code:'EPUB_CREATOR_MISMATCH',message:`EPUB dc:creator does not match the authoritative book author`})
             if(!identifier)errors.push({code:'EPUB_IDENTIFIER',message:'EPUB dc:identifier is missing or empty'})
           }
           const manifest = new Map<string, { href: string; properties: string; mediaType: string }>()

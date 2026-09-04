@@ -53,6 +53,49 @@ function translatedTitleAlreadyPresent(document: SemanticDocumentV2, title: stri
   return document.nodes.some(node => node.type === 'heading' && normalized(node.translatedText || '') === normalized(title))
 }
 
+function joinHeadingFragments(values:string[]):string{
+  return values.reduce((result,value)=>{
+    const clean=decodeVisibleEntities(value).trim()
+    if(!result)return clean
+    if(/[-‐-―]\s*$/.test(result))return /^[a-zà-öø-ÿäöüß]/.test(clean)?`${result.replace(/[-‐-―]\s*$/,'')}${clean}`:`${result}${clean}`
+    return `${result} ${clean}`
+  },'')
+}
+
+/** Collapse a numbered chapter heading split across adjacent display blocks. */
+export function consolidatedArtifactNodes(document:SemanticDocumentV2):SemanticNodeV2[]{
+  const output:SemanticNodeV2[]=[]
+  for(let index=0;index<document.nodes.length;index++){
+    const node=document.nodes[index]
+    if(node.type==='heading'&&/^chapter\s+(?:\d+|[ivxlcdm]+)\s*:?$/i.test(decodeVisibleEntities(node.sourceText).trim())){
+      const group=[node]
+      while((document.nodes[index+1]?.type==='heading'&&!/^chapter\s+(?:\d+|[ivxlcdm]+)\b/i.test(decodeVisibleEntities(document.nodes[index+1].sourceText).trim()))||(document.nodes[index+1]?.type==='paragraph'&&document.nodes[index+2]?.type==='heading'&&!/^chapter\s+(?:\d+|[ivxlcdm]+)\b/i.test(decodeVisibleEntities(document.nodes[index+2].sourceText).trim())&&decodeVisibleEntities(document.nodes[index+1].sourceText).trim().split(/\s+/).length<=8&&!/[.!?]$/.test(decodeVisibleEntities(document.nodes[index+1].sourceText).trim())))group.push(document.nodes[++index])
+      output.push({...node,sourceText:joinHeadingFragments(group.map(item=>item.sourceText)),translatedText:joinHeadingFragments(group.map(item=>item.translatedText||''))})
+    }else output.push(node)
+  }
+  return output
+}
+
+function documentNodesWithGeneratedToc(document:SemanticDocumentV2):SemanticNodeV2[]{
+  const nodes=consolidatedArtifactNodes(document)
+  const tocIndex=nodes.findIndex(node=>/^(?:table of contents|contents)$/i.test(decodeVisibleEntities(node.sourceText).trim()))
+  const firstBodyHeading=nodes.findIndex((node,index)=>index>tocIndex&&node.type==='heading')
+  if(tocIndex<0||firstBodyHeading<0)return nodes
+  const chapterHeadings=nodes.slice(firstBodyHeading).filter(node=>node.type==='heading'&&(/^(?:introduction|chapter\s+(?:\d+|[ivxlcdm]+)\b)/i.test(decodeVisibleEntities(node.sourceText).trim())))
+  if(!chapterHeadings.length)return nodes
+  const tocRows=chapterHeadings.map((node,index)=>({...node,id:`${node.id}-toc`,order:nodes[tocIndex].order+index+1,type:'paragraph' as const,headingLevel:null,chapterId:null}))
+  return [...nodes.slice(0,tocIndex+1),...tocRows,...nodes.slice(firstBodyHeading)]
+}
+
+/** Prefer author attribution embedded in the book over a checkout/customer label. */
+export function resolveBookAuthor(document:SemanticDocumentV2,fallback?:string):string|undefined{
+  const about=document.nodes.findIndex(node=>/^about the author$/i.test(decodeVisibleEntities(node.sourceText).trim()))
+  const candidate=about>=0?decodeVisibleEntities(document.nodes[about+1]?.sourceText||'').trim():''
+  if(candidate&&candidate.length<=120&&!/[.!?]$/.test(candidate))return candidate
+  const clean=decodeVisibleEntities(fallback||'').replace(/^prepared for\s+/i,'').trim()
+  return clean||undefined
+}
+
 export function decodeVisibleEntities(value:string):string{
   let previous=''
   let output=value
@@ -70,7 +113,7 @@ export async function buildSemanticDocx(document: SemanticDocumentV2, title: str
   assertTranslated(document)
   const children: Paragraph[] = []
   if (!translatedTitleAlreadyPresent(document, title)) children.push(new Paragraph({ text: title, heading: HeadingLevel.TITLE }))
-  document.nodes.forEach((node, index) => children.push(nodeParagraph(node, node.translatedText!, undefined, index)))
+  documentNodesWithGeneratedToc(document).forEach((node, index) => children.push(nodeParagraph(node, node.translatedText!, undefined, index)))
   return deterministicDocx(Buffer.from(await Packer.toBuffer(new Document({
     styles: semanticStyles(),
     sections: [{ properties: { page: { margin: BOOKLINGUA_CLEAN_BOOK_STYLE.pageMarginsTwips } }, children }],
@@ -118,8 +161,9 @@ export async function buildSemanticReviewDocx(pass1: SemanticDocumentV2, pass2: 
     new Paragraph('Read this as a polished translation with editorial changes marked in place. Yellow strikethrough shows wording removed during editorial review; adjacent yellow text shows its replacement. Unmarked text was unchanged. Accept or reject marked revisions in Word as appropriate.'),
     ...(changeCount === 0 ? [new Paragraph('Editorial review completed: no wording changes were required, so this document intentionally contains no highlighted revisions.')] : []),
   ]
-  pass1.nodes.forEach((first, index) => {
-    const second = pass2.nodes[index]
+  const firstNodes=documentNodesWithGeneratedToc(pass1),secondNodes=documentNodesWithGeneratedToc(pass2)
+  firstNodes.forEach((first, index) => {
+    const second = secondNodes[index]
     if (!second || second.id !== first.id) throw new Error('Review semantic identity mismatch')
     if (first.translatedText === second.translatedText) children.push(nodeParagraph(second, second.translatedText!, undefined, index))
     else children.push(nodeParagraph(second, '', wordLevelDiff(decodeVisibleEntities(first.translatedText!), decodeVisibleEntities(second.translatedText!)).map(token => new TextRun({
@@ -268,6 +312,10 @@ export function buildSemanticEpub(source: Buffer, document: SemanticDocumentV2, 
   assertTranslated(document)
   if (document.sourceFormat !== 'epub') throw new Error('EPUB output requires an EPUB semantic source')
   const zip: any = new AdmZip(source)
+  const consolidated=consolidatedArtifactNodes(document)
+  const consolidatedByFirstId=new Map(consolidated.map(node=>[node.id,node]))
+  const retainedIds=new Set(consolidated.map(node=>node.id))
+  const removedHeadingKeys=new Set(document.nodes.filter(node=>!retainedIds.has(node.id)).map(node=>decodeVisibleEntities(node.sourceText).normalize('NFKC').toLocaleLowerCase().replace(/\s+/g,' ').trim()))
   const byPath = new Map<string, SemanticNodeV2[]>()
   for (const node of document.nodes) {
     const split = node.sourceLocation.match(/^(.*):block:(\d+)$/)
@@ -284,17 +332,26 @@ export function buildSemanticEpub(source: Buffer, document: SemanticDocumentV2, 
       if (!inner.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim()) return _full
       const node = nodes[index++]
       if (!node) throw new Error(`EPUB semantic block count changed: ${entryPath}`)
+      if(!retainedIds.has(node.id))return ''
+      const artifactNode=consolidatedByFirstId.get(node.id)||node
       const outputTag=node.type==='heading'?`h${Math.max(1,Math.min(6,node.headingLevel||1))}`:tag
-      return `<${outputTag}${attrs}>${replaceTextPreservingInline(inner,node.translatedText!)}</${outputTag}>`
+      return `<${outputTag}${attrs}>${replaceTextPreservingInline(inner,artifactNode.translatedText!)}</${outputTag}>`
     })
     if (index !== nodes.length) throw new Error(`EPUB semantic block count changed: ${entryPath}`)
     zip.updateFile(entryPath, Buffer.from(xml))
   }
-  const headingMap = new Map(document.nodes.filter(n => n.type === 'heading').map(n => [n.sourceText.trim(), n.translatedText!]))
+  const headingMap = new Map(consolidated.filter(n => n.type === 'heading').map(n => [n.sourceText.trim(), n.translatedText!]))
   for (const entry of zip.getEntries().filter((e: any) => /(?:nav|toc|\.ncx$)/i.test(e.entryName))) {
     let xml = entry.getData().toString('utf8')
+    const entryContainsRemovedHeading=(block:string)=>Array.from(block.matchAll(/<(?:a|text)\b[^>]*>([\s\S]*?)<\/(?:a|text)>/gi)).some(match=>removedHeadingKeys.has(decodeVisibleEntities(match[1].replace(/<[^>]+>/g,' ')).normalize('NFKC').toLocaleLowerCase().replace(/\s+/g,' ').trim()))
+    xml=xml.replace(/<navPoint\b[^>]*>[\s\S]*?<\/navPoint>/gi,(block:string)=>entryContainsRemovedHeading(block)?'':block)
+    xml=xml.replace(/<li\b[^>]*>[\s\S]*?<\/li>/gi,(block:string)=>entryContainsRemovedHeading(block)?'':block)
     for (const [sourceText, translatedText] of Array.from(headingMap.entries())) xml = xml.split(`>${sourceText}<`).join(`>${escapeXml(translatedText)}<`)
-    const normalizedHeadings=new Map(document.nodes.map(node=>[decodeVisibleEntities(node.sourceText.replace(/<[^>]+>/g,' ')).normalize('NFKC').toLocaleLowerCase().replace(/\s+/g,' ').trim(),node.translatedText!]))
+    const normalizedHeadings=new Map(consolidated.map(node=>[decodeVisibleEntities(node.sourceText.replace(/<[^>]+>/g,' ')).normalize('NFKC').toLocaleLowerCase().replace(/\s+/g,' ').trim(),node.translatedText!]))
+    for(const node of document.nodes.filter(item=>item.type==='heading'&&retainedIds.has(item.id))){
+      const artifactNode=consolidatedByFirstId.get(node.id)
+      if(artifactNode&&artifactNode.sourceText!==node.sourceText)normalizedHeadings.set(decodeVisibleEntities(node.sourceText).normalize('NFKC').toLocaleLowerCase().replace(/\s+/g,' ').trim(),artifactNode.translatedText!)
+    }
     const systemLabels:Record<string,{cover:string;toc:string}>={'pt-br':{cover:'Capa',toc:'Sumário'},de:{cover:'Umschlag',toc:'Inhaltsverzeichnis'},fr:{cover:'Couverture',toc:'Table des matières'},'es-es':{cover:'Portada',toc:'Índice'}}
     if(language&&systemLabels[language]){normalizedHeadings.set('cover',systemLabels[language].cover);normalizedHeadings.set('table of contents',systemLabels[language].toc)}
     xml=xml.replace(/<(a|text)\b([^>]*)>([\s\S]*?)<\/\1>/gi,(full:string,tag:string,attrs:string,inner:string)=>{
@@ -313,7 +370,7 @@ export function buildSemanticEpub(source: Buffer, document: SemanticDocumentV2, 
     if(language){
       xml=/<dc:language(?:\s[^>]*)?>/i.test(xml)?xml.replace(/<dc:language(?:\s[^>]*)?>[\s\S]*?<\/dc:language>/gi,`<dc:language>${escapeXml(language)}</dc:language>`):xml.replace(/<metadata\b([^>]*)>/i,`<metadata$1><dc:language>${escapeXml(language)}</dc:language>`)
       xml=xml.replace(/<meta\b([^>]*property=["']dcterms:language["'][^>]*)>[\s\S]*?<\/meta>/gi,`<meta$1>${escapeXml(language)}</meta>`)
-      const creator=authorName?.trim()
+      const creator=resolveBookAuthor(document,authorName)
       if(creator)xml=/<dc:creator(?:\s[^>]*)?>/i.test(xml)?xml.replace(/<dc:creator(?:\s[^>]*)?>[\s\S]*?<\/dc:creator>/gi,`<dc:creator>${escapeXml(creator)}</dc:creator>`):xml.replace(/<metadata\b([^>]*)>/i,`<metadata$1><dc:creator>${escapeXml(creator)}</dc:creator>`)
       const identifier=editionIdentifier(editionSeed||document.sourceHash,language)
       xml=/<dc:identifier(?:\s[^>]*)?>/i.test(xml)?xml.replace(/<dc:identifier(?:\s[^>]*)?>[\s\S]*?<\/dc:identifier>/i,(match:string)=>match.replace(/>[^<]*</,`>${identifier}<`)):xml.replace(/<metadata\b([^>]*)>/i,`<metadata$1><dc:identifier id="bookid">${identifier}</dc:identifier>`)

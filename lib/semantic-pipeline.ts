@@ -5,7 +5,7 @@ import { SupabaseClient } from '@supabase/supabase-js'
 import { parseSemanticDocx, parseSemanticEpub, parseSemanticTxt } from './semantic-parser'
 import { evaluateSemanticEligibility, SemanticDocumentV2 } from './semantic-document'
 import { createNodeTranslationInput, nodeBatchFingerprint, NodeTranslationInput, NodeTranslationOutput, validateAndMergeNodeOutput } from './node-translation-contract'
-import { buildFinalSemanticDocx, buildSemanticDocx, buildSemanticEpub, buildSemanticEpubFromDocument, buildSemanticReviewDocx, normalizeEpubImages } from './semantic-artifacts'
+import { buildFinalSemanticDocx, buildSemanticDocx, buildSemanticEpub, buildSemanticEpubFromDocument, buildSemanticReviewDocx, consolidatedArtifactNodes, normalizeEpubImages, resolveBookAuthor } from './semantic-artifacts'
 import { buildChapterMap, renderChapterMapCsv, renderChapterMapDocx } from './chapter-map'
 import { validateArtifact } from './artifact-validation-v2'
 import { storeImmutableArtifact } from './artifact-store'
@@ -88,7 +88,7 @@ async function validationReport(supabase: SupabaseClient, input: { orderId: stri
   return data.id
 }
 
-async function storeValidated(input: SemanticPipelineInput, buildId: string, type: ArtifactType, filename: string, buffer: Buffer, kind?: 'docx'|'epub', semanticDuplicateParityValidated = false) {
+async function storeValidated(input: SemanticPipelineInput, buildId: string, type: ArtifactType, filename: string, buffer: Buffer, kind?: 'docx'|'epub', semanticDuplicateParityValidated = false,expectedCreator?:string) {
   // Partial-build retries reuse already validated immutable artifacts. The
   // deterministic build ID binds them to the exact source/brief/language, and
   // avoids regenerating container formats after a later stage fails.
@@ -104,7 +104,7 @@ async function storeValidated(input: SemanticPipelineInput, buildId: string, typ
     sizeBytes: Number(existing.size_bytes), schemaVersion: existing.schema_version || undefined,
     validationStatus: existing.validation_status, validationReportId: existing.validation_report_id || undefined,
   }
-  const result = kind ? validateArtifact(buffer, kind, { semanticDuplicateParityValidated, semanticHeadingDuplicateParityValidated: semanticDuplicateParityValidated, expectedLanguage: input.language }) : { passed: buffer.length > 0, errors: buffer.length ? [] : [{ code: 'EMPTY', message: 'Artifact empty' }], metrics: {} }
+  const result = kind ? validateArtifact(buffer, kind, { semanticDuplicateParityValidated, semanticHeadingDuplicateParityValidated: semanticDuplicateParityValidated, expectedLanguage: input.language,expectedCreator }) : { passed: buffer.length > 0, errors: buffer.length ? [] : [{ code: 'EMPTY', message: 'Artifact empty' }], metrics: {} }
   const reportId = await validationReport(input.supabase, { orderId: input.orderId, language: input.language, buildId, stage: `artifact:${type}`, passed: result.passed, errors: result.errors, metrics: result.metrics })
   if (!result.passed) throw new Error(`${type} validation failed: ${result.errors.map((error: any) => error.message).join('; ')}`)
   return storeImmutableArtifact({ supabase: input.supabase, orderId: input.orderId, language: input.language, buildId, type, filename, buffer, schemaVersion: 'semantic-v2', validationStatus: 'pass', validationReportId: reportId })
@@ -231,10 +231,11 @@ export async function runSemanticPipeline(input: SemanticPipelineInput) {
   await storeValidated(input, buildId, 'translation_brief', 'translation-brief.json', Buffer.from(JSON.stringify(input.brief, null, 2)))
   await storeValidated(input, buildId, 'pass1_docx', `${input.title} - ${input.language} - Pass 1.docx`, await buildSemanticDocx(pass1, titleAuthority.effectiveValue, 'pass1'), 'docx', true)
   await storeValidated(input, buildId, 'review_docx', `${input.title} - ${input.language} - Review.docx`, await buildSemanticReviewDocx(pass1, pass2, titleAuthority.effectiveValue), 'docx', true)
-  if (input.sourceFormat === 'epub' || input.dualFormat) await storeValidated(input, buildId, 'final_epub', `${input.title} - ${input.language} - Final.epub`, input.sourceFormat === 'epub' ? buildSemanticEpub(await normalizeEpubImages(input.source), pass2, titleAuthority, input.language,input.authorName,input.orderId) : buildSemanticEpubFromDocument(pass2, titleAuthority.effectiveValue,input.language,input.authorName||'Unknown',input.orderId), 'epub', true)
+  const bookAuthor=resolveBookAuthor(pass2,input.authorName)
+  if (input.sourceFormat === 'epub' || input.dualFormat) await storeValidated(input, buildId, 'final_epub', `${input.title} - ${input.language} - Final.epub`, input.sourceFormat === 'epub' ? buildSemanticEpub(await normalizeEpubImages(input.source), pass2, titleAuthority, input.language,bookAuthor,input.orderId) : buildSemanticEpubFromDocument(pass2, titleAuthority.effectiveValue,input.language,bookAuthor||'Unknown',input.orderId), 'epub', true,bookAuthor)
   await storeValidated(input, buildId, 'final_docx', `${input.title} - ${input.language} - Final.docx`, await buildFinalSemanticDocx(input.source, pass2, titleAuthority.effectiveValue), 'docx', true)
   const map = buildChapterMap(pass2)
-  const sourceHeadingCount=sourceDocument.nodes.filter(node=>node.type==='heading').length
+  const sourceHeadingCount=consolidatedArtifactNodes(sourceDocument).filter(node=>node.type==='heading').length
   const minimumMapRows=Math.max(1,Math.ceil(sourceHeadingCount*0.9))
   if(map.length<minimumMapRows)throw new Error(`Chapter map validation failed: ${map.length} rows; expected at least ${minimumMapRows} from ${sourceHeadingCount} source headings`)
   if (map.some(row => row.status !== 'mapped')) throw new Error('Chapter map is incomplete')

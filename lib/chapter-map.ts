@@ -3,7 +3,7 @@ import { brandedDocumentHeader } from './branded-document-header'
 import { SemanticDocumentV2 } from './semantic-document'
 import { deterministicDocx } from './deterministic-docx'
 import { BOOKLINGUA_CLEAN_BOOK_STYLE } from './formatting-policy'
-import { decodeVisibleEntities } from './semantic-artifacts'
+import { consolidatedArtifactNodes, decodeVisibleEntities } from './semantic-artifacts'
 
 export interface ChapterMapRow {
   chapterId: string
@@ -17,7 +17,7 @@ export interface ChapterMapRow {
 }
 
 export function buildChapterMap(document: SemanticDocumentV2): ChapterMapRow[] {
-  const candidates = document.nodes
+  const candidates = consolidatedArtifactNodes(document)
     .filter(node => node.type === 'heading')
     .map(node => ({
       chapterId: node.id,

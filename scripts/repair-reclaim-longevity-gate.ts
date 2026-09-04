@@ -2,7 +2,7 @@ import {createClient} from '@supabase/supabase-js'
 import {randomUUID,createHash} from 'node:crypto'
 import AdmZip from 'adm-zip'
 import {downloadOriginalBinary} from '../lib/source-binary'
-import {buildSemanticDocx,buildSemanticReviewDocx,buildSemanticEpub,normalizeEpubImages,decodeVisibleEntities} from '../lib/semantic-artifacts'
+import {buildSemanticDocx,buildSemanticReviewDocx,buildSemanticEpub,consolidatedArtifactNodes,normalizeEpubImages,decodeVisibleEntities,resolveBookAuthor} from '../lib/semantic-artifacts'
 import {buildChapterMap,renderChapterMapCsv,renderChapterMapDocx} from '../lib/chapter-map'
 import {deriveEditorialTranslationNotes,renderTranslationNotes} from '../lib/translation-notes'
 import {renderCustomerLaunchPackDocx} from '../lib/customer-delivery-docx'
@@ -22,8 +22,8 @@ async function report(db:any,buildId:string,language:string,stage:string,passed:
  const {data,error}=await db.from('validation_reports').insert({order_id:ORDER,language,build_id:buildId,stage,validator_version:'semantic-v2.5-gate-hole-repair',passed,errors,warnings:[],metrics}).select('id').single()
  if(error)throw error;return data.id as string
 }
-async function store(db:any,buildId:string,language:string,type:any,filename:string,bytes:Buffer,kind?:'docx'|'epub'){
- const result=kind?validateArtifact(bytes,kind,{semanticDuplicateParityValidated:true,semanticHeadingDuplicateParityValidated:true,expectedLanguage:language}):{passed:bytes.length>0,errors:[],metrics:{}}
+async function store(db:any,buildId:string,language:string,type:any,filename:string,bytes:Buffer,kind?:'docx'|'epub',expectedCreator?:string){
+ const result=kind?validateArtifact(bytes,kind,{semanticDuplicateParityValidated:true,semanticHeadingDuplicateParityValidated:true,expectedLanguage:language,expectedCreator}):{passed:bytes.length>0,errors:[],metrics:{}}
  const id=await report(db,buildId,language,`artifact:${type}`,result.passed,result.errors,result.metrics)
  if(!result.passed)throw new Error(`${language} ${type}: ${result.errors.map((e:any)=>e.message).join('; ')}`)
  return storeImmutableArtifact({supabase:db,orderId:ORDER,language,buildId,type,filename,buffer:bytes,schemaVersion:'semantic-v2.5',validationStatus:'pass',validationReportId:id})
@@ -67,11 +67,11 @@ async function main(){
   await store(db,buildId,language,'pass1_docx',`${storageTitle} - ${language} - Pass 1.docx`,await buildSemanticDocx(pass1,title,'pass1'),'docx')
   await store(db,buildId,language,'review_docx',`${storageTitle} - ${language} - Review.docx`,await buildSemanticReviewDocx(pass1,pass2,title),'docx')
   const authority:any={sourceKind:'epub_metadata',sourceValue:'Reclaim Your Longevity',translatedValue:title,effectiveValue:title,confidence:'verified',fallbackUsed:false}
-  const epub=buildSemanticEpub(await normalizeEpubImages(source),pass2,authority,language,order.author_name,`${ORDER}:${language}`)
+  const bookAuthor=resolveBookAuthor(pass2,order.author_name),epub=buildSemanticEpub(await normalizeEpubImages(source),pass2,authority,language,bookAuthor,`${ORDER}:${language}`)
   const debugZip:any=new AdmZip(epub);console.log(`${language} rebuilt NCX first label:`,debugZip.readAsText('OEBPS/toc.ncx').match(/<navLabel><text>(.*?)<\/text>/)?.[1])
-  await store(db,buildId,language,'final_epub',`${storageTitle} - ${language} - Final.epub`,epub,'epub')
+  await store(db,buildId,language,'final_epub',`${storageTitle} - ${language} - Final.epub`,epub,'epub',bookAuthor)
   await store(db,buildId,language,'final_docx',`${storageTitle} - ${language} - Final.docx`,await buildSemanticDocx(pass2,title,'final'),'docx')
-  const map=buildChapterMap(pass2);if(map.length<Math.ceil(labels.length*.9))throw new Error(`${language}: chapter map ${map.length}/${labels.length}`)
+  const map=buildChapterMap(pass2),sourceHeadingCount=consolidatedArtifactNodes(pass2).filter(node=>node.type==='heading').length;if(map.length<Math.ceil(sourceHeadingCount*.9))throw new Error(`${language}: chapter map ${map.length}/${sourceHeadingCount}`)
   await store(db,buildId,language,'chapter_map_csv','chapter-map.csv',Buffer.from(renderChapterMapCsv(map)))
   await store(db,buildId,language,'chapter_map_docx','chapter-map.docx',await renderChapterMapDocx(map,{bookTitle:title,language}),'docx')
   const notes=deriveEditorialTranslationNotes({language,pass1,pass2,authoritativeTitle:{source:'Reclaim Your Longevity',target:title}})

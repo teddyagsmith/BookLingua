@@ -7,7 +7,7 @@ import { parseSemanticDocx, parseSemanticEpub, parseSemanticTxt } from '../lib/s
 import { createNodeTranslationInput, validateAndMergeNodeOutput } from '../lib/node-translation-contract'
 import { buildChapterMap, renderChapterMapCsv, renderChapterMapDocx } from '../lib/chapter-map'
 import { evaluateSemanticEligibility } from '../lib/semantic-document'
-import { buildSemanticDocx, buildSemanticEpub, buildSemanticEpubFromDocument, buildSemanticReviewDocx, normalizeEpubImages } from '../lib/semantic-artifacts'
+import { buildSemanticDocx, buildSemanticEpub, buildSemanticEpubFromDocument, buildSemanticReviewDocx, consolidatedArtifactNodes, normalizeEpubImages, resolveBookAuthor } from '../lib/semantic-artifacts'
 import { validateArtifact } from '../lib/artifact-validation-v2'
 import { deterministicSemanticBuildId } from '../lib/semantic-pipeline'
 import { semanticV2AllowedForOrder } from '../lib/semantic-canary'
@@ -152,6 +152,27 @@ test('chapter map is one-to-one and emits CSV and DOCX', async () => {
   assert.deepEqual(rows.map(row => row.sourceChapterNumber), ['10', '11'])
   assert.match(renderChapterMapCsv(rows), /Chapitre 11/)
   assert.ok((await renderChapterMapDocx(rows)).length > 0)
+})
+
+test('split chapter headings become one EPUB nav, DOCX TOC, and Chapter Map entry',async()=>{
+  const zip:any=new (AdmZip as any)(undefined,{noSort:true})
+  zip.addFile('mimetype',Buffer.from('application/epub+zip'));zip.getEntry('mimetype').header.method=0
+  zip.addFile('META-INF/container.xml',Buffer.from('<container><rootfiles><rootfile full-path="OPS/book.opf"/></rootfiles></container>'))
+  zip.addFile('OPS/book.opf',Buffer.from('<package><metadata xmlns:dc="http://purl.org/dc/elements/1.1/"><dc:title>Book</dc:title><dc:language>en</dc:language><dc:creator>Wrong Customer</dc:creator><dc:identifier>old</dc:identifier></metadata><manifest><item id="b" href="b.xhtml" media-type="application/xhtml+xml"/><item id="n" href="nav.xhtml" media-type="application/xhtml+xml" properties="nav"/></manifest><spine><itemref idref="b"/></spine></package>'))
+  zip.addFile('OPS/b.xhtml',Buffer.from('<html><body><p>About the Author</p><p>Cari Rhys-Owen</p><p>Table of Contents</p><p>Chapter 1:</p><p>Understanding</p><h1>Chapter 1:</h1><p>Understanding</p><h1>Your Body\'s Natural Aging Systems</h1><p>Body.</p></body></html>'))
+  zip.addFile('OPS/nav.xhtml',Buffer.from('<html><body><nav><ol><li><a href="b.xhtml#c1">Chapter 1:</a></li><li><a href="b.xhtml#c2">Understanding</a></li><li><a href="b.xhtml#c3">Your Body\'s Natural Aging Systems</a></li></ol></nav></body></html>'))
+  const source=zip.toBuffer(),doc=parseSemanticEpub(source,'split');doc.nodes.forEach(node=>{node.translatedText=({
+    'About the Author':'Über die Autorin','Table of Contents':'Inhaltsverzeichnis','Chapter 1:':'Kapitel 1:','Understanding':'Verständnis der',"Your Body's Natural Aging Systems":'natürlichen Alterungssysteme Ihres Körpers'
+  } as Record<string,string>)[node.sourceText]||node.sourceText})
+  const rows=buildChapterMap(doc);assert.equal(rows.length,1);assert.equal(rows[0].translatedTitle,'Kapitel 1: Verständnis der natürlichen Alterungssysteme Ihres Körpers')
+  assert.equal(consolidatedArtifactNodes(doc).filter(node=>node.type==='heading').length,1)
+  assert.equal(resolveBookAuthor(doc,'Tina Vaughan / Cari Rhys-Owen'),'Cari Rhys-Owen')
+  const epub=buildSemanticEpub(source,doc,{sourceKind:'epub_metadata',sourceValue:'Book',translatedValue:'Buch',effectiveValue:'Buch',confidence:'verified',fallbackUsed:false},'de','Tina Vaughan / Cari Rhys-Owen','edition')
+  const output:any=new AdmZip(epub),nav=output.getEntry('OPS/nav.xhtml').getData().toString(),opf=output.getEntry('OPS/book.opf').getData().toString(),body=output.getEntry('OPS/b.xhtml').getData().toString()
+  assert.equal((nav.match(/<li\b/g)||[]).length,1);assert.match(nav,/Kapitel 1: Verständnis der natürlichen Alterungssysteme Ihres Körpers/)
+  assert.equal((body.match(/<h1\b/g)||[]).length,1);assert.match(opf,/<dc:creator>Cari Rhys-Owen<\/dc:creator>/)
+  const docx:any=new AdmZip(await buildSemanticDocx(doc,'Buch','final')),xml=docx.getEntry('word/document.xml').getData().toString()
+  assert.equal((xml.match(/Kapitel 1:/g)||[]).length,2);assert.match(xml,/Kapitel 1: Verständnis der natürlichen Alterungssysteme Ihres Körpers/)
 })
 
 test('EPUB customer gate blocks wrong metadata, untranslated nav, and missing content headings',()=>{
