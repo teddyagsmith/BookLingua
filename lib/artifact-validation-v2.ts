@@ -13,6 +13,12 @@ export interface ArtifactValidationResult {
   metrics: { contentFiles: number; headings: string[]; navigationHeadings: string[]; chapterNumbers: string[]; textCharacters: number }
 }
 
+export interface ArtifactValidationOptions {
+  semanticDuplicateParityValidated?: boolean
+  semanticHeadingDuplicateParityValidated?: boolean
+  expectedLanguage?: string
+}
+
 const INTERNAL_MARKER = /===SEGMENT(?:_|:|===)|===TRANSLATION_NOTES===|###CHAPTER:|###H[1-6]:/i
 const VISIBLE_MARKDOWN_HEADING = /(?:^|\n)\s*#{1,6}\s+\S/m
 const CHAPTER_NUMBER = /\b(?:chapter|chapitre|cap[ií]tulo|kapitel|capitolo)\s+([0-9]+|[ivxlcdm]+)\b/gi
@@ -92,9 +98,10 @@ function docxParagraphs(xml: string): Array<{ text: string; style: string }> {
   }).filter(p => p.text)
 }
 
-export function validateArtifact(buffer: Buffer, kind: ArtifactKind, options: { semanticDuplicateParityValidated?: boolean; semanticHeadingDuplicateParityValidated?: boolean } = {}): ArtifactValidationResult {
+export function validateArtifact(buffer: Buffer, kind: ArtifactKind, options: ArtifactValidationOptions = {}): ArtifactValidationResult {
   const errors: ArtifactValidationIssue[] = []; const warnings: ArtifactValidationIssue[] = []
   const headings: string[] = []; const navigationHeadings: string[] = []; const paragraphs: string[] = []; const allText: string[] = []
+  let doubleEscapedEntity = false
   let contentFiles = 0
   if (!buffer.length) errors.push({ code: 'EMPTY_FILE', message: 'Artifact is empty' })
   try {
@@ -109,6 +116,14 @@ export function validateArtifact(buffer: Buffer, kind: ArtifactKind, options: { 
         if (!container || !opfPath || !entries.has(opfPath)) errors.push({ code: 'EPUB_CONTAINER', message: 'EPUB container/OPF is missing or invalid' })
         else {
           const opf = entries.get(opfPath)!.getData().toString('utf8'); const base = path.posix.dirname(opfPath) === '.' ? '' : path.posix.dirname(opfPath)
+          const language=textFromMarkup(opf.match(/<dc:language(?:\s[^>]*)?>([\s\S]*?)<\/dc:language>/i)?.[1]||'')
+          const creator=textFromMarkup(opf.match(/<dc:creator(?:\s[^>]*)?>([\s\S]*?)<\/dc:creator>/i)?.[1]||'')
+          const identifier=textFromMarkup(opf.match(/<dc:identifier(?:\s[^>]*)?>([\s\S]*?)<\/dc:identifier>/i)?.[1]||'')
+          if(options.expectedLanguage){
+            if(language.toLowerCase()!==options.expectedLanguage.toLowerCase())errors.push({code:'EPUB_LANGUAGE',message:`EPUB language ${language||'(missing)'} does not match ${options.expectedLanguage}`})
+            if(!creator)errors.push({code:'EPUB_CREATOR',message:'EPUB dc:creator is missing or empty'})
+            if(!identifier)errors.push({code:'EPUB_IDENTIFIER',message:'EPUB dc:identifier is missing or empty'})
+          }
           const manifest = new Map<string, { href: string; properties: string; mediaType: string }>()
           for (const tag of opf.match(/<(?:[\w.-]+:)?item\b[^>]*\/?\s*>/gi) || []) { const a = attrs(tag); if (a.id && a.href) manifest.set(a.id, { href: a.href, properties: a.properties || '', mediaType: a['media-type'] || '' }) }
           for (const item of Array.from(manifest.values())) if (item.mediaType.startsWith('image/') && !['image/jpeg','image/png','image/gif','image/svg+xml'].includes(item.mediaType.toLowerCase())) errors.push({ code: 'EPUB_NON_CORE_IMAGE', message: `EPUB contains unsupported image media type: ${item.mediaType}`, location: item.href })
@@ -118,7 +133,8 @@ export function validateArtifact(buffer: Buffer, kind: ArtifactKind, options: { 
             const item = manifest.get(id); const entryPath = item && safeZipPath(base, item.href)
             const entry = entryPath ? entries.get(entryPath) : undefined
             if (!item || !entry || !/xhtml|html/.test(item.mediaType)) { errors.push({ code: 'EPUB_SPINE_ITEM', message: `Unreadable spine item: ${id}` }); continue }
-            const blocks = htmlBlocks(entry.getData().toString('utf8')); contentFiles++; headings.push(...blocks.headings); paragraphs.push(...blocks.paragraphs); allText.push(blocks.text)
+            const rawMarkup=entry.getData().toString('utf8');doubleEscapedEntity ||= /&amp;(?:quot|apos|amp|lt|gt|#\d+|#x[0-9a-f]+);/i.test(rawMarkup)
+            const blocks = htmlBlocks(rawMarkup); contentFiles++; headings.push(...blocks.headings); paragraphs.push(...blocks.paragraphs); allText.push(blocks.text)
             if (!blocks.text) errors.push({ code: 'EMPTY_CONTENT', message: 'Spine content document is empty', location: entryPath! })
             if (chapterNumbers(blocks.headings).length && blocks.paragraphs.join(' ').trim().length < 2) errors.push({ code: 'EMPTY_CHAPTER', message: 'Chapter has no body content', location: entryPath! })
             const compact = compactTextFromMarkup(entry.getData().toString('utf8'))
@@ -129,6 +145,14 @@ export function validateArtifact(buffer: Buffer, kind: ArtifactKind, options: { 
           for (const item of Array.from(manifest.values())) if (/\bnav\b/.test(item.properties)) { const p = safeZipPath(base, item.href); const e = p && entries.get(p); if (!e) errors.push({ code: 'EPUB_NAV', message: 'Declared navigation document is missing' }); else { const xml = e.getData().toString('utf8'); navigationHeadings.push(...navigationLabels(xml)); navSequences.push(chapterNumbers(navigationLabels(xml))) } }
           const ncx = Array.from(manifest.values()).find(item => /ncx/i.test(item.mediaType)); if (ncx) { const p = safeZipPath(base, ncx.href); const e = p && entries.get(p); if (!e) errors.push({ code: 'EPUB_NCX', message: 'Declared NCX navigation document is missing' }); else { const labels = navigationLabels(e.getData().toString('utf8')); navigationHeadings.push(...labels); navSequences.push(chapterNumbers(labels)) } }
           const contentSequence = chapterNumbers(headings)
+          if(navigationHeadings.length&&!headings.length)errors.push({code:'EPUB_NAV_CONTENT_UNVERIFIABLE',message:'EPUB navigation exists but no semantic content headings were found'})
+          const normalizedContent=new Set(headings.map(value=>value.normalize('NFKC').toLocaleLowerCase().replace(/\s+/g,' ').trim()))
+          const contentNumbers=new Set(chapterNumbers(headings))
+          const localizedLandmarks:Record<string,Set<string>>={'pt-br':new Set(['capa','sumário']),'de':new Set(['umschlag','inhaltsverzeichnis']),'fr':new Set(['couverture','table des matières']),'es-es':new Set(['portada','índice'])}
+          const landmarks=localizedLandmarks[options.expectedLanguage||'']||new Set<string>()
+          const unmatched=navigationHeadings.filter(value=>{const normalized=value.normalize('NFKC').toLocaleLowerCase().replace(/\s+/g,' ').trim();return!landmarks.has(normalized)&&!normalizedContent.has(normalized)&&!chapterNumbers([value]).some(number=>contentNumbers.has(number))})
+          if(headings.length&&unmatched.length)errors.push({code:'EPUB_NAV_TEXT_MISMATCH',message:`Navigation labels do not resolve to content headings: ${unmatched.slice(0,5).join(' | ')}`})
+          if(options.expectedLanguage&&options.expectedLanguage!=='en'&&navigationHeadings.some(value=>/^(?:chapter|introduction|table of contents|cover)\b/i.test(value)))errors.push({code:'EPUB_NAV_WRONG_LANGUAGE',message:`Navigation contains English labels for ${options.expectedLanguage}`})
           for (const sequence of navSequences) {
             if (!sequence.length) continue
             // Some valid publisher EPUBs encode chapter labels as styled
@@ -151,7 +175,8 @@ export function validateArtifact(buffer: Buffer, kind: ArtifactKind, options: { 
         const document = entries.get('word/document.xml')
         if (!document) errors.push({ code: 'DOCX_DOCUMENT_MISSING', message: 'DOCX word/document.xml is missing' })
         else {
-          const ps = docxParagraphs(document.getData().toString('utf8')); contentFiles = 1; paragraphs.push(...ps.map(p => p.text)); allText.push(ps.map(p => p.text).join('\n'))
+          const rawMarkup=document.getData().toString('utf8');doubleEscapedEntity=/&amp;(?:quot|apos|amp|lt|gt|#\d+|#x[0-9a-f]+);/i.test(rawMarkup)
+          const ps = docxParagraphs(rawMarkup); contentFiles = 1; paragraphs.push(...ps.map(p => p.text)); allText.push(ps.map(p => p.text).join('\n'))
           for (const p of ps) if (/^heading[1-6]$/i.test(p.style)) headings.push(p.text)
           const chapterIndexes = ps.map((p, i) => /^heading1$/i.test(p.style) && chapterNumbers([p.text]).length ? i : -1).filter(i => i >= 0)
           for (let i = 0; i < chapterIndexes.length; i++) { const start = chapterIndexes[i] + 1; const end = chapterIndexes[i + 1] ?? ps.length; if (!ps.slice(start, end).some(p => !/^heading[1-6]$/i.test(p.style) && p.text.trim())) errors.push({ code: 'EMPTY_CHAPTER', message: `Chapter has no body content: ${ps[chapterIndexes[i]].text}` }) }
@@ -161,6 +186,8 @@ export function validateArtifact(buffer: Buffer, kind: ArtifactKind, options: { 
   } catch { errors.push({ code: 'CORRUPT_PACKAGE', message: `${kind.toUpperCase()} is not a readable package` }) }
 
   const joined = allText.join('\n')
+  if(doubleEscapedEntity)errors.push({code:'DOUBLE_ESCAPED_ENTITY',message:'Customer-facing markup contains a double-escaped HTML/XML entity'})
+  if(/&(?:quot|apos|amp|lt|gt|#\d+|#x[0-9a-f]+);/i.test(joined))errors.push({code:'VISIBLE_ESCAPED_ENTITY',message:'Customer-facing text contains an escaped HTML/XML entity'})
   if (INTERNAL_MARKER.test(joined)) errors.push({ code: 'LEAKED_MARKER', message: 'Internal pipeline marker is visible' })
   if (VISIBLE_MARKDOWN_HEADING.test(joined)) errors.push({ code: 'VISIBLE_MARKDOWN', message: 'Markdown heading syntax is visible' })
   if (/\b(?:book|manuscript|document)\s+WORD\b/i.test(joined)) errors.push({ code: 'PLACEHOLDER_TITLE', message: 'Internal filename/project placeholder is visible in customer-facing content' })

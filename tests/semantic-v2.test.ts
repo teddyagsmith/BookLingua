@@ -154,6 +154,23 @@ test('chapter map is one-to-one and emits CSV and DOCX', async () => {
   assert.ok((await renderChapterMapDocx(rows)).length > 0)
 })
 
+test('EPUB customer gate blocks wrong metadata, untranslated nav, and missing content headings',()=>{
+  const zip:any=new AdmZip();zip.addFile('mimetype',Buffer.from('application/epub+zip'));zip.getEntry('mimetype').header.method=0
+  zip.addFile('META-INF/container.xml',Buffer.from('<container><rootfiles><rootfile full-path="OPS/book.opf"/></rootfiles></container>'))
+  zip.addFile('OPS/book.opf',Buffer.from('<package><metadata xmlns:dc="http://purl.org/dc/elements/1.1/"><dc:title>Title</dc:title><dc:language>en-GB</dc:language><dc:identifier>same</dc:identifier></metadata><manifest><item id="b" href="b.xhtml" media-type="application/xhtml+xml"/><item id="n" href="nav.xhtml" media-type="application/xhtml+xml" properties="nav"/></manifest><spine><itemref idref="b"/></spine></package>'))
+  zip.addFile('OPS/b.xhtml',Buffer.from('<html><body><p>Body only</p></body></html>'));zip.addFile('OPS/nav.xhtml',Buffer.from('<html><body><a href="b.xhtml">Chapter 1</a></body></html>'))
+  const result=validateArtifact(zip.toBuffer(),'epub',{expectedLanguage:'de'})
+  for(const code of ['EPUB_LANGUAGE','EPUB_CREATOR','EPUB_NAV_CONTENT_UNVERIFIABLE','EPUB_NAV_WRONG_LANGUAGE'])assert.ok(result.errors.some(error=>error.code===code),code)
+})
+
+test('customer gate blocks double-escaped visible entities',()=>{
+  const doc:any=new AdmZip();
+  return Packer.toBuffer(new Document({sections:[{children:[new Paragraph('A &quot;broken&quot; line')]}]})).then(bytes=>{
+    const result=validateArtifact(Buffer.from(bytes),'docx')
+    assert.ok(result.errors.some(error=>['VISIBLE_ESCAPED_ENTITY','DOUBLE_ESCAPED_ENTITY'].includes(error.code)))
+  })
+})
+
 test('dual-format EPUB is generated directly from authoritative semantic nodes', () => {
   const doc: any={schemaVersion:'2.0',sourceHash:'hash',sourceFormat:'docx',parserConfidence:1,nodes:[{id:'h',chapterId:'c',type:'heading',headingLevel:1,sourceChapterNumber:'1',sourceText:'Chapter 1',translatedText:'Chapitre 1',order:0,sourceLocation:'x'},{id:'p',chapterId:'c',type:'paragraph',headingLevel:null,sourceChapterNumber:null,sourceText:'Hello',translatedText:'Bonjour',order:1,sourceLocation:'y'}]}
   assert.equal(validateArtifact(buildSemanticEpubFromDocument(doc,'Synthetic'),'epub').passed,true)

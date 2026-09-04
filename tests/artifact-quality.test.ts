@@ -2,7 +2,7 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import AdmZip from 'adm-zip'
 import { Document, HeadingLevel, Packer, Paragraph, TextRun } from 'docx'
-import { applyTitleAuthority, resolveTitleAuthority } from '../lib/authoritative-title'
+import { applyTitleAuthority, cleanBookTitle, resolveTitleAuthority } from '../lib/authoritative-title'
 import { assessSourceFormatting } from '../lib/formatting-policy'
 import { buildFinalSemanticDocx, buildSemanticDocxPreservingSource, buildSemanticEpub, buildSemanticReviewDocx, wordLevelDiff } from '../lib/semantic-artifacts'
 import { deriveEditorialTranslationNotes, validateTranslationNotes } from '../lib/translation-notes'
@@ -38,6 +38,10 @@ test('metadata-only EPUB preserves its title and never treats first H1 Chapter 1
   assert.equal(authority.sourceKind,'epub_metadata');assert.equal(authority.effectiveValue,'Bride of the Hollow King');assert.equal(authority.translatedValue,undefined);assert.equal(authority.warning?.code,'TITLE_TRANSLATION_UNAVAILABLE')
   const output:any=new AdmZip(buildSemanticEpub(source,doc,authority)),opf=output.getEntry('OEBPS/content.opf').getData().toString('utf8')
   assert.match(opf,/<dc:title>Bride of the Hollow King<\/dc:title>/);assert.doesNotMatch(opf,/<dc:title>Chapitre 1<\/dc:title>/)
+})
+
+test('internal upload labels are stripped from title fallback',()=>{
+  assert.equal(cleanBookTitle('Updated eBook Reclaim Your Longevity'),'Reclaim Your Longevity')
 })
 
 test('safe title matching accepts subtitle, punctuation and apostrophe variation without fuzzy heading guesses',()=>{

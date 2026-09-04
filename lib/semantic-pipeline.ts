@@ -16,6 +16,7 @@ import { TranslationBriefV1, assertTranslationBriefForSource, translationBriefFi
 import { ArtifactType } from './package-manifest'
 import { UPLOAD_GUIDE_ASSET_PATH, UPLOAD_GUIDE_SHA256 } from './upload-guide'
 import { LaunchPackV1, validateLaunchPack, validateLaunchPackRegister } from './launch-pack-schema'
+import { renderCustomerLaunchPackDocx } from './customer-delivery-docx'
 import { BOOKLINGUA_MODEL_CONFIG } from './model-config'
 import { assertCompleteBatchCoverage, createDeterministicSemanticBatches, semanticBatchIdentity } from './semantic-batching'
 import { recordModelTelemetry } from './model-telemetry'
@@ -37,6 +38,7 @@ export interface SemanticPipelineInput {
   sourceFormat: 'epub' | 'docx' | 'txt'
   source: Buffer
   title: string
+  authorName?: string
   brief: TranslationBriefV1
   notes: TranslationNotesV1
   translate: SemanticTranslator
@@ -102,7 +104,7 @@ async function storeValidated(input: SemanticPipelineInput, buildId: string, typ
     sizeBytes: Number(existing.size_bytes), schemaVersion: existing.schema_version || undefined,
     validationStatus: existing.validation_status, validationReportId: existing.validation_report_id || undefined,
   }
-  const result = kind ? validateArtifact(buffer, kind, { semanticDuplicateParityValidated, semanticHeadingDuplicateParityValidated: semanticDuplicateParityValidated }) : { passed: buffer.length > 0, errors: buffer.length ? [] : [{ code: 'EMPTY', message: 'Artifact empty' }], metrics: {} }
+  const result = kind ? validateArtifact(buffer, kind, { semanticDuplicateParityValidated, semanticHeadingDuplicateParityValidated: semanticDuplicateParityValidated, expectedLanguage: input.language }) : { passed: buffer.length > 0, errors: buffer.length ? [] : [{ code: 'EMPTY', message: 'Artifact empty' }], metrics: {} }
   const reportId = await validationReport(input.supabase, { orderId: input.orderId, language: input.language, buildId, stage: `artifact:${type}`, passed: result.passed, errors: result.errors, metrics: result.metrics })
   if (!result.passed) throw new Error(`${type} validation failed: ${result.errors.map((error: any) => error.message).join('; ')}`)
   return storeImmutableArtifact({ supabase: input.supabase, orderId: input.orderId, language: input.language, buildId, type, filename, buffer, schemaVersion: 'semantic-v2', validationStatus: 'pass', validationReportId: reportId })
@@ -204,6 +206,11 @@ export async function runSemanticPipeline(input: SemanticPipelineInput) {
   await persistSemantic(input.supabase, { orderId: input.orderId, language: input.language, buildId, pass: 'pass1', document: pass1, eligibility: eligibility.status })
   const rawPass2 = { ...pass1, nodes: await runBatchedPass(input, pass1.nodes, 2) }
   const titleAuthority = resolveTitleAuthority({ document: rawPass2, checkoutTitle: input.title, source: input.source })
+  if(titleAuthority.fallbackUsed||!titleAuthority.translatedValue){
+    const errors=[titleAuthority.warning||{code:'TITLE_TRANSLATION_UNAVAILABLE',message:'A verified translated title is required'}]
+    await validationReport(input.supabase,{orderId:input.orderId,language:input.language,buildId,stage:'title_authority',passed:false,errors,metrics:{titleAuthority}})
+    throw new Error(`Title authority validation failed: ${errors[0].message}`)
+  }
   const titleResult = applyTitleAuthority(rawPass2, input.title, titleAuthority)
   const pass2 = titleResult.document
   await validationReport(input.supabase, { orderId: input.orderId, language: input.language, buildId, stage: 'title_authority', passed: true, metrics: { titleAuthority } })
@@ -224,9 +231,12 @@ export async function runSemanticPipeline(input: SemanticPipelineInput) {
   await storeValidated(input, buildId, 'translation_brief', 'translation-brief.json', Buffer.from(JSON.stringify(input.brief, null, 2)))
   await storeValidated(input, buildId, 'pass1_docx', `${input.title} - ${input.language} - Pass 1.docx`, await buildSemanticDocx(pass1, titleAuthority.effectiveValue, 'pass1'), 'docx', true)
   await storeValidated(input, buildId, 'review_docx', `${input.title} - ${input.language} - Review.docx`, await buildSemanticReviewDocx(pass1, pass2, titleAuthority.effectiveValue), 'docx', true)
-  if (input.sourceFormat === 'epub' || input.dualFormat) await storeValidated(input, buildId, 'final_epub', `${input.title} - ${input.language} - Final.epub`, await normalizeEpubImages(input.sourceFormat === 'epub' ? buildSemanticEpub(input.source, pass2, titleAuthority, input.language) : buildSemanticEpubFromDocument(pass2, titleAuthority.effectiveValue)), 'epub', true)
+  if (input.sourceFormat === 'epub' || input.dualFormat) await storeValidated(input, buildId, 'final_epub', `${input.title} - ${input.language} - Final.epub`, input.sourceFormat === 'epub' ? buildSemanticEpub(await normalizeEpubImages(input.source), pass2, titleAuthority, input.language,input.authorName,input.orderId) : buildSemanticEpubFromDocument(pass2, titleAuthority.effectiveValue,input.language,input.authorName||'Unknown',input.orderId), 'epub', true)
   await storeValidated(input, buildId, 'final_docx', `${input.title} - ${input.language} - Final.docx`, await buildFinalSemanticDocx(input.source, pass2, titleAuthority.effectiveValue), 'docx', true)
   const map = buildChapterMap(pass2)
+  const sourceHeadingCount=sourceDocument.nodes.filter(node=>node.type==='heading').length
+  const minimumMapRows=Math.max(1,Math.ceil(sourceHeadingCount*0.9))
+  if(map.length<minimumMapRows)throw new Error(`Chapter map validation failed: ${map.length} rows; expected at least ${minimumMapRows} from ${sourceHeadingCount} source headings`)
   if (map.some(row => row.status !== 'mapped')) throw new Error('Chapter map is incomplete')
   await storeValidated(input, buildId, 'chapter_map_csv', 'chapter-map.csv', Buffer.from(renderChapterMapCsv(map)))
   await storeValidated(input, buildId, 'chapter_map_docx', 'chapter-map.docx', await renderChapterMapDocx(map, { bookTitle: input.title, language: input.language }), 'docx')
@@ -242,6 +252,7 @@ export async function runSemanticPipeline(input: SemanticPipelineInput) {
     const launchErrors = validateLaunchPack({ pack, expectedLocale: input.language, purchased: true })
     launchErrors.push(...validateLaunchPackRegister(pack,input.brief.items.find(item=>item.issueType==='author_instruction'&&/address|pronoun/i.test(item.sourceTerm))?.authorDecision))
     if (launchErrors.length) throw new Error(`Launch Pack validation failed: ${launchErrors.join('; ')}`)
+    await renderCustomerLaunchPackDocx(input.launchPack,input.title,titleAuthority.translatedValue)
     await storeValidated(input, buildId, 'launch_pack', 'launch-pack.json', input.launchPack)
   }
   return { buildId, eligibility, pass1, pass2, manifest: await resolvePackageGate(input.supabase, { orderId: input.orderId, language: input.language, buildId }) }

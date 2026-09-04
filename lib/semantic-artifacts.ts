@@ -1,4 +1,5 @@
 import AdmZip from 'adm-zip'
+import { createHash } from 'node:crypto'
 import path from 'node:path'
 import sharp from 'sharp'
 import { AlignmentType, Document, HeadingLevel, Packer, Paragraph, TextRun } from 'docx'
@@ -257,7 +258,13 @@ function replaceTextPreservingInline(inner: string, translated: string): string 
   return tokens.join('').replace(/<\/(?:b|strong|i|em)>(?=[A-Za-zÀ-ÖØ-öø-ÿ0-9])/g,match=>`${match} `)
 }
 
-export function buildSemanticEpub(source: Buffer, document: SemanticDocumentV2, titleAuthority?: TitleAuthority, language?:string): Buffer {
+function editionIdentifier(seed:string,language:string):string{
+  const hex=createHash('sha256').update(`${seed}:${language}`).digest('hex').slice(0,32).split('')
+  hex[12]='5';hex[16]=((parseInt(hex[16],16)&3)|8).toString(16)
+  return `urn:uuid:${hex.slice(0,8).join('')}-${hex.slice(8,12).join('')}-${hex.slice(12,16).join('')}-${hex.slice(16,20).join('')}-${hex.slice(20).join('')}`
+}
+
+export function buildSemanticEpub(source: Buffer, document: SemanticDocumentV2, titleAuthority?: TitleAuthority, language?:string,authorName?:string,editionSeed?:string): Buffer {
   assertTranslated(document)
   if (document.sourceFormat !== 'epub') throw new Error('EPUB output requires an EPUB semantic source')
   const zip: any = new AdmZip(source)
@@ -277,15 +284,27 @@ export function buildSemanticEpub(source: Buffer, document: SemanticDocumentV2, 
       if (!inner.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim()) return _full
       const node = nodes[index++]
       if (!node) throw new Error(`EPUB semantic block count changed: ${entryPath}`)
-      return `<${tag}${attrs}>${replaceTextPreservingInline(inner,node.translatedText!)}</${tag}>`
+      const outputTag=node.type==='heading'?`h${Math.max(1,Math.min(6,node.headingLevel||1))}`:tag
+      return `<${outputTag}${attrs}>${replaceTextPreservingInline(inner,node.translatedText!)}</${outputTag}>`
     })
     if (index !== nodes.length) throw new Error(`EPUB semantic block count changed: ${entryPath}`)
     zip.updateFile(entryPath, Buffer.from(xml))
   }
   const headingMap = new Map(document.nodes.filter(n => n.type === 'heading').map(n => [n.sourceText.trim(), n.translatedText!]))
-  for (const entry of zip.getEntries().filter((e: any) => /(?:nav|\.ncx$)/i.test(e.entryName))) {
+  for (const entry of zip.getEntries().filter((e: any) => /(?:nav|toc|\.ncx$)/i.test(e.entryName))) {
     let xml = entry.getData().toString('utf8')
     for (const [sourceText, translatedText] of Array.from(headingMap.entries())) xml = xml.split(`>${sourceText}<`).join(`>${escapeXml(translatedText)}<`)
+    const normalizedHeadings=new Map(document.nodes.map(node=>[decodeVisibleEntities(node.sourceText.replace(/<[^>]+>/g,' ')).normalize('NFKC').toLocaleLowerCase().replace(/\s+/g,' ').trim(),node.translatedText!]))
+    const systemLabels:Record<string,{cover:string;toc:string}>={'pt-br':{cover:'Capa',toc:'Sumário'},de:{cover:'Umschlag',toc:'Inhaltsverzeichnis'},fr:{cover:'Couverture',toc:'Table des matières'},'es-es':{cover:'Portada',toc:'Índice'}}
+    if(language&&systemLabels[language]){normalizedHeadings.set('cover',systemLabels[language].cover);normalizedHeadings.set('table of contents',systemLabels[language].toc)}
+    xml=xml.replace(/<(a|text)\b([^>]*)>([\s\S]*?)<\/\1>/gi,(full:string,tag:string,attrs:string,inner:string)=>{
+      const key=decodeVisibleEntities(inner.replace(/<[^>]+>/g,' ')).normalize('NFKC').toLocaleLowerCase().replace(/\s+/g,' ').trim()
+      const translated=normalizedHeadings.get(key)
+      return translated?`<${tag}${attrs}>${escapeXml(translated)}</${tag}>`:full
+    })
+    if(titleAuthority?.translatedValue)xml=xml.replace(/<docTitle\b([^>]*)>[\s\S]*?<\/docTitle>/i,`<docTitle$1><text>${escapeXml(titleAuthority.translatedValue)}</text></docTitle>`)
+    if(titleAuthority?.translatedValue)xml=xml.replace(/<title\b([^>]*)>[\s\S]*?<\/title>/gi,`<title$1>${escapeXml(titleAuthority.translatedValue)}</title>`)
+    if(language&&systemLabels[language])xml=xml.replace(/<h([1-6])\b([^>]*)>\s*(?:Contents|Table of Contents)\s*<\/h\1>/gi,`<h$1$2>${escapeXml(systemLabels[language].toc)}</h$1>`)
     zip.updateFile(entry.entryName, Buffer.from(xml))
   }
   if (titleAuthority?.translatedValue || language) for (const entry of zip.getEntries().filter((e: any) => /\.opf$/i.test(e.entryName))) {
@@ -294,6 +313,10 @@ export function buildSemanticEpub(source: Buffer, document: SemanticDocumentV2, 
     if(language){
       xml=/<dc:language(?:\s[^>]*)?>/i.test(xml)?xml.replace(/<dc:language(?:\s[^>]*)?>[\s\S]*?<\/dc:language>/gi,`<dc:language>${escapeXml(language)}</dc:language>`):xml.replace(/<metadata\b([^>]*)>/i,`<metadata$1><dc:language>${escapeXml(language)}</dc:language>`)
       xml=xml.replace(/<meta\b([^>]*property=["']dcterms:language["'][^>]*)>[\s\S]*?<\/meta>/gi,`<meta$1>${escapeXml(language)}</meta>`)
+      const creator=authorName?.trim()
+      if(creator)xml=/<dc:creator(?:\s[^>]*)?>/i.test(xml)?xml.replace(/<dc:creator(?:\s[^>]*)?>[\s\S]*?<\/dc:creator>/gi,`<dc:creator>${escapeXml(creator)}</dc:creator>`):xml.replace(/<metadata\b([^>]*)>/i,`<metadata$1><dc:creator>${escapeXml(creator)}</dc:creator>`)
+      const identifier=editionIdentifier(editionSeed||document.sourceHash,language)
+      xml=/<dc:identifier(?:\s[^>]*)?>/i.test(xml)?xml.replace(/<dc:identifier(?:\s[^>]*)?>[\s\S]*?<\/dc:identifier>/i,(match:string)=>match.replace(/>[^<]*</,`>${identifier}<`)):xml.replace(/<metadata\b([^>]*)>/i,`<metadata$1><dc:identifier id="bookid">${identifier}</dc:identifier>`)
     }
     const copyright=document.nodes.find(node=>/^Copyright\b/i.test(decodeVisibleEntities(node.sourceText)))?.translatedText
     if(copyright){
@@ -320,7 +343,7 @@ export function buildSemanticEpub(source: Buffer, document: SemanticDocumentV2, 
   return output.toBuffer()
 }
 
-export function buildSemanticEpubFromDocument(document: SemanticDocumentV2, title: string): Buffer {
+export function buildSemanticEpubFromDocument(document: SemanticDocumentV2, title: string,language='en',authorName='Unknown',editionSeed=document.sourceHash): Buffer {
   assertTranslated(document)
   const zip: any = new (AdmZip as any)(undefined, { noSort: true })
   zip.addFile('mimetype', Buffer.from('application/epub+zip'))
@@ -337,6 +360,6 @@ export function buildSemanticEpubFromDocument(document: SemanticDocumentV2, titl
   }
   const manifest = chapters.map(c=>`<item id="${c.id}" href="${c.id}.xhtml" media-type="application/xhtml+xml"/>`).join('')
   const spine = chapters.map(c=>`<itemref idref="${c.id}"/>`).join('')
-  zip.addFile('OPS/book.opf', Buffer.from(`<package xmlns="http://www.idpf.org/2007/opf" version="3.0"><metadata xmlns:dc="http://purl.org/dc/elements/1.1/"><dc:title>${escapeXml(title)}</dc:title></metadata><manifest>${manifest}</manifest><spine>${spine}</spine></package>`))
+  zip.addFile('OPS/book.opf', Buffer.from(`<package xmlns="http://www.idpf.org/2007/opf" version="3.0" unique-identifier="bookid"><metadata xmlns:dc="http://purl.org/dc/elements/1.1/"><dc:identifier id="bookid">${editionIdentifier(editionSeed,language)}</dc:identifier><dc:title>${escapeXml(title)}</dc:title><dc:creator>${escapeXml(authorName)}</dc:creator><dc:language>${escapeXml(language)}</dc:language></metadata><manifest>${manifest}</manifest><spine>${spine}</spine></package>`))
   return zip.toBuffer()
 }

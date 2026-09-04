@@ -334,7 +334,7 @@ export const translateBook = inngest.createFunction(
           }
           const result = await runSemanticPipeline({
             supabase: getSupabaseAdmin(), orderId, language, sourceFormat: format, source,
-            title: order.book_title, brief, notes, buildId: deterministicSemanticBuildId(orderId,language,crypto.createHash('sha256').update(source).digest('hex'),brief.revision), allowReviewedStructure: order.semantic_structure_approved === true,
+            title: order.book_title, authorName: order.author_name, brief, notes, buildId: deterministicSemanticBuildId(orderId,language,crypto.createHash('sha256').update(source).digest('hex'),brief.revision), allowReviewedStructure: order.semantic_structure_approved === true,
             launchPack, dualFormat: (order.upsells || []).includes('dual-format'),
             translate: async (batch, context) => {
               const stage=context.pass===1?'translation':'editorial';const requestIdentity=`${orderId}:${language}:${stage}:${context.batchId}`

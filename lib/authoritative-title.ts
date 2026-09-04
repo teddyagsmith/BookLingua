@@ -22,6 +22,10 @@ function normalize(value:string):string{
   return value.normalize('NFKC').replace(/[‘’‛]/g,"'").toLocaleLowerCase().replace(/[^\w\u00c0-\u024f]+/g,' ').replace(/\s+/g,' ').trim()
 }
 
+export function cleanBookTitle(value:string):string{
+  return decodeXml(value).replace(/^\s*(?:updated\s+)?(?:e-?book|ebook|final|revised|latest)(?:\s+(?:file|version|edition))?\s*[-_:–—]*\s*/i,'').trim()||decodeXml(value)
+}
+
 function subtitleBase(value:string):string|null{
   const match=value.match(/^(.*?)(?:\s+[—–|]\s+|:\s+|\s+-\s+).+$/)
   return match?.[1]?.trim()||null
@@ -60,7 +64,7 @@ export function resolveTitleAuthority(input:{document:SemanticDocumentV2;checkou
     confidence:'verified',fallbackUsed:false,semanticNodeId:semantic.id,
   }
   const metadata=extractSourceMetadataTitle(input.source,input.document.sourceFormat)
-  const sourceValue=metadata?.value||input.checkoutTitle.trim()
+  const sourceValue=cleanBookTitle(metadata?.value||input.checkoutTitle)
   return{
     sourceKind:metadata?.kind||'checkout_metadata',sourceValue,effectiveValue:sourceValue,confidence:'preserved',fallbackUsed:true,
     warning:{code:'TITLE_TRANSLATION_UNAVAILABLE',message:'No verified translated title authority was available; the original title was preserved for review.'},
