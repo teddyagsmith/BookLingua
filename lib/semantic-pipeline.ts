@@ -43,6 +43,8 @@ export interface SemanticPipelineInput {
   sourceFormat: 'epub' | 'docx' | 'txt'
   source: Buffer
   title: string
+  /** A separately verified title translation, used when the source title exists only in metadata. */
+  verifiedTranslatedTitle?: string
   authorName?: string
   genre?: string
   brief: TranslationBriefV1
@@ -66,7 +68,7 @@ export interface SemanticPipelineInput {
  * leaving the delivered files untouched.
  */
 export const SEMANTIC_PROMPT_SIGNATURE = `${TRANSLATION_PROMPT_VERSION}+${EDITORIAL_PROMPT_VERSION}`
-export const SEMANTIC_BUILD_POLICY_VERSION = 'semantic-v2-title-authority-clean-v2'
+export const SEMANTIC_BUILD_POLICY_VERSION = 'semantic-v2-title-authority-clean-v3'
 
 export function deterministicSemanticBuildId(orderId: string, language: string, sourceHash: string, briefRevision: number, promptSignature: string = SEMANTIC_PROMPT_SIGNATURE): string {
   const hex = createHash('sha256').update(`${orderId}:${language}:${sourceHash}:${briefRevision}:${SEMANTIC_BUILD_POLICY_VERSION}:${promptSignature}`).digest('hex').slice(0, 32).split('')
@@ -221,7 +223,12 @@ export async function runSemanticPipeline(input: SemanticPipelineInput) {
   assertSourceAwareHeadingDuplicateParity(sourceDocument.nodes, pass1.nodes)
   await persistSemantic(input.supabase, { orderId: input.orderId, language: input.language, buildId, pass: 'pass1', document: pass1, eligibility: eligibility.status })
   const rawPass2 = { ...pass1, nodes: await runBatchedPass(input, pass1.nodes, 2) }
-  const titleAuthority = resolveTitleAuthority({ document: rawPass2, checkoutTitle: input.title, source: input.source })
+  let titleAuthority = resolveTitleAuthority({ document: rawPass2, checkoutTitle: input.title, source: input.source })
+  const verifiedTranslatedTitle=input.verifiedTranslatedTitle?.trim()
+  if(titleAuthority.fallbackUsed&&verifiedTranslatedTitle)titleAuthority={
+    ...titleAuthority,translatedValue:verifiedTranslatedTitle,effectiveValue:verifiedTranslatedTitle,
+    confidence:'verified',fallbackUsed:false,warning:undefined,
+  }
   if(titleAuthority.fallbackUsed||!titleAuthority.translatedValue){
     const errors=[titleAuthority.warning||{code:'TITLE_TRANSLATION_UNAVAILABLE',message:'A verified translated title is required'}]
     await validationReport(input.supabase,{orderId:input.orderId,language:input.language,buildId,stage:'title_authority',passed:false,errors,metrics:{titleAuthority}})
