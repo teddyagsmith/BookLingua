@@ -375,6 +375,15 @@ function editionIdentifier(seed:string,language:string):string{
   return `urn:uuid:${hex.slice(0,8).join('')}-${hex.slice(8,12).join('')}-${hex.slice(12,16).join('')}-${hex.slice(16,20).join('')}-${hex.slice(20).join('')}`
 }
 
+function setEpubDocumentLanguage(xml:string,language:string):string{
+  xml=xml.replace(/<html\b([^>]*)>/i,(full:string,attrs:string)=>/\b(?:xml:)?lang\s*=/i.test(attrs)
+    ? `<html${attrs.replace(/\b(xml:)?lang\s*=\s*(["'])[^"']*\2/gi,(_m:string,prefix:string|undefined,q:string)=>`${prefix||''}lang=${q}${escapeXml(language)}${q}`)}>`
+    : `<html${attrs} lang="${escapeXml(language)}" xml:lang="${escapeXml(language)}">`)
+  return xml.replace(/<body\b([^>]*)>/i,(full:string,attrs:string)=>/\blang\s*=/i.test(attrs)
+    ? `<body${attrs.replace(/\blang\s*=\s*(["'])[^"']*\1/i,`lang="${escapeXml(language)}"`)}>`
+    : `<body${attrs} lang="${escapeXml(language)}">`)
+}
+
 export function buildSemanticEpub(source: Buffer, document: SemanticDocumentV2, titleAuthority?: TitleAuthority, language?:string,authorName?:string,editionSeed?:string): Buffer {
   assertTranslated(document)
   if (document.sourceFormat !== 'epub') throw new Error('EPUB output requires an EPUB semantic source')
@@ -404,16 +413,12 @@ export function buildSemanticEpub(source: Buffer, document: SemanticDocumentV2, 
       const outputTag=node.type==='heading'?`h${Math.max(1,Math.min(6,node.headingLevel||1))}`:tag
       return `<${outputTag}${attrs}>${replaceTextPreservingInline(inner,artifactNode.translatedText!)}</${outputTag}>`
     })
-    if(language){
-      xml=xml.replace(/<html\b([^>]*)>/i,(full:string,attrs:string)=>/\b(?:xml:)?lang\s*=/i.test(attrs)
-        ? `<html${attrs.replace(/\b(xml:)?lang\s*=\s*(["'])[^"']*\2/gi,(_m:string,prefix:string|undefined,q:string)=>`${prefix||''}lang=${q}${escapeXml(language)}${q}`)}>`
-        : `<html${attrs} lang="${escapeXml(language)}" xml:lang="${escapeXml(language)}">`)
-      xml=xml.replace(/<body\b([^>]*)>/i,(full:string,attrs:string)=>/\blang\s*=/i.test(attrs)
-        ? `<body${attrs.replace(/\blang\s*=\s*(["'])[^"']*\1/i,`lang="${escapeXml(language)}"`)}>`
-        : `<body${attrs} lang="${escapeXml(language)}">`)
-    }
+    if(language)xml=setEpubDocumentLanguage(xml,language)
     if (index !== nodes.length) throw new Error(`EPUB semantic block count changed: ${entryPath}`)
     zip.updateFile(entryPath, Buffer.from(xml))
+  }
+  if(language)for(const entry of zip.getEntries().filter((e:any)=>/\.xhtml?$/i.test(e.entryName))){
+    zip.updateFile(entry.entryName,Buffer.from(setEpubDocumentLanguage(entry.getData().toString('utf8'),language)))
   }
   const headingMap = new Map(consolidated.filter(n => n.type === 'heading').map(n => [n.sourceText.trim(), n.translatedText!]))
   for (const entry of zip.getEntries().filter((e: any) => /(?:nav|toc|\.ncx$)/i.test(e.entryName))) {
