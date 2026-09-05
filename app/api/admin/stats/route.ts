@@ -19,10 +19,13 @@ export async function GET(request: NextRequest) {
 
     if (error) throw error
     const orderIds=(orders||[]).map(order=>order.id)
-    const {data:modelCalls,error:modelCallsError}=orderIds.length
-      ? await getSupabaseAdmin().from('model_call_events').select('order_id,success,estimated_cost_usd').in('order_id',orderIds)
-      : {data:[] as any[],error:null}
-    if(modelCallsError)console.error('Model cost query error:',modelCallsError)
+    const modelCalls:any[]=[]
+    if(orderIds.length)for(let from=0;;from+=1000){
+      const {data,error:modelCallsError}=await getSupabaseAdmin().from('model_call_events').select('order_id,success,estimated_cost_usd').in('order_id',orderIds).range(from,from+999)
+      if(modelCallsError){console.error('Model cost query error:',modelCallsError);break}
+      modelCalls.push(...(data||[]))
+      if((data||[]).length<1000)break
+    }
     const eventCosts=new Map<string,number>()
     for(const call of modelCalls||[])if(call.success&&call.estimated_cost_usd!=null)eventCosts.set(call.order_id,(eventCosts.get(call.order_id)||0)+Number(call.estimated_cost_usd))
     const {data:readerRequests}=orderIds.length
@@ -40,7 +43,8 @@ export async function GET(request: NextRequest) {
       const staleCheckout=['pending','processing'].includes(order.status)&&!order.source_linked_at&&Date.now()-new Date(order.created_at).getTime()>24*60*60*1000
       const inconsistentTerminal=['pending_review','processing'].includes(order.status)&&Boolean(order.completed_at)
       const supersededReview=['pending_review','ready_for_review'].includes(order.status)&&newerCompleted&&Boolean(order.failure_message)
-      const admin_archived=staleCheckout||inconsistentTerminal||supersededReview
+      const oldSyntheticOrSupersededFailure=order.status==='failed'&&Date.now()-new Date(order.created_at).getTime()>7*24*60*60*1000&&(newerCompleted||order.email.endsWith('.invalid'))
+      const admin_archived=staleCheckout||inconsistentTerminal||supersededReview||oldSyntheticOrSupersededFailure
       const effectiveMargin=order.margin_pct==null&&effectiveCost!=null&&Number(order.amount_paid)>0
         ? ((Number(order.amount_paid)-Number(effectiveCost))/Number(order.amount_paid))*100
         : order.margin_pct
