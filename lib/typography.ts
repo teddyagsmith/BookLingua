@@ -69,5 +69,10 @@ export function normalizeTypography(text: string, language: string): string {
     if (next === decoded) break
     decoded = next
   }
-  return normalizeQuotes(normalizeApostrophes(decoded).replace(/\.\.\./g, '…'), language)
+  let normalized=normalizeQuotes(normalizeApostrophes(decoded).replace(/\.\.\./g, '…'), language)
+  if(language==='fr')normalized=normalized
+    .replace(/«[ \u00a0\u202f]*/g,'«\u202f')
+    .replace(/[ \u00a0\u202f]*»/g,'\u202f»')
+    .replace(/([A-Za-zÀ-ÖØ-öø-ÿ0-9,:;.!?])«/g,'$1 «')
+  return normalized
 }

@@ -235,6 +235,7 @@ export default function Home() {
   const [selectedTier, setSelectedTier] = useState<'small' | 'medium' | 'large' | null>(null)
   const [selectedLanguages, setSelectedLanguages] = useState<string[]>([])
   const [selectedGenre, setSelectedGenre] = useState('')
+  const [germanReaderRegister, setGermanReaderRegister] = useState<'formal_sie'|'informal_du'|''>('')
   const [heatLevel, setHeatLevel] = useState<string>('')
   const [bookSetting, setBookSetting] = useState('')
   const [selectedUpsells, setSelectedUpsells] = useState<string[]>([])
@@ -628,6 +629,7 @@ export default function Home() {
           uploadToken: uploadTokenRef.current,
           bookSetting,
           affiliateCode,
+          readerRegisters: germanReaderRegister ? { de:germanReaderRegister } : undefined,
         }),
       })
 
@@ -1496,6 +1498,18 @@ export default function Home() {
                         ))}
                       </select>
                     </div>
+
+                    {selectedLanguages.includes('de') && (
+                      <div className="mb-6">
+                        <label className="block text-sm font-medium text-gray-700 mb-2">German reader address</label>
+                        <select value={germanReaderRegister} onChange={e=>setGermanReaderRegister(e.target.value as 'formal_sie'|'informal_du'|'')} className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:border-brand-light outline-none">
+                          <option value="">Recommended for genre ({/romance|fiction|fantasy|thriller|mystery|erotica/i.test(selectedGenre) ? 'informal du' : 'formal Sie'})</option>
+                          <option value="formal_sie">Formal Sie</option>
+                          <option value="informal_du">Informal du</option>
+                        </select>
+                        <p className="mt-1 text-xs text-gray-500">This applies consistently throughout every author-to-reader passage and can be overridden here.</p>
+                      </div>
+                    )}
 
                     {(selectedGenre === 'Romance' || selectedGenre === 'Erotica') && (
                       <div className="mt-4 mb-6">

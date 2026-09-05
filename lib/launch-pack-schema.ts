@@ -86,10 +86,10 @@ function allStringValues(value:unknown,path='$'):Array<{path:string;value:string
 
 /** Enforce an approved reader register across the complete customer-facing pack. */
 export function validateLaunchPackRegister(pack:LaunchPackV1,authorDecision:string|undefined):string[]{
-  if(authorDecision!=='informal_du')return []
-  const formal=/\b(?:Sie|Ihnen|Ihr|Ihre|Ihrem|Ihren|Ihrer|Ihres)\b/g
+  if(authorDecision!=='informal_du'&&authorDecision!=='formal_sie')return []
+  const formal=authorDecision==='informal_du'?/\b(?:Sie|Ihnen|Ihr|Ihre|Ihrem|Ihren|Ihrer|Ihres)\b/g:/\b(?:du|dich|dir|dein|deine|deinem|deinen|deiner|deines)\b/gi
   return allStringValues(pack).flatMap(item=>{
     const matches=item.value.match(formal)
-    return matches?.length?[`Formal German reader address (${matches.join(', ')}) is forbidden at ${item.path}`]:[]
+    return matches?.length?[`${authorDecision==='informal_du'?'Formal':'Informal'} German reader address (${matches.join(', ')}) is forbidden at ${item.path}`]:[]
   })
 }

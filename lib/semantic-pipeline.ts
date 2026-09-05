@@ -23,6 +23,7 @@ import { recordModelTelemetry } from './model-telemetry'
 import { assertSourceAwareDuplicateParity, assertSourceAwareHeadingDuplicateParity } from './semantic-duplicate-validation'
 import { EDITORIAL_PROMPT_VERSION, TRANSLATION_PROMPT_VERSION } from './editorial-prompt'
 import { normalizeTypography } from './typography'
+import { validateGermanReaderRegister } from './reader-register'
 
 /** Below this share of nodes changed, an editorial pass is treated as having done nothing. */
 export const EDITORIAL_MIN_CHANGE_RATIO = 0.01
@@ -89,7 +90,7 @@ export function applyVerifiedEditorialOverrides(document:SemanticDocumentV2,over
  * output from identical inputs, and without this the completed package short-circuits
  * and the customer's files never change.
  */
-export const PIPELINE_OUTPUT_VERSION = 'output-v4-emphasis-typography-entities'
+export const PIPELINE_OUTPUT_VERSION = 'output-v5-register-epub-lang-fr-spacing'
  
  export const SEMANTIC_PROMPT_SIGNATURE = `${TRANSLATION_PROMPT_VERSION}+${EDITORIAL_PROMPT_VERSION}+${PIPELINE_OUTPUT_VERSION}`
 export const SEMANTIC_BUILD_POLICY_VERSION = 'semantic-v2-review-diff-spacing-v6'
@@ -275,6 +276,9 @@ export async function runSemanticPipeline(input: SemanticPipelineInput) {
   }
   const titleResult = applyTitleAuthority(rawPass2, input.title, titleAuthority)
   const pass2 = titleResult.document
+  const registerErrors=input.language==='de'?validateGermanReaderRegister(pass2,input.brief.readerRegister):[]
+  await validationReport(input.supabase,{orderId:input.orderId,language:input.language,buildId,stage:'manuscript_register',passed:registerErrors.length===0,errors:registerErrors.map(message=>({code:'REGISTER_DRIFT',message})),metrics:{readerRegister:input.brief.readerRegister,violations:registerErrors.length}})
+  if(registerErrors.length)throw new Error(`Manuscript register validation failed: ${registerErrors.slice(0,10).join('; ')}`)
   // An editorial pass that changes almost nothing has not reviewed the translation, it has
   // echoed it. Record that rather than presenting the build as edited.
   const editedNodes = pass1.nodes.filter((node, index) => node.translatedText !== rawPass2.nodes[index]?.translatedText).length
@@ -326,7 +330,7 @@ export async function runSemanticPipeline(input: SemanticPipelineInput) {
     let pack: LaunchPackV1
     try { pack = JSON.parse(input.launchPack.toString('utf8')) } catch { throw new Error('Launch Pack is not valid JSON') }
     const launchErrors = validateLaunchPack({ pack, expectedLocale: input.language, purchased: true })
-    launchErrors.push(...validateLaunchPackRegister(pack,input.brief.items.find(item=>item.issueType==='author_instruction'&&/address|pronoun/i.test(item.sourceTerm))?.authorDecision))
+    launchErrors.push(...validateLaunchPackRegister(pack,input.brief.readerRegister))
     if (launchErrors.length) throw new Error(`Launch Pack validation failed: ${launchErrors.join('; ')}`)
     await renderCustomerLaunchPackDocx(input.launchPack,input.title,titleAuthority.translatedValue)
     await storeValidated(input, buildId, 'launch_pack', 'launch-pack.json', input.launchPack)

@@ -49,7 +49,7 @@ const LANGUAGE_SETTINGS: Record<string, string> = {
   'es-es': `Spanish (Spain) — formal usted for professional/business contexts, tú for casual/conversational. Use Spanish punctuation rules (space before : ; ? !). Prefer European Spanish vocabulary and idioms.`,
   'es-419': `Spanish (Latin America) — formal usted for professional/business contexts, tú for casual/conversational. Use Spanish punctuation rules (space before : ; ? !). Prefer Latin American vocabulary and idioms.`,
   'fr': `French (France) — formal vous for professional/business contexts, tu for casual/conversational. Use French punctuation rules (space before : ; ? !).`,
-  'de': `German — formal Sie for professional/business contexts, du for casual/conversational. Use German punctuation rules.`,
+  'de': `German — follow the translation brief's document-wide reader register without exception. Use German punctuation rules.`,
   'pt-pt': `Portuguese (Portugal) — formal você for professional/business contexts, tu for casual/conversational. Use Portuguese punctuation rules.`,
   'pt-br': `Portuguese (Brazil) — formal você for professional/business contexts, tu for casual/conversational. Use Brazilian Portuguese vocabulary and idioms.`,
   'it': `Italian — formal Lei for professional/business contexts, tu for casual/conversational. Use Italian punctuation rules.`,

@@ -43,3 +43,7 @@ test('visible punctuation entities are decoded before language normalisation', (
   assert.equal(normalizeTypography('N&apos;oubliez pas &quot;ceci&quot;.', 'fr'), 'N’oubliez pas « ceci ».')
   assert.equal(normalizeTypography('&amp;quot;Teste&amp;quot;', 'pt-br'), '“Teste”')
 })
+
+test('French guillemets have exactly one narrow no-break inner space', () => {
+  assert.equal(normalizeTypography('souligne que«   Les zones bleues   »', 'fr'), 'souligne que « Les zones bleues »')
+})

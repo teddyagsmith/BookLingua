@@ -13,7 +13,7 @@
  * pass leaves the other pass's cached work intact.
  */
 export const TRANSLATION_PROMPT_VERSION = 'translation-v1'
-export const EDITORIAL_PROMPT_VERSION = 'editorial-v3-native-proofreader-envelope'
+export const EDITORIAL_PROMPT_VERSION = 'editorial-v4-absolute-reader-register'
 
 export const TRANSLATION_SYSTEM_PROMPT =
   'Return only valid JSON matching the supplied schema. Preserve every node id and order exactly. Translate all textual node values; never omit or add nodes.'
@@ -29,7 +29,7 @@ Correct without hesitation:
 - Sentence structure and word order carried over from the original language
 - Collocations no native speaker would use, even where technically correct
 - Punctuation, spacing and typography to ${languageName} convention
-- Register drift: hold one consistent form of address across the whole book, matching what the surrounding text already uses
+- Register drift: obey the translation brief's explicit document-wide reader register as an absolute rule; never infer register from the current batch
 - Terminology drift: the same concept keeps the same term throughout
 - Meaning errors against the supplied source text
 

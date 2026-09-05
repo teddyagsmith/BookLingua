@@ -8,6 +8,8 @@ import {renderCustomerLaunchPackDocx,renderCustomerTranslationNotesDocx} from '.
 const ORDER='6b47fdde-389a-49ad-ab94-fcc2e1ea08cc'
 const TOKEN='/Users/gilbert/.openclaw/workspace/gilly_token.json'
 const TARGETS={
+  'es-es':{folder:'1srbrsxRctSU6RqcZOlYH8iLkUqF1Yt4K',code:'ES',title:'Recupera tu longevidad'},
+  fr:{folder:'11GNgprwvknRIVhs_uVbmefJkJIUlmV7L',code:'FR',title:'Reconquérez votre longévité'},
   'pt-br':{folder:'1Q-HD3xkk4N1GEF_yJ4ZuW8sPNo75mG4B',code:'PT',title:'Reconquiste Sua Longevidade'},
   de:{folder:'1e02fecNjg70drucBXJC6drLrA6kFv5B9',code:'DE',title:'Erobern Sie Ihre Langlebigkeit zurück'},
 } as const
@@ -16,7 +18,7 @@ const mime=(name:string)=>name.endsWith('.epub')?'application/epub+zip':'applica
 async function main(){
   const token=JSON.parse(await readFile(TOKEN,'utf8')),auth=new google.auth.OAuth2(token.client_id,token.client_secret);auth.setCredentials({refresh_token:token.refresh_token})
   const drive=google.drive({version:'v3',auth}),db=createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!,process.env.SUPABASE_SERVICE_ROLE_KEY!,{auth:{persistSession:false}})
-  for(const [language,target] of Object.entries(TARGETS)){
+  for(const [language,target] of Object.entries(TARGETS).filter(([language])=>!process.env.REPAIR_LANG||language===process.env.REPAIR_LANG)){
     const {data:build,error:buildError}=await db.from('order_language_builds').select('id,state').eq('order_id',ORDER).eq('language',language).eq('is_current',true).single()
     if(buildError||build?.state!=='passed')throw new Error(`${language}: current passed build missing`)
     const {data:manifest,error:manifestError}=await db.from('package_manifests').select('manifest').eq('order_id',ORDER).eq('language',language).eq('build_id',build.id).eq('status','pass').single()

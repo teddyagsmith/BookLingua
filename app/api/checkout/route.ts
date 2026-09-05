@@ -206,6 +206,7 @@ export async function POST(request: NextRequest) {
       sessionId,
       uploadToken,
       bookSetting,
+      readerRegisters,
       affiliateCode,
     } = body
     if (HARDENED_V1_ENABLED && !verifyUploadIdentity(sessionId, uploadToken)) {
@@ -305,7 +306,7 @@ export async function POST(request: NextRequest) {
 
         if (tempUpload) {
           try {
-            await linkSourceUploadToOrder(getSupabaseAdmin(), order.id, tempUpload, selectedLanguages)
+            await linkSourceUploadToOrder(getSupabaseAdmin(), order.id, tempUpload, selectedLanguages, selectedGenre, readerRegisters)
           } catch (linkError) {
             if (HARDENED_V1_ENABLED) await getSupabaseAdmin().from('orders').delete().eq('id', order.id).eq('status', 'pending')
             throw linkError
@@ -408,6 +409,7 @@ export async function POST(request: NextRequest) {
         specialInstructions: (specialInstructions || '').slice(0, 490), // Stripe 500 char limit
         book_setting: (bookSetting || '').slice(0, 490),
         affiliateCode: (affiliateCode || '').toUpperCase(),
+        readerRegisters: JSON.stringify(readerRegisters || {}),
       },
     })
 

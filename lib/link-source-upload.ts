@@ -20,6 +20,8 @@ export async function linkSourceUploadToOrder(
   orderId: string,
   tempUpload: TempUploadSource,
   languages: string[],
+  genre?: string,
+  readerRegisters?: Record<string, any>,
 ): Promise<void> {
   if (tempUpload.source_manifest && tempUpload.source_storage_path && tempUpload.source_sha256) {
     if (!tempUpload.glossary_saved_at) throw new Error('Author translation choices were not approved')
@@ -35,6 +37,8 @@ export async function linkSourceUploadToOrder(
       sourceManifestFingerprint: manifest.sourceHash,
       approvedAt: tempUpload.glossary_saved_at,
       decisions,
+      genre,
+      readerRegisters,
     })
     const { error } = await supabase.rpc('link_hardened_source_to_order', {
       p_order_id: orderId,

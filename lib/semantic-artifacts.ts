@@ -392,7 +392,7 @@ export function buildSemanticEpub(source: Buffer, document: SemanticDocumentV2, 
   for (const [entryPath, nodes] of Array.from(byPath.entries())) {
     const entry = zip.getEntry(entryPath); if (!entry) throw new Error(`EPUB source entry missing: ${entryPath}`)
     let index = 0
-    const xml = entry.getData().toString('utf8').replace(/<(h[1-6]|p|li)\b([^>]*)>([\s\S]*?)<\/\1>/gi, (_full: string, tag: string, attrs: string, inner: string) => {
+    let xml = entry.getData().toString('utf8').replace(/<(h[1-6]|p|li)\b([^>]*)>([\s\S]*?)<\/\1>/gi, (_full: string, tag: string, attrs: string, inner: string) => {
       // The canonical parser deliberately omits empty/markup-only blocks. The
       // rebuilder must apply the identical selection rule or its source-location
       // indexes diverge on real EPUBs containing empty layout paragraphs.
@@ -404,6 +404,14 @@ export function buildSemanticEpub(source: Buffer, document: SemanticDocumentV2, 
       const outputTag=node.type==='heading'?`h${Math.max(1,Math.min(6,node.headingLevel||1))}`:tag
       return `<${outputTag}${attrs}>${replaceTextPreservingInline(inner,artifactNode.translatedText!)}</${outputTag}>`
     })
+    if(language){
+      xml=xml.replace(/<html\b([^>]*)>/i,(full:string,attrs:string)=>/\b(?:xml:)?lang\s*=/i.test(attrs)
+        ? `<html${attrs.replace(/\b(xml:)?lang\s*=\s*(["'])[^"']*\2/gi,(_m:string,prefix:string|undefined,q:string)=>`${prefix||''}lang=${q}${escapeXml(language)}${q}`)}>`
+        : `<html${attrs} lang="${escapeXml(language)}" xml:lang="${escapeXml(language)}">`)
+      xml=xml.replace(/<body\b([^>]*)>/i,(full:string,attrs:string)=>/\blang\s*=/i.test(attrs)
+        ? `<body${attrs.replace(/\blang\s*=\s*(["'])[^"']*\1/i,`lang="${escapeXml(language)}"`)}>`
+        : `<body${attrs} lang="${escapeXml(language)}">`)
+    }
     if (index !== nodes.length) throw new Error(`EPUB semantic block count changed: ${entryPath}`)
     zip.updateFile(entryPath, Buffer.from(xml))
   }
@@ -480,7 +488,7 @@ export function buildSemanticEpubFromDocument(document: SemanticDocumentV2, titl
   }
   for (const chapter of chapters) {
     const body = chapter.nodes.map(n => n.type === 'heading' ? `<h${Math.min(6,n.headingLevel||1)}>${escapeXml(n.translatedText!)}</h${Math.min(6,n.headingLevel||1)}>` : `<p>${escapeXml(n.translatedText!)}</p>`).join('')
-    zip.addFile(`OPS/${chapter.id}.xhtml`, Buffer.from(`<html xmlns="http://www.w3.org/1999/xhtml"><head><title>${escapeXml(chapter.title)}</title></head><body>${body}</body></html>`))
+    zip.addFile(`OPS/${chapter.id}.xhtml`, Buffer.from(`<html xmlns="http://www.w3.org/1999/xhtml" lang="${escapeXml(language)}" xml:lang="${escapeXml(language)}"><head><title>${escapeXml(chapter.title)}</title></head><body lang="${escapeXml(language)}">${body}</body></html>`))
   }
   const manifest = chapters.map(c=>`<item id="${c.id}" href="${c.id}.xhtml" media-type="application/xhtml+xml"/>`).join('')
   const spine = chapters.map(c=>`<itemref idref="${c.id}"/>`).join('')
