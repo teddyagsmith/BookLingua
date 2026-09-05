@@ -38,3 +38,8 @@ test('full pass fixes apostrophes, quotes and ellipses together', () => {
   const out = normalizeTypography(`Elle a dit "c'est fini"... vraiment`, 'fr')
   assert.equal(out, 'Elle a dit «\u202Fc’est fini\u202F»… vraiment')
 })
+
+test('visible punctuation entities are decoded before language normalisation', () => {
+  assert.equal(normalizeTypography('N&apos;oubliez pas &quot;ceci&quot;.', 'fr'), 'N’oubliez pas « ceci ».')
+  assert.equal(normalizeTypography('&amp;quot;Teste&amp;quot;', 'pt-br'), '“Teste”')
+})

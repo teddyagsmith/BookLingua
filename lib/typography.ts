@@ -60,5 +60,14 @@ export function normalizeQuotes(text: string, language: string): string {
 
 /** Apply the full typographic contract for one language. */
 export function normalizeTypography(text: string, language: string): string {
-  return normalizeQuotes(normalizeApostrophes(text).replace(/\.\.\./g, '…'), language)
+  // Model/cache text can contain visible XML entities. Decode punctuation before
+  // applying language rules, otherwise `N&apos;oubliez` bypasses apostrophe
+  // normalisation and `&quot;...&quot;` bypasses quote pairing.
+  let decoded = text
+  for (let i = 0; i < 3; i++) {
+    const next = decoded.replace(/&amp;/g, '&').replace(/&apos;/g, "'").replace(/&quot;/g, '"')
+    if (next === decoded) break
+    decoded = next
+  }
+  return normalizeQuotes(normalizeApostrophes(decoded).replace(/\.\.\./g, '…'), language)
 }
