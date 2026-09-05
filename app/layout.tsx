@@ -5,11 +5,11 @@ import Script from 'next/script'
 
 export const metadata: Metadata = {
   title: 'AI Book Translation Service — Translate & Publish in 6 Languages',
-  description: 'AI book translation service with human editorial review and proofreading reports. Translate novels, non-fiction and series into Spanish, German, French, Italian, Portuguese, Polish and Japanese.',
+  description: 'AI book translation with AI editorial review and targeted review by a professional translator. Translate novels, non-fiction and series into Spanish, German, French, Italian, Portuguese, Polish and Japanese.',
   metadataBase: new URL('https://booklingua.io'),
   openGraph: {
     title: 'AI Book Translation Service — Translate & Publish in 6 Languages',
-    description: 'AI book translation service with human editorial review and proofreading reports. Translate novels, non-fiction and series into Spanish, German, French, Italian, Portuguese, Polish and Japanese.',
+    description: 'AI book translation with AI editorial review and targeted review by a professional translator. Translate novels, non-fiction and series into Spanish, German, French, Italian, Portuguese, Polish and Japanese.',
     url: 'https://booklingua.io',
     siteName: 'BookLingua',
     images: [
@@ -25,7 +25,7 @@ export const metadata: Metadata = {
   twitter: {
     card: 'summary_large_image',
     title: 'AI Book Translation Service — Translate & Publish in 6 Languages',
-    description: 'AI book translation service with human editorial review and proofreading reports.',
+    description: 'AI book translation with AI editorial review and targeted review by a professional translator.',
     images: ['/og-image.png'],
   },
 }
