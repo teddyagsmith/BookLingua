@@ -12,7 +12,9 @@ type Order = {
   tier: string
   amount_paid: number
   api_cost: number | null
+  api_cost_estimated?: boolean
   margin_pct: number | null
+  admin_archived?: boolean
   status: OrderStatus
   created_at: string
   completed_at: string | null
@@ -103,7 +105,7 @@ export default function AdminPage() {
   const [orders, setOrders] = useState<Order[]>([])
   const [abandonedUploads, setAbandonedUploads] = useState<AbandonedUpload[]>([])
   const [stats, setStats] = useState<Stats | null>(null)
-  const [filter, setFilter] = useState<string>('all')
+  const [filter, setFilter] = useState<string>('current')
   const [activeTab, setActiveTab] = useState<'orders' | 'abandoned'>('orders')
   const [search, setSearch] = useState('')
   const [lastRefresh, setLastRefresh] = useState<Date | null>(null)
@@ -222,7 +224,9 @@ export default function AdminPage() {
   }, [authed, password, fetchData])
 
   const filteredOrders = orders.filter(o => {
-    if (filter !== 'all' && o.status !== filter) return false
+    if(filter==='current'&&o.admin_archived)return false
+    if(filter==='archived'&&!o.admin_archived)return false
+    if(!['current','all','archived'].includes(filter)&&o.status!==filter)return false
     if (search) {
       const q = search.toLowerCase()
       return o.email.toLowerCase().includes(q) || o.book_title.toLowerCase().includes(q) || o.id.includes(q)
@@ -444,7 +448,7 @@ export default function AdminPage() {
               className="flex-1 border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-violet-400"
             />
             <div className="flex gap-2 flex-wrap">
-              {['all', 'completed', 'processing', 'failed', 'pending', 'qa_blocked', 'gate_failed'].map(s => (
+              {['current', 'completed', 'processing', 'failed', 'pending', 'qa_blocked', 'gate_failed', 'archived', 'all'].map(s => (
                 <button
                   key={s}
                   onClick={() => setFilter(s)}
@@ -506,7 +510,7 @@ export default function AdminPage() {
                       </div>
                     </td>
                     <td className="px-4 py-3 text-right font-medium text-gray-900">{fmt$(Number(o.amount_paid))}</td>
-                    <td className="px-4 py-3 text-right text-gray-500">{o.api_cost != null ? fmt$(Number(o.api_cost)) : '—'}</td>
+                    <td className="px-4 py-3 text-right text-gray-500" title={o.api_cost_estimated?'Estimated from immutable model-call telemetry':'Stored order cost'}>{o.api_cost != null ? `${o.api_cost_estimated?'≈':''}${fmt$(Number(o.api_cost))}` : '—'}</td>
                     <td className="px-4 py-3 text-right">
                       {o.margin_pct != null ? (
                         <span className={Number(o.margin_pct) > 50 ? 'text-green-600 font-medium' : 'text-red-500 font-medium'}>
