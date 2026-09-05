@@ -89,7 +89,7 @@ export function applyVerifiedEditorialOverrides(document:SemanticDocumentV2,over
  * output from identical inputs, and without this the completed package short-circuits
  * and the customer's files never change.
  */
- export const PIPELINE_OUTPUT_VERSION = 'output-v2-emphasis-typography'
+export const PIPELINE_OUTPUT_VERSION = 'output-v3-emphasis-positioning'
  
  export const SEMANTIC_PROMPT_SIGNATURE = `${TRANSLATION_PROMPT_VERSION}+${EDITORIAL_PROMPT_VERSION}+${PIPELINE_OUTPUT_VERSION}`
 export const SEMANTIC_BUILD_POLICY_VERSION = 'semantic-v2-review-diff-spacing-v6'

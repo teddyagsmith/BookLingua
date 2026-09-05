@@ -105,13 +105,56 @@ export function distributeEmphasis(runs: EmphasisRun[], translated: string): Emp
     const isLast = index === runs.length - 1
     const share = isLast ? remaining : Math.min(remaining, Math.max(weights[index] ? 1 : 0, Math.round(words.length * weights[index] / total)))
     if (!share) return
-    const text = words.slice(offset, offset + share).join(' ')
+    // The word split discards separators, so carry one boundary space into every
+    // later run. Without it, Word concatenates differently styled words.
+    const text = `${offset > 0 ? ' ' : ''}${words.slice(offset, offset + share).join(' ')}`
     offset += share
     const previous = output[output.length - 1]
     // Adjacent runs sharing formatting are merged so the document keeps clean runs.
-    if (previous && styleKey(previous) === styleKey(run)) previous.text += ` ${text}`
-    else output.push({ text, italic: run.italic, bold: run.bold, superscript: run.superscript })
+    const mapped = { text, italic: run.italic, bold: run.bold }
+    if (previous && styleKey(previous) === styleKey(mapped)) previous.text += text
+    else output.push(mapped)
   })
   if (offset < words.length && output.length) output[output.length - 1].text += ` ${words.slice(offset).join(' ')}`
-  return output.length ? output : undefined
+  if (!output.length) return undefined
+
+  // Footnote markers must be placed by their literal value, not by proportional
+  // word position. Proportional placement can superscript an arbitrary nearby word.
+  const sourceLength = Math.max(1, runs.reduce((sum, run) => sum + run.text.length, 0))
+  const target = output.map(run => run.text).join('')
+  let sourceOffset = 0
+  let targetFloor = 0
+  const intervals: Array<[number, number]> = []
+  for (const run of runs) {
+    const marker = run.superscript ? run.text.trim() : ''
+    if (marker) {
+      const expected = Math.round((sourceOffset / sourceLength) * target.length)
+      const superscript = marker.replace(/[0-9]/g, digit => '⁰¹²³⁴⁵⁶⁷⁸⁹'[Number(digit)])
+      const forms = Array.from(new Set([marker, superscript]))
+      const candidates: Array<{ at: number; value: string }> = []
+      for (const value of forms) for (let at = target.indexOf(value, targetFloor); at >= 0; at = target.indexOf(value, at + 1)) candidates.push({ at, value })
+      if (candidates.length) {
+        const match = candidates.reduce((best, value) => Math.abs(value.at - expected) < Math.abs(best.at - expected) ? value : best)
+        intervals.push([match.at, match.at + match.value.length]); targetFloor = match.at + match.value.length
+      }
+    }
+    sourceOffset += run.text.length
+  }
+  if (!intervals.length) return output
+  const overlaid: EmphasisRun[] = []
+  let globalOffset = 0
+  for (const run of output) {
+    let local = 0
+    const end = globalOffset + run.text.length
+    for (const [start, markerEnd] of intervals) {
+      if (markerEnd <= globalOffset || start >= end) continue
+      const a = Math.max(0, start - globalOffset), b = Math.min(run.text.length, markerEnd - globalOffset)
+      if (a > local) overlaid.push({ ...run, text: run.text.slice(local, a) })
+      overlaid.push({ ...run, text: run.text.slice(a, b), superscript: true })
+      local = b
+    }
+    if (local < run.text.length) overlaid.push({ ...run, text: run.text.slice(local) })
+    globalOffset = end
+  }
+  return overlaid
 }

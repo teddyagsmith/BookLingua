@@ -28,9 +28,16 @@ test('styled spans and emphasis tags both produce runs', () => {
 test('emphasis is mapped onto the translated words and merged where formatting matches', () => {
   const runs = blockEmphasisRuns('The <span class="Italic">quick brown</span> fox runs', STYLES)
   const mapped = distributeEmphasis(runs, 'Le renard brun rapide court vite')!
-  assert.equal(mapped.map(r => r.text).join(' '), 'Le renard brun rapide court vite')
+  assert.equal(mapped.map(r => r.text).join(''), 'Le renard brun rapide court vite')
   assert.ok(mapped.some(r => r.italic), 'some run carries the emphasis')
   assert.equal(mapped.filter(r => r.italic).length, 1, 'adjacent italic runs are merged')
+})
+
+test('superscript footnote markers stay attached and do not consume nearby words', () => {
+  const runs = blockEmphasisRuns('Genes load the gun<span class="CharOverride-14">1</span>. Lifestyle pulls it.', STYLES)
+  const mapped = distributeEmphasis(runs, 'Gene laden die Waffe¹. Der Lebensstil drückt ab.')!
+  assert.equal(mapped.map(run => run.text).join(''), 'Gene laden die Waffe¹. Der Lebensstil drückt ab.')
+  assert.deepEqual(mapped.filter(run => run.superscript).map(run => run.text), ['¹'])
 })
 
 test('blocks without emphasis stay on the plain path', () => {
