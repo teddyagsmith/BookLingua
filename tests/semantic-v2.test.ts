@@ -292,3 +292,9 @@ test('inline markup does not inject spaces into sentences or split words', () =>
   // Line breaks are real separators and still become a space.
   assert.match(nodes[2].sourceText, /First line second line/)
 })
+test('build identity changes when output behaviour changes, not only prompts', () => {
+  // A parser or builder change produces different files from identical inputs; without
+  // this the completed package is returned and the delivered files never change.
+  const base = deterministicSemanticBuildId('order', 'fr', 'source', 1)
+  assert.notEqual(base, deterministicSemanticBuildId('order', 'fr', 'source', 1, 'translation-v1+editorial-v2+output-v3'))
+})

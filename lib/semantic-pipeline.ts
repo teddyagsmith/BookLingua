@@ -83,7 +83,15 @@ export function applyVerifiedEditorialOverrides(document:SemanticDocumentV2,over
  * a prompt change persists new passes but returns the previously completed package,
  * leaving the delivered files untouched.
  */
-export const SEMANTIC_PROMPT_SIGNATURE = `${TRANSLATION_PROMPT_VERSION}+${EDITORIAL_PROMPT_VERSION}`
+ /**
+ * Bump when parsing or artifact generation changes what the delivered files contain.
+ * Prompt versions alone are not enough: a parser or builder change produces different
+ * output from identical inputs, and without this the completed package short-circuits
+ * and the customer's files never change.
+ */
+ export const PIPELINE_OUTPUT_VERSION = 'output-v2-emphasis-typography'
+ 
+ export const SEMANTIC_PROMPT_SIGNATURE = `${TRANSLATION_PROMPT_VERSION}+${EDITORIAL_PROMPT_VERSION}+${PIPELINE_OUTPUT_VERSION}`
 export const SEMANTIC_BUILD_POLICY_VERSION = 'semantic-v2-review-diff-spacing-v6'
 
 export function deterministicSemanticBuildId(orderId: string, language: string, sourceHash: string, briefRevision: number, promptSignature: string = SEMANTIC_PROMPT_SIGNATURE): string {
