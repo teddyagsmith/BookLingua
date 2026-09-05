@@ -45,6 +45,7 @@ export interface SemanticPipelineInput {
   title: string
   /** A separately verified title translation, used when the source title exists only in metadata. */
   verifiedTranslatedTitle?: string
+  verifiedEditorialOverrides?: Array<{ nodeId:string; before:string; after:string }>
   authorName?: string
   genre?: string
   brief: TranslationBriefV1
@@ -59,6 +60,20 @@ export interface SemanticPipelineInput {
   editorialModel?: string
   maxBatchOutputWords?: number
   maxBatchConcurrency?: number
+}
+
+export function applyVerifiedEditorialOverrides(document:SemanticDocumentV2,overrides:NonNullable<SemanticPipelineInput['verifiedEditorialOverrides']>):SemanticDocumentV2{
+  if(!overrides.length)return document
+  const pending=new Map(overrides.map(item=>[item.nodeId,item]))
+  const nodes=document.nodes.map(node=>{
+    const override=pending.get(node.id);if(!override)return node
+    pending.delete(node.id)
+    const text=node.translatedText||'',occurrences=text.split(override.before).length-1
+    if(!override.before||!override.after||occurrences!==1)throw new Error(`Verified editorial override does not match exactly once at ${node.id}`)
+    return{...node,translatedText:text.replace(override.before,override.after)}
+  })
+  if(pending.size)throw new Error(`Verified editorial override node missing: ${Array.from(pending.keys()).join(', ')}`)
+  return{...document,nodes}
 }
 
 /**
@@ -225,7 +240,7 @@ export async function runSemanticPipeline(input: SemanticPipelineInput) {
   // fragment (for example "Creating Your") is mistaken for a duplicate heading.
   assertSourceAwareHeadingDuplicateParity(consolidatedArtifactNodes(sourceDocument), consolidatedArtifactNodes(pass1))
   await persistSemantic(input.supabase, { orderId: input.orderId, language: input.language, buildId, pass: 'pass1', document: pass1, eligibility: eligibility.status })
-  const rawPass2 = { ...pass1, nodes: await runBatchedPass(input, pass1.nodes, 2) }
+  const rawPass2 = applyVerifiedEditorialOverrides({ ...pass1, nodes: await runBatchedPass(input, pass1.nodes, 2) },input.verifiedEditorialOverrides||[])
   let titleAuthority = resolveTitleAuthority({ document: rawPass2, checkoutTitle: input.title, source: input.source })
   const verifiedTranslatedTitle=input.verifiedTranslatedTitle?.trim()
   if(titleAuthority.fallbackUsed&&verifiedTranslatedTitle)titleAuthority={

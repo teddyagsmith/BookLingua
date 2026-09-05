@@ -9,7 +9,7 @@ import { buildChapterMap, renderChapterMapCsv, renderChapterMapDocx } from '../l
 import { evaluateSemanticEligibility } from '../lib/semantic-document'
 import { buildSemanticDocx, buildSemanticEpub, buildSemanticEpubFromDocument, buildSemanticReviewDocx, consolidatedArtifactNodes, normalizeEpubImages, resolveBookAuthor } from '../lib/semantic-artifacts'
 import { validateArtifact } from '../lib/artifact-validation-v2'
-import { deterministicSemanticBuildId } from '../lib/semantic-pipeline'
+import { applyVerifiedEditorialOverrides, deterministicSemanticBuildId } from '../lib/semantic-pipeline'
 import { editorialSystemPrompt } from '../lib/editorial-prompt'
 import { semanticV2AllowedForOrder } from '../lib/semantic-canary'
 
@@ -263,4 +263,11 @@ test('build identity changes when a prompt changes, so completed packages are re
   // Without this, a prompt change persists new passes but returns the old package
   // and the customer's files never change.
   assert.notEqual(base, deterministicSemanticBuildId('order', 'fr', 'source', 1, 'translation-v1+editorial-v3'))
+})
+
+test('verified editorial overrides are exact and node-bound',()=>{
+  const document:any={schemaVersion:'2.0',sourceHash:'x',sourceFormat:'epub',parserConfidence:1,nodes:[{id:'n1',order:0,type:'paragraph',headingLevel:null,chapterId:null,sourceChapterNumber:null,sourceLocation:'x',sourceText:'source',translatedText:'avant mauvaise phrase après'}]}
+  const corrected=applyVerifiedEditorialOverrides(document,[{nodeId:'n1',before:'mauvaise phrase',after:'phrase corrigée'}])
+  assert.equal(corrected.nodes[0].translatedText,'avant phrase corrigée après')
+  assert.throws(()=>applyVerifiedEditorialOverrides(document,[{nodeId:'n2',before:'mauvaise phrase',after:'phrase corrigée'}]),/node missing/)
 })
