@@ -33,16 +33,19 @@ async function main(){
       {name:`Reclaim Your Longevity - Notes - ${target.code}.docx`,data:await renderCustomerTranslationNotesDocx(await bytes('translation_notes'),target.title,language)},
       {name:`Reclaim Your Longevity - Launch Pack - ${target.code}.docx`,data:await renderCustomerLaunchPackDocx(await bytes('launch_pack'),'Reclaim Your Longevity',target.title,'Cari Rhys-Owen')},
     ]
-    const old=(await drive.files.list({q:`'${target.folder}' in parents and trashed=false`,fields:'files(id,name)',pageSize:100})).data.files||[],staged:Array<{id:string;name:string;md5:string;size:number}>=[]
+    const old=(await drive.files.list({q:`'${target.folder}' in parents and trashed=false`,fields:'files(id,name,size,modifiedTime,md5Checksum)',pageSize:100})).data.files||[],oldFinal=old.find(file=>file.name===`Reclaim Your Longevity - Final - ${target.code}.docx`),staged:Array<{id:string;name:string;md5:string;size:number}>=[]
     try{
       for(const file of files){const stagedName=`.replacement-${build.id}-${file.name}`,upload=await drive.files.create({requestBody:{name:stagedName,parents:[target.folder]},media:{mimeType:mime(file.name),body:Readable.from(file.data)},fields:'id,size,md5Checksum'}),md5=createHash('md5').update(file.data).digest('hex');if(upload.data.md5Checksum!==md5||Number(upload.data.size)!==file.data.length)throw new Error(`${language}: Drive upload mismatch ${file.name}`);staged.push({id:upload.data.id!,name:file.name,md5,size:file.data.length})}
       if(staged.length!==6)throw new Error(`${language}: expected six customer files`)
       for(const file of old)await drive.files.update({fileId:file.id!,requestBody:{trashed:true}})
       for(const file of staged)await drive.files.update({fileId:file.id,requestBody:{name:file.name}})
     }catch(error){for(const file of staged)await drive.files.update({fileId:file.id,requestBody:{trashed:true}}).catch(()=>undefined);throw error}
-    const current=(await drive.files.list({q:`'${target.folder}' in parents and trashed=false`,fields:'files(name,size,md5Checksum)',orderBy:'name',pageSize:100})).data.files||[]
+    const current=(await drive.files.list({q:`'${target.folder}' in parents and trashed=false`,fields:'files(id,name,size,modifiedTime,md5Checksum)',orderBy:'name',pageSize:100})).data.files||[]
     if(current.length!==6||staged.some(expected=>!current.some(file=>file.name===expected.name&&file.md5Checksum===expected.md5&&Number(file.size)===expected.size)))throw new Error(`${language}: final Drive verification failed`)
-    console.log(JSON.stringify({language,buildId:build.id,files:current.map(file=>file.name)}))
+    const final=current.find(file=>file.name===`Reclaim Your Longevity - Final - ${target.code}.docx`);if(!final?.id)throw new Error(`${language}: Final DOCX missing after read-back`)
+    const refetched=(await drive.files.get({fileId:final.id,fields:'id,name,size,modifiedTime,md5Checksum,parents,trashed'})).data
+    if(refetched.trashed||refetched.id!==final.id||refetched.md5Checksum!==final.md5Checksum||refetched.size!==final.size)throw new Error(`${language}: file-id read-back mismatch`)
+    console.log(JSON.stringify({language,buildId:build.id,files:current.map(file=>file.name),finalDocx:{oldFileId:oldFinal?.id,oldSize:Number(oldFinal?.size||0),oldModifiedTime:oldFinal?.modifiedTime,newFileId:refetched.id,newSize:Number(refetched.size),newModifiedTime:refetched.modifiedTime,md5Checksum:refetched.md5Checksum}}))
   }
 }
 main().catch(error=>{console.error(error);process.exit(1)})

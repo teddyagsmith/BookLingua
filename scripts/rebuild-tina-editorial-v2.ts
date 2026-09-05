@@ -83,7 +83,9 @@ async function main() {
     const { data: briefRow, error: briefError } = await db.from('translation_briefs').select('brief,revision').eq('order_id', ORDER).eq('language', language).order('revision', { ascending: false }).limit(1).single()
     if (briefError || !briefRow?.brief) throw new Error(`${language}: translation brief unavailable`)
     const priorBrief = briefRow.brief as TranslationBriefV1
-    const brief:TranslationBriefV1=priorBrief.readerRegister==='formal_sie'?priorBrief:{...priorBrief,revision:Number(briefRow.revision)+1,approvedAt:new Date().toISOString(),approvalSource:'admin',readerRegister:'formal_sie'}
+    const registerItem={id:'reader-register',sourceTerm:'Reader address and every second-person form',issueType:'reader_register',authorDecision:'formal_sie',targetInstruction:'Use formal Sie/Ihr/Ihnen consistently throughout all author-to-reader passages. Never switch to du/dich/dir/dein in those passages, including headings.'}
+    const hasRegisterItem=priorBrief.items.some(item=>item.issueType==='reader_register'&&item.authorDecision==='formal_sie')
+    const brief:TranslationBriefV1=priorBrief.readerRegister==='formal_sie'&&hasRegisterItem?priorBrief:{...priorBrief,revision:Number(briefRow.revision)+1,approvedAt:new Date().toISOString(),approvalSource:'admin',readerRegister:'formal_sie',items:[...priorBrief.items.filter(item=>item.issueType!=='reader_register'),registerItem]}
     if(brief!==priorBrief){
       const {error:briefInsertError}=await db.from('translation_briefs').insert({order_id:ORDER,language,schema_version:brief.schemaVersion,revision:brief.revision,source_manifest_fingerprint:brief.sourceManifestFingerprint,content_fingerprint:translationBriefFingerprint(brief),approved_at:brief.approvedAt,approval_source:brief.approvalSource,brief})
       if(briefInsertError)throw new Error(`${language}: formal register brief insert failed: ${briefInsertError.message}`)
@@ -101,16 +103,15 @@ async function main() {
       nodeId:'node-000375',before:'en utilisant quelle que soit la source d’énergie disponible',
       after:'en utilisant la source d’énergie disponible, quelle qu’elle soit',
     }]:language==='de'?[
-      {nodeId:'node-000256',before:'Sinnhaftigkeit muss nicht großartig sein. Es kann so einfach sein wie für deine Familie da zu sein, Schönheit in deinem Garten zu erschaffen oder dein Fachwissen zu teilen. Wichtig ist, dass es sich für dich bedeutsam anfühlt.',after:'Sinnhaftigkeit muss nicht großartig sein. Es kann so einfach sein wie für Ihre Familie da zu sein, Schönheit in Ihrem Garten zu erschaffen oder Ihr Fachwissen zu teilen. Wichtig ist, dass es sich für Sie bedeutsam anfühlt.'},
-      {nodeId:'node-001059',before:'Eine Herausforderung, der ich heute begegnet bin, und wie ich damit umgegangen bin (stärkt das Vertrauen in deine Bewältigungsfähigkeiten)',after:'Eine Herausforderung, der ich heute begegnet bin, und wie ich damit umgegangen bin (stärkt das Vertrauen in Ihre Bewältigungsfähigkeiten)'},
+      {nodeId:'node-000049',before:'Der natürlichen Alterungssysteme deines Körpers',after:'Der natürlichen Alterungssysteme Ihres Körpers'},
+      {nodeId:'node-001032',before:'Bitten Sie um Erlaubnis: „Ich möchte gerne etwas Persönliches teilen – hast du Zeit?“',after:'Bitten Sie um Erlaubnis: „Ich möchte gerne etwas Persönliches teilen – haben Sie Zeit?“'},
       {nodeId:'node-001082',before:'Sinn und gesellschaftliches Engagement erzeugen kraftvolle biologische Effekte. Ziele zu haben, die über dich selbst hinausgehen, ist nicht nur psychologisch befriedigend – es erzeugt messbare anti-alternde Effekte.',after:'Sinn und gesellschaftliches Engagement erzeugen kraftvolle biologische Effekte. Ziele zu haben, die über Sie selbst hinausgehen, ist nicht nur psychologisch befriedigend – es erzeugt messbare anti-alternde Effekte.'},
-      {nodeId:'node-001522',before:'Zweck: Sicherstellen, dass sich dein Protokoll mit deinen sich verändernden Bedürfnissen und Umständen weiterentwickelt',after:'Zweck: Sicherstellen, dass sich Ihr Protokoll mit Ihren sich verändernden Bedürfnissen und Umständen weiterentwickelt'},
     ]:[]
     const result = await runSemanticPipeline({
       supabase: db, orderId: ORDER, language, sourceFormat: 'epub', source,
       title: order.book_title, authorName: order.author_name, genre: order.genre || undefined,
       verifiedTranslatedTitle: VERIFIED_TITLES[language],
-      brief, notes, buildId: deterministicSemanticBuildId(ORDER, language, sourceHash, brief.revision,`${SEMANTIC_PROMPT_SIGNATURE}+formal-register-repair-v3${verifiedEditorialOverrides.length?'+verified-register-overrides-v1':''}`),
+      brief, notes, buildId: deterministicSemanticBuildId(ORDER, language, sourceHash, brief.revision,`${SEMANTIC_PROMPT_SIGNATURE}+formal-register-repair-v4${verifiedEditorialOverrides.length?'+verified-register-overrides-v2':''}`),
       verifiedEditorialOverrides,
       allowReviewedStructure: order.semantic_structure_approved === true, launchPack, dualFormat: (order.upsells || []).includes('dual-format'), maxBatchConcurrency: 3,
       translate: async (batch, context) => {
