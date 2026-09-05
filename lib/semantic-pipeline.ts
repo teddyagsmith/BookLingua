@@ -5,7 +5,7 @@ import { SupabaseClient } from '@supabase/supabase-js'
 import { parseSemanticDocx, parseSemanticEpub, parseSemanticTxt } from './semantic-parser'
 import { evaluateSemanticEligibility, SemanticDocumentV2 } from './semantic-document'
 import { createNodeTranslationInput, nodeBatchFingerprint, NodeTranslationInput, NodeTranslationOutput, validateAndMergeNodeOutput } from './node-translation-contract'
-import { buildFinalSemanticDocx, buildSemanticDocx, buildSemanticEpub, buildSemanticEpubFromDocument, buildSemanticReviewDocx, consolidatedArtifactNodes, normalizeEpubImages, resolveBookAuthor } from './semantic-artifacts'
+import { buildFinalSemanticDocx, buildSemanticDocx, buildSemanticEpub, buildSemanticEpubFromDocument, buildSemanticReviewDocx, consolidatedArtifactNodes, epubEmphasisByLocation, normalizeEpubImages, resolveBookAuthor } from './semantic-artifacts'
 import { buildChapterMap, renderChapterMapCsv, renderChapterMapDocx } from './chapter-map'
 import { validateArtifact } from './artifact-validation-v2'
 import { storeImmutableArtifact } from './artifact-store'
@@ -23,7 +23,8 @@ import { recordModelTelemetry } from './model-telemetry'
 import { assertSourceAwareDuplicateParity, assertSourceAwareHeadingDuplicateParity } from './semantic-duplicate-validation'
 import { EDITORIAL_PROMPT_VERSION, TRANSLATION_PROMPT_VERSION } from './editorial-prompt'
 import { normalizeTypography } from './typography'
-import { validateGermanReaderRegister } from './reader-register'
+import { ReaderRegister, resolveReaderRegister, readerRegisterPromptLine } from './reader-register'
+import { checkDeliveredDocx, describeFailures, inspectDeliveredDocx } from './delivery-contract'
 
 /** Below this share of nodes changed, an editorial pass is treated as having done nothing. */
 export const EDITORIAL_MIN_CHANGE_RATIO = 0.01
@@ -33,6 +34,9 @@ export type SemanticTranslator = (input: NodeTranslationInput, context: {
   language: string
   brief: TranslationBriefV1
   genre?: string
+  /** Resolved for every order; the translator must pass it to both passes. */
+  readerRegister: ReaderRegister
+  readerRegisterPrompt: string
   batchId: string
   batchIndex: number
   batchCount: number
@@ -90,7 +94,7 @@ export function applyVerifiedEditorialOverrides(document:SemanticDocumentV2,over
  * output from identical inputs, and without this the completed package short-circuits
  * and the customer's files never change.
  */
-export const PIPELINE_OUTPUT_VERSION = 'output-v6-register-epub-lang-fr-spacing'
+export const PIPELINE_OUTPUT_VERSION = 'output-v7-delivery-contract'
  
  export const SEMANTIC_PROMPT_SIGNATURE = `${TRANSLATION_PROMPT_VERSION}+${EDITORIAL_PROMPT_VERSION}+${PIPELINE_OUTPUT_VERSION}`
 export const SEMANTIC_BUILD_POLICY_VERSION = 'semantic-v2-review-diff-spacing-v6'
@@ -171,11 +175,33 @@ async function cachedTranslation(input: SemanticPipelineInput, batch: NodeTransl
       requestIdentity:`${batchId}:cache-hit`,provider:modelProvider,modelId,success:true,inputTokens:0,outputTokens:0,cacheStatus:'hit'})
     return validateAndMergeNodeOutput(authoritativeNodes, JSON.parse(existing.content), batch.sourceFingerprint)
   }
-  const output = await input.translate(batch,{pass,language:input.language,brief:input.brief,genre:input.genre,batchId,batchIndex,batchCount})
+  const readerRegister = resolveReaderRegister({ brief: input.brief, genre: input.genre, language: input.language })
+  const output = await input.translate(batch,{pass,language:input.language,brief:input.brief,genre:input.genre,
+    readerRegister,readerRegisterPrompt:readerRegisterPromptLine(input.language,readerRegister),batchId,batchIndex,batchCount})
   const validated = validateAndMergeNodeOutput(authoritativeNodes, output, batch.sourceFingerprint)
   const { error } = await input.supabase.from('translation_chunks').upsert({ order_id:input.orderId,lang_code:input.language,chunk_index:batchIndex,pass:`semantic-pass${pass}`,content:JSON.stringify(output),pipeline_version:'semantic-v2',schema_version:batch.schemaVersion,structure_fingerprint:batchId,model_provider:modelProvider,model_id:modelId,model_stage:modelStage },{onConflict:'order_id,lang_code,chunk_index,pass,pipeline_version,schema_version,structure_fingerprint,model_id'})
   if (error) throw new Error(`Semantic cache persistence failed: ${error.message}`)
   return validated
+}
+
+/**
+ * What the source book actually emphasises. The contract compares the delivered file
+ * against this rather than a fixed number, so a book with no italics is not failed for
+ * having none, and a book with 517 emphasised blocks cannot deliver zero.
+ */
+function sourceEmphasisCounts(source: Buffer, sourceFormat: 'epub'|'docx'|'txt'): { italic: number; bold: number; superscript: number } {
+  if (sourceFormat !== 'epub') return { italic: 0, bold: 0, superscript: 0 }
+  let italic = 0, bold = 0, superscript = 0
+  try {
+    for (const runs of Array.from(epubEmphasisByLocation(source).values())) {
+      for (const run of runs) {
+        if (run.italic) italic++
+        if (run.bold) bold++
+        if (run.superscript) superscript++
+      }
+    }
+  } catch { return { italic: 0, bold: 0, superscript: 0 } }
+  return { italic, bold, superscript }
 }
 
 /** Typewriter punctuation is corrected on the way out of every pass, so the stored
@@ -252,6 +278,7 @@ export async function runSemanticPipeline(input: SemanticPipelineInput) {
   const noteErrors = validateTranslationNotes(input.notes); if (noteErrors.length) throw new Error(noteErrors.join('; '))
   await persistSemantic(input.supabase, { orderId: input.orderId, pass: 'source', document: sourceDocument, eligibility: eligibility.status })
 
+  const readerRegister = resolveReaderRegister({ brief: input.brief, genre: input.genre, language: input.language })
   const buildId = input.buildId || deterministicSemanticBuildId(input.orderId, input.language, sourceHash, input.brief.revision)
   const { error: buildError } = await input.supabase.rpc('begin_order_language_build', { p_order_id: input.orderId, p_language: input.language, p_build_id: buildId })
   if (buildError) throw new Error(`Build allocation failed: ${buildError.message}`)
@@ -276,9 +303,6 @@ export async function runSemanticPipeline(input: SemanticPipelineInput) {
   }
   const titleResult = applyTitleAuthority(rawPass2, input.title, titleAuthority)
   const pass2 = titleResult.document
-  const registerErrors=input.language==='de'?validateGermanReaderRegister(pass2,input.brief.readerRegister):[]
-  await validationReport(input.supabase,{orderId:input.orderId,language:input.language,buildId,stage:'manuscript_register',passed:registerErrors.length===0,errors:registerErrors.map(message=>({code:'REGISTER_DRIFT',message})),metrics:{readerRegister:input.brief.readerRegister,violations:registerErrors.length}})
-  if(registerErrors.length)throw new Error(`Manuscript register validation failed: ${registerErrors.slice(0,10).join('; ')}`)
   // An editorial pass that changes almost nothing has not reviewed the translation, it has
   // echoed it. Record that rather than presenting the build as edited.
   const editedNodes = pass1.nodes.filter((node, index) => node.translatedText !== rawPass2.nodes[index]?.translatedText).length
@@ -312,7 +336,32 @@ export async function runSemanticPipeline(input: SemanticPipelineInput) {
   await storeValidated(input, buildId, 'review_docx', `${input.title} - ${input.language} - Review.docx`, await buildSemanticReviewDocx(pass1, pass2, titleAuthority.effectiveValue), 'docx', true)
   const bookAuthor=resolveBookAuthor(pass2,input.authorName)
   if (input.sourceFormat === 'epub' || input.dualFormat) await storeValidated(input, buildId, 'final_epub', `${input.title} - ${input.language} - Final.epub`, input.sourceFormat === 'epub' ? buildSemanticEpub(await normalizeEpubImages(input.source), pass2, titleAuthority, input.language,bookAuthor,input.orderId) : buildSemanticEpubFromDocument(pass2, titleAuthority.effectiveValue,input.language,bookAuthor||'Unknown',input.orderId), 'epub', true,bookAuthor)
-  await storeValidated(input, buildId, 'final_docx', `${input.title} - ${input.language} - Final.docx`, await buildFinalSemanticDocx(input.source, pass2, titleAuthority.effectiveValue), 'docx', true)
+  // The delivery contract reads the bytes the customer will open, not the pipeline's own
+  // record of what it built. Everything asserted here has shipped broken at least once.
+  const finalDocx = await buildFinalSemanticDocx(input.source, pass2, titleAuthority.effectiveValue)
+  const deliveredNodes = consolidatedArtifactNodes(pass2)
+  const headingStyles: Record<string, number> = {}
+  for (const node of deliveredNodes) {
+    if (node.type !== 'heading') continue
+    const level = Math.min(3, Math.max(1, node.headingLevel || 1))
+    const style = `Heading${level}`
+    headingStyles[style] = (headingStyles[style] || 0) + 1
+  }
+  const deliveryFailures = checkDeliveredDocx(inspectDeliveredDocx(finalDocx), {
+    language: input.language,
+    readerRegister,
+    styles: headingStyles,
+    minimumParagraphs: deliveredNodes.length,
+    emphasis: sourceEmphasisCounts(input.source, input.sourceFormat),
+  })
+  await validationReport(input.supabase, {
+    orderId: input.orderId, language: input.language, buildId, stage: 'delivery_contract',
+    passed: deliveryFailures.length === 0,
+    errors: deliveryFailures.length ? deliveryFailures.map(failure => ({ code: failure.code, message: failure.detail })) : undefined,
+    metrics: { readerRegister, headingStyles, nodes: deliveredNodes.length },
+  })
+  if (deliveryFailures.length) throw new Error(`Delivery contract failed for ${input.language}: ${describeFailures(deliveryFailures)}`)
+  await storeValidated(input, buildId, 'final_docx', `${input.title} - ${input.language} - Final.docx`, finalDocx, 'docx', true)
   const map = buildChapterMap(pass2)
   const sourceHeadingCount=consolidatedArtifactNodes(sourceDocument).filter(node=>node.type==='heading').length
   const minimumMapRows=Math.max(1,Math.ceil(sourceHeadingCount*0.9))
@@ -330,7 +379,7 @@ export async function runSemanticPipeline(input: SemanticPipelineInput) {
     let pack: LaunchPackV1
     try { pack = JSON.parse(input.launchPack.toString('utf8')) } catch { throw new Error('Launch Pack is not valid JSON') }
     const launchErrors = validateLaunchPack({ pack, expectedLocale: input.language, purchased: true })
-    launchErrors.push(...validateLaunchPackRegister(pack,input.brief.readerRegister))
+    launchErrors.push(...validateLaunchPackRegister(pack,input.brief.items.find(item=>item.issueType==='reader_register')?.authorDecision))
     if (launchErrors.length) throw new Error(`Launch Pack validation failed: ${launchErrors.join('; ')}`)
     await renderCustomerLaunchPackDocx(input.launchPack,input.title,titleAuthority.translatedValue)
     await storeValidated(input, buildId, 'launch_pack', 'launch-pack.json', input.launchPack)
