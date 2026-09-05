@@ -113,7 +113,11 @@ async function persistSemantic(supabase: SupabaseClient, input: { orderId: strin
     if (input.language) query.eq('language', input.language); else query.is('language', null)
     if (input.buildId) query.eq('build_id', input.buildId); else query.is('build_id', null)
     const { data } = await query.single()
-    if (!data || data.source_hash !== row.source_hash || data.structure_fingerprint !== row.structure_fingerprint) throw new Error('Semantic retry differs from immutable persisted state')
+    // The order-level source row is an immutable record of the uploaded binary's
+    // first admitted parse. Later parser versions may legitimately produce a new
+    // structure from those exact same bytes; build-scoped pass documents preserve
+    // that new structure. A different source hash remains forbidden.
+    if (!data || data.source_hash !== row.source_hash || (input.pass !== 'source' && data.structure_fingerprint !== row.structure_fingerprint)) throw new Error('Semantic retry differs from immutable persisted state')
   }
 }
 
