@@ -85,6 +85,15 @@ test('word-level review diff does not duplicate the whole changed paragraph', as
   assert.equal((xml.match(/Elle/g)||[]).length,1)
 })
 
+test('review replacements retain a visible boundary between deleted and inserted words',async()=>{
+  const pass1=document([{sourceText:'Title',translatedText:'Titel'},{sourceText:'Do it.',translatedText:'Wir machen es.'}])
+  const pass2=structuredClone(pass1);pass2.nodes[1].translatedText='Wir Tun es.'
+  const zip:any=new AdmZip(await buildSemanticReviewDocx(pass1,pass2,'Titel'))
+  const xml=zip.getEntry('word/document.xml')!.getData().toString('utf8')
+  assert.doesNotMatch(xml,/machen<\/w:t>.*?<w:t[^>]*>Tun/)
+  assert.match(xml,/machen<\/w:t>.*?<w:t[^>]*> Tun/)
+})
+
 test('review diff keeps bilingual title replacements coherent and suppresses typography-only noise',()=>{
   const title=wordLevelDiff('Bride of the Hollow King ?',"L'Épouse du Roi Vide ?")
   assert.equal(title.filter(token=>token.kind==='delete').map(token=>token.text).join(''),'Bride of the Hollow King ?')

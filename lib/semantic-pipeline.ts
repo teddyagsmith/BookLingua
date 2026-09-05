@@ -68,7 +68,7 @@ export interface SemanticPipelineInput {
  * leaving the delivered files untouched.
  */
 export const SEMANTIC_PROMPT_SIGNATURE = `${TRANSLATION_PROMPT_VERSION}+${EDITORIAL_PROMPT_VERSION}`
-export const SEMANTIC_BUILD_POLICY_VERSION = 'semantic-v2-heading-prefix-parity-v5'
+export const SEMANTIC_BUILD_POLICY_VERSION = 'semantic-v2-review-diff-spacing-v6'
 
 export function deterministicSemanticBuildId(orderId: string, language: string, sourceHash: string, briefRevision: number, promptSignature: string = SEMANTIC_PROMPT_SIGNATURE): string {
   const hex = createHash('sha256').update(`${orderId}:${language}:${sourceHash}:${briefRevision}:${SEMANTIC_BUILD_POLICY_VERSION}:${promptSignature}`).digest('hex').slice(0, 32).split('')

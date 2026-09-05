@@ -174,6 +174,19 @@ export function wordLevelDiff(before: string, after: string): DiffToken[] {
   return result
 }
 
+function reviewDiffRuns(before:string,after:string):TextRun[]{
+  const tokens=wordLevelDiff(before,after)
+  return tokens.map((token,index)=>{
+    const previous=tokens[index-1]
+    const separatesReplacement=previous&&previous.kind!==token.kind&&previous.kind!=='same'&&token.kind!=='same'
+      &&!/[\s]$/.test(previous.text)&&!/^\s/.test(token.text)
+    return new TextRun({
+      text:`${separatesReplacement?' ':''}${decodeVisibleEntities(token.text)}`,
+      strike:token.kind==='delete',highlight:token.kind==='same'?undefined:'yellow',
+    })
+  })
+}
+
 export async function buildSemanticReviewDocx(pass1: SemanticDocumentV2, pass2: SemanticDocumentV2, title: string): Promise<Buffer> {
   assertTranslated(pass1); assertTranslated(pass2)
   if (pass1.sourceHash !== pass2.sourceHash) throw new Error('Review documents have different source fingerprints')
@@ -189,11 +202,7 @@ export async function buildSemanticReviewDocx(pass1: SemanticDocumentV2, pass2: 
     const second = secondNodes[index]
     if (!second || second.id !== first.id) throw new Error('Review semantic identity mismatch')
     if (first.translatedText === second.translatedText) children.push(nodeParagraph(second, second.translatedText!, undefined, index))
-    else children.push(nodeParagraph(second, '', wordLevelDiff(decodeVisibleEntities(first.translatedText!), decodeVisibleEntities(second.translatedText!)).map(token => new TextRun({
-      text: decodeVisibleEntities(token.text),
-      strike: token.kind === 'delete',
-      highlight: token.kind === 'same' ? undefined : 'yellow',
-    })), index))
+    else children.push(nodeParagraph(second, '', reviewDiffRuns(decodeVisibleEntities(first.translatedText!),decodeVisibleEntities(second.translatedText!)), index))
   })
   return deterministicDocx(ensureDefaultNormalStyle(Buffer.from(await Packer.toBuffer(new Document({ styles: semanticStyles(), sections: [{ properties: { page: { margin: BOOKLINGUA_CLEAN_BOOK_STYLE.pageMarginsTwips } }, children }] })))))
 }
