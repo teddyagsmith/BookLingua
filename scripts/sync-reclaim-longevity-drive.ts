@@ -5,6 +5,7 @@ import {Readable} from 'node:stream'
 import {readFile} from 'node:fs/promises'
 import {renderCustomerLaunchPackDocx,renderCustomerTranslationNotesDocx} from '../lib/customer-delivery-docx'
 import {assertDeliveryContract,checkUploadedObject} from '../lib/delivery-contract'
+import {ensureOriginalAuthorUpload,orderFolderForLanguageFolder} from './drive-original-upload'
 
 const ORDER='6b47fdde-389a-49ad-ab94-fcc2e1ea08cc'
 const TOKEN='/Users/gilbert/.openclaw/workspace/gilly_token.json'
@@ -19,6 +20,8 @@ const mime=(name:string)=>name.endsWith('.epub')?'application/epub+zip':'applica
 async function main(){
   const token=JSON.parse(await readFile(TOKEN,'utf8')),auth=new google.auth.OAuth2(token.client_id,token.client_secret);auth.setCredentials({refresh_token:token.refresh_token})
   const drive=google.drive({version:'v3',auth}),db=createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!,process.env.SUPABASE_SERVICE_ROLE_KEY!,{auth:{persistSession:false}})
+  const orderFolderId=await orderFolderForLanguageFolder(drive,Object.values(TARGETS)[0].folder)
+  console.log(JSON.stringify({originalAuthorUpload:await ensureOriginalAuthorUpload({db,drive,orderId:ORDER,orderFolderId})}))
   for(const [language,target] of Object.entries(TARGETS).filter(([language])=>!process.env.REPAIR_LANG||language===process.env.REPAIR_LANG)){
     const {data:build,error:buildError}=await db.from('order_language_builds').select('id,state').eq('order_id',ORDER).eq('language',language).eq('is_current',true).single()
     if(buildError||build?.state!=='passed')throw new Error(`${language}: current passed build missing`)

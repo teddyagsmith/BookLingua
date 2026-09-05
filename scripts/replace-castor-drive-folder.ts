@@ -4,6 +4,7 @@ import { createHash } from 'node:crypto'
 import { Readable } from 'node:stream'
 import { readFile } from 'node:fs/promises'
 import {assertDeliveryContract,checkUploadedObject} from '../lib/delivery-contract'
+import {ensureOriginalAuthorUpload,orderFolderForLanguageFolder} from './drive-original-upload'
 
 const ORDER_ID='bdacf80e-7e6d-4b8b-8e81-e7f442b123ec'
 const FOLDER_ID='1MMCHxu9N7bPk8WDp27XD2h0xEbZLp0aK'
@@ -15,6 +16,8 @@ async function main(){
   const auth=new google.auth.OAuth2(token.client_id,token.client_secret);auth.setCredentials({refresh_token:token.refresh_token})
   const drive=google.drive({version:'v3',auth})
   const db=createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!,process.env.SUPABASE_SERVICE_ROLE_KEY!,{auth:{persistSession:false}})
+  const orderFolderId=await orderFolderForLanguageFolder(drive,FOLDER_ID)
+  console.log(JSON.stringify({originalAuthorUpload:await ensureOriginalAuthorUpload({db,drive,orderId:ORDER_ID,orderFolderId})}))
   const {data:build,error:buildError}=await db.from('order_language_builds').select('id,state').eq('order_id',ORDER_ID).eq('language','de').eq('is_current',true).single()
   if(buildError||!build||build.state!=='passed')throw new Error(buildError?.message||'Current passed build missing')
   const buildId=build.id
