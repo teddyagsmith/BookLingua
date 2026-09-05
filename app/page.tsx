@@ -7,6 +7,10 @@ import { getSupabase } from '@/lib/supabase'
 import { bundleDiscountPercent } from '@/lib/bundle-pricing'
 import ResourcesMenu from '@/components/ResourcesMenu'
 import SiteFooter from '@/components/SiteFooter'
+import PricingCalculator, { PricingCalculatorSelection } from '@/components/PricingCalculator'
+import { trackEvent } from '@/lib/analytics'
+import { CORE_LANGUAGES } from '@/lib/languages'
+import { WORD_TIERS, PricingTierKey, pricingTierForWordCount } from '@/lib/pricing'
 
 // GA4 event helper for CTA buttons
 function trackStartTranslation(location: string) {
@@ -21,13 +25,6 @@ function trackStartTranslation(location: string) {
   }
 }
 
-// Updated pricing tiers
-const WORD_TIERS = {
-  small: { maxWords: 40000, label: 'Up to 40k words', basePrice: 99 },
-  medium: { maxWords: 80000, label: 'Up to 80k words', basePrice: 149 },
-  large: { maxWords: 150000, label: 'Up to 150k words', basePrice: 199 },
-}
-
 const BUNDLE_DISCOUNTS = {
   1: { discount: 0, label: '1 Language' },
   2: { discount: 7, label: '2 Languages' },
@@ -36,18 +33,6 @@ const BUNDLE_DISCOUNTS = {
   5: { discount: 15, label: '5 Languages' },
   6: { discount: 20, label: '6+ Languages' },
 }
-
-const CORE_LANGUAGES = [
-  { code: 'es-es', name: 'Spanish (Spain)', flag: '🇪🇸', market: 'Spain · Castilian' },
-  { code: 'es-latam', name: 'Spanish (Latin America)', flag: '🌎', market: 'Mexico, Colombia, Argentina+' },
-  { code: 'fr', name: 'French', flag: '🇫🇷', market: '300M+ speakers' },
-  { code: 'de', name: 'German', flag: '🇩🇪', market: '100M+ speakers' },
-  { code: 'it', name: 'Italian', flag: '🇮🇹', market: '65M+ speakers' },
-  { code: 'pl', name: 'Polish', flag: '🇵🇱', market: '50M+ speakers' },
-  { code: 'ja', name: 'Japanese', flag: '🇯🇵', market: '125M+ speakers' },
-  { code: 'pt-pt', name: 'Portuguese (Portugal)', flag: '🇵🇹', market: 'Portugal · European' },
-  { code: 'pt-br', name: 'Portuguese (Brazil)', flag: '🇧🇷', market: 'Brazil · 215M speakers' },
-]
 
 const UPSELLS: Array<{id: string; name: string; price: number; description: string; icon: string; popular?: boolean; perLanguage?: boolean; details?: string[]; priceAll?: number; savings?: string; originalPrice?: number}> = [
   {
@@ -263,12 +248,10 @@ export default function Home() {
   const [scanLoading, setScanLoading] = useState(false)
   const [showScanStep, setShowScanStep] = useState(false)
   const [affiliateCode, setAffiliateCode] = useState('')
+  const [priceCorrection, setPriceCorrection] = useState('')
+  const calculatorEstimateRef = useRef<PricingCalculatorSelection | null>(null)
 
-  const determineTier = (words: number): 'small' | 'medium' | 'large' => {
-    if (words <= 40000) return 'small'
-    if (words <= 80000) return 'medium'
-    return 'large'
-  }
+  const determineTier = (words: number): PricingTierKey | null => pricingTierForWordCount(words)?.key || null
 
   const calculatePrice = (tier: 'small' | 'medium' | 'large' | null, numLanguages: number) => {
     if (!tier || numLanguages === 0) return '0.00'
@@ -409,10 +392,38 @@ export default function Home() {
 
   // Capture affiliate ref from URL
   useEffect(() => {
-    const params = new URLSearchParams(window.location.search)
-    const ref = params.get('ref')
-    if (ref) setAffiliateCode(ref)
+    const applyLocation = () => {
+      const params = new URLSearchParams(window.location.search)
+      const ref = params.get('ref')
+      if (ref) setAffiliateCode(ref)
+      const estimateWords = Number(params.get('estimateWords'))
+      const estimateLanguages = (params.get('languages') || '').split(',').filter(code => CORE_LANGUAGES.some(language => language.code === code))
+      const estimateTier = pricingTierForWordCount(estimateWords)
+      if (params.get('start') === '1' && estimateTier && estimateLanguages.length) {
+        calculatorEstimateRef.current = { wordCount: estimateWords, languages: estimateLanguages, tier: estimateTier.key, discountPercent: bundleDiscountPercent(estimateLanguages.length), total: 0 }
+        setSelectedLanguages(estimateLanguages)
+        setCurrentView('upload')
+      } else {
+        setCurrentView('landing')
+      }
+    }
+    applyLocation()
+    window.addEventListener('popstate', applyLocation)
+    return () => window.removeEventListener('popstate', applyLocation)
   }, [])
+
+  const startFromCalculator = (selection: PricingCalculatorSelection) => {
+    calculatorEstimateRef.current = selection
+    setSelectedLanguages(selection.languages)
+    setCurrentView('upload')
+    setCheckoutStep(1)
+    const url = new URL(window.location.href)
+    url.searchParams.set('start', '1')
+    url.searchParams.set('estimateWords', String(selection.wordCount))
+    url.searchParams.set('languages', selection.languages.join(','))
+    window.history.pushState({ pricingCalculator: true }, '', url)
+    window.scrollTo({ top: 0, behavior: 'smooth' })
+  }
 
   const handleDrag = useCallback((e: React.DragEvent) => {
     e.preventDefault()
@@ -484,6 +495,14 @@ export default function Home() {
         if (result.wordCount) {
           setWordCount(result.wordCount)
           setSelectedTier(determineTier(result.wordCount))
+          if (calculatorEstimateRef.current) {
+            const actualTier = determineTier(result.wordCount)
+            setPriceCorrection(!actualTier
+              ? `Your uploaded manuscript contains ${Number(result.wordCount).toLocaleString()} words, which is over the 150,000-word standard-pricing limit. Please request a tailored quote instead of continuing to payment.`
+              : actualTier !== calculatorEstimateRef.current.tier
+              ? `Your uploaded manuscript contains ${Number(result.wordCount).toLocaleString()} words, so your price has been updated from the calculator’s ${WORD_TIERS[calculatorEstimateRef.current.tier].bandLabel} band to the ${WORD_TIERS[actualTier].bandLabel} band.`
+              : `We counted ${Number(result.wordCount).toLocaleString()} words in your uploaded manuscript and confirmed the calculator’s ${WORD_TIERS[actualTier].bandLabel} price band.`)
+          }
         }
         setUploadComplete(true)
       } catch (err) {
@@ -708,7 +727,7 @@ export default function Home() {
                 </h1>
 
                 <p className="text-xl text-gray-600 leading-relaxed mb-6 max-w-lg">
-                  Professional AI translation for independent authors, with editorial review and a native-speaker proofreading check included.
+                  Professional AI translation for independent authors, with editorial review and targeted review by a professional translator included.
                 </p>
 
                 <div className="flex flex-wrap gap-3 mb-6">
@@ -811,7 +830,7 @@ export default function Home() {
 
                 <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4 py-4 border-t border-gray-100">
                   <div>
-                    <span className="text-gray-600 text-sm block">AI Translation + AI Editorial Review + Human Proofreading Check</span>
+                    <span className="text-gray-600 text-sm block">AI Translation + AI Editorial Review + Targeted Professional Translator Review</span>
                     <span className="text-xs text-green-600 font-medium">20% bundle discount applied when you translate to 6 or more languages</span>
                   </div>
                   <div className="sm:text-right flex-shrink-0">
@@ -847,8 +866,8 @@ export default function Home() {
               <div className="flex items-center gap-3 text-gray-700 font-semibold text-lg">
                 <span className="text-2xl">👤</span>
                 <span>
-                  Human proofreading check included
-                  <span className="block text-sm font-normal text-gray-500">Reviewed by a native speaker</span>
+                  Targeted professional translator review included
+                  <span className="block text-sm font-normal text-gray-500">Selected passages reviewed where particular care is needed</span>
                 </span>
               </div>
               <div className="flex items-center gap-3 text-gray-700 font-semibold text-lg">
@@ -864,7 +883,7 @@ export default function Home() {
           <div className="max-w-7xl mx-auto px-8">
             <div className="text-center mb-16">
               <h2 className="text-4xl font-bold text-gray-900 mb-4" style={serifFont}>How BookLingua Works</h2>
-              <p className="text-xl text-gray-600">Four distinct stages: cultural scan → AI translation → AI editorial review → native-speaker proofreading check</p>
+              <p className="text-xl text-gray-600">Four distinct stages: cultural scan → AI translation → AI editorial review → targeted professional translator review</p>
             </div>
 
             <div className="grid md:grid-cols-2 xl:grid-cols-4 gap-6 mb-16">
@@ -935,15 +954,15 @@ export default function Home() {
                 <div className="flex items-center gap-4 mb-6">
                   <div className="w-14 h-14 flex-shrink-0 bg-emerald-700 rounded-2xl flex items-center justify-center text-white text-2xl font-bold shadow-lg">4</div>
                   <div>
-                    <h3 className="text-xl font-bold text-gray-900" style={serifFont}>Native-Speaker Proofreading Check</h3>
+                    <h3 className="text-xl font-bold text-gray-900" style={serifFont}>Targeted Professional Translator Review</h3>
                     <p className="text-sm text-emerald-700">Independent human assessment</p>
                   </div>
                 </div>
                 <p className="text-gray-700 mb-4">
-                  A real human proofreader reviews the translation and provides an independent report on how it reads in the target language.
+                  A professional translator reviews selected passages where clarity, consistency, tone and readability require particular care. This is not a full-manuscript human proofread.
                 </p>
                 <ul className="space-y-2">
-                  {['Checks whether the language sounds natural', 'Flags awkward or overly literal wording', 'Reviews tone and regional language', 'Gives you an independent native-speaker assessment'].map((item, i) => (
+                  {['Reviews selected dialogue, humour and idioms', 'Flags awkward or overly literal wording in selected passages', 'Reviews tone and regional language where it matters most', 'Adds professional judgement to passages requiring particular care'].map((item, i) => (
                     <li key={i} className="flex items-start gap-2 text-gray-700 text-sm">
                       <span className="text-emerald-700">✓</span>{item}
                     </li>
@@ -1042,7 +1061,7 @@ export default function Home() {
           <div className="max-w-4xl mx-auto px-8">
             <div className="text-center mb-10">
               <h2 className="text-2xl font-bold text-gray-900 mb-2" style={serifFont}>What You Get Back</h2>
-              <p className="text-gray-600">Your translated files, AI editorial highlights and native-speaker proofreading report</p>
+              <p className="text-gray-600">Your translated files, AI editorial highlights and targeted professional translator review</p>
             </div>
             <div className="grid md:grid-cols-2 gap-6">
               <div className="bg-gradient-to-br from-blue-50 to-white rounded-2xl p-6 border border-[#EBE6F4]">
@@ -1078,8 +1097,9 @@ export default function Home() {
           <div className="max-w-7xl mx-auto px-8">
             <div className="text-center mb-16">
               <h2 className="text-4xl font-bold text-gray-900 mb-4" style={serifFont}>Simple, transparent pricing</h2>
-              <p className="text-xl text-gray-600">Per language • Includes AI editorial review and a native-speaker proofreading check</p>
-              <p className="text-lg text-brand font-medium mt-3">Upload your book and we automatically calculate your exact price — no need to pick a tier</p>
+              <p className="text-xl text-gray-600">Per language • Includes AI editorial review and targeted review by a professional translator</p>
+              <p className="text-lg text-brand font-medium mt-3">Upload your book and we’ll automatically count the words, apply the correct price band and calculate any multi-language discount.</p>
+              <a href="#pricing-calculator" className="mt-2 inline-block font-semibold text-brand underline underline-offset-4">Want to check the price first? Use the calculator below.</a>
             </div>
 
             <div className="grid md:grid-cols-3 gap-6 max-w-4xl mx-auto mb-16">
@@ -1132,6 +1152,8 @@ export default function Home() {
               </p>
             </div>
 
+            <PricingCalculator onStart={startFromCalculator} />
+
             <div className="text-center mt-12">
               <button
                 onClick={() => { trackStartTranslation('pricing'); setCurrentView('upload') }}
@@ -1154,7 +1176,7 @@ export default function Home() {
               {[
                 {
                   q: 'Is this better than Google Translate?',
-                  a: 'Yes - significantly. BookLingua uses a specialist AI translation pass followed by a separate AI editorial-review stage that refines idioms, adapts cultural context, and improves natural phrasing. Every AI editorial change is highlighted so you stay in control. A native-speaker proofreader then carries out an independent human quality check and provides a report.',
+                  a: 'Yes - significantly. BookLingua uses a specialist AI translation pass followed by a separate AI editorial-review stage that refines idioms, adapts cultural context, and improves natural phrasing. Every AI editorial change is highlighted so you stay in control. We then select passages requiring particular care for targeted review by a professional translator.',
                 },
                 {
                   q: 'What file formats do you support?',
@@ -1184,7 +1206,7 @@ export default function Home() {
                 },
                 {
                   q: 'Is AI book translation good enough to publish?',
-                  a: 'It can be — with the right process. BookLingua combines a cultural scan, AI translation, a separate AI editorial-review pass, consistency checks, and an included native-speaker proofreading report. The human proofreader assesses how the translation reads rather than rewriting every sentence.',
+                  a: 'It can be — with the right process. BookLingua combines a cultural scan, AI translation, a separate AI editorial-review pass, consistency checks, and targeted review by a professional translator of passages that require particular care. This is not a full-manuscript human proofread.',
                 },
                 {
                   q: 'What languages can I translate my book into?',
@@ -1192,7 +1214,7 @@ export default function Home() {
                 },
                 {
                   q: 'Can AI translate fiction and keep my author voice?',
-                  a: 'Yes. We use genre-specific prompts and a translation brief to preserve your tone, style, character voices, and narrative pacing. The AI editorial-review stage then refines idioms, dialogue, and cultural references, before a native-speaker proofreader provides an independent assessment.',
+                  a: 'Yes. We use genre-specific prompts and a translation brief to preserve your tone, style, character voices, and narrative pacing. The AI editorial-review stage then refines idioms, dialogue, and cultural references before selected passages receive targeted review by a professional translator.',
                 },
                 {
                   q: 'Will my manuscript formatting be preserved?',
@@ -1200,7 +1222,15 @@ export default function Home() {
                 },
                 {
                   q: 'Is every translation checked by a human?',
-                  a: 'Yes. After BookLingua completes its translation and AI editorial-review stages, a native-speaker proofreader carries out an independent quality check. You receive their report alongside your translated files, so you can see how the book reads to a real person in the target language.',
+                  a: 'Selected passages are checked by a professional translator after BookLingua completes its translation and AI editorial-review stages. The translator focuses on passages where professional judgement is most valuable; this is not a line-by-line proofread of the complete manuscript.',
+                },
+                {
+                  q: 'What does the professional translator review include?',
+                  a: 'BookLingua selects passages that are particularly difficult to translate or where small choices could significantly affect tone, meaning or readability. These might include dialogue, humour, idioms, culturally specific references or emotionally important scenes. A professional translator reviews these passages as an additional human quality check. The review focuses on the parts of the book where professional judgement is most valuable; it is not a full line-by-line proofread of the complete manuscript.',
+                },
+                {
+                  q: 'Will my translated book sound exactly as though it was originally written in the target language?',
+                  a: 'Not necessarily—and that is normal for translated literature. A translation may retain some of the character, rhythm or structure of its original language. BookLingua aims to create a clear, consistent and enjoyable translation while preserving the author’s voice and meaning, rather than rewriting the book to remove every sign that it has been translated.',
                 },
                 {
                   q: 'Can I translate my whole book series?',
@@ -1231,7 +1261,7 @@ export default function Home() {
                     name: 'Is this better than Google Translate?',
                     acceptedAnswer: {
                       '@type': 'Answer',
-                      text: "Yes - significantly. BookLingua uses a specialist AI translation pass followed by a separate AI editorial-review stage. Every AI editorial change is highlighted. A native-speaker proofreader then carries out an independent human quality check and provides a report.",
+                      text: "Yes - significantly. BookLingua uses a specialist AI translation pass followed by a separate AI editorial-review stage. Every AI editorial change is highlighted. We then select passages requiring particular care for targeted review by a professional translator.",
                     },
                   },
                   {
@@ -1287,7 +1317,7 @@ export default function Home() {
                     name: 'Is AI book translation good enough to publish?',
                     acceptedAnswer: {
                       '@type': 'Answer',
-                      text: 'It can be — with the right process. BookLingua combines a cultural scan, AI translation, a separate AI editorial-review pass, consistency checks, and an included native-speaker proofreading report. The human proofreader assesses how the translation reads rather than rewriting every sentence.',
+                      text: 'It can be — with the right process. BookLingua combines a cultural scan, AI translation, a separate AI editorial-review pass, consistency checks, and targeted review by a professional translator of passages that require particular care. This is not a full-manuscript human proofread.',
                     },
                   },
                   {
@@ -1303,7 +1333,7 @@ export default function Home() {
                     name: 'Can AI translate fiction and keep my author voice?',
                     acceptedAnswer: {
                       '@type': 'Answer',
-                      text: 'Yes. We use genre-specific prompts and a translation brief to preserve your tone, style, character voices, and narrative pacing. The AI editorial-review stage refines idioms, dialogue, and cultural references, before a native-speaker proofreader provides an independent assessment.',
+                      text: 'Yes. We use genre-specific prompts and a translation brief to preserve your tone, style, character voices, and narrative pacing. The AI editorial-review stage refines idioms, dialogue, and cultural references before selected passages receive targeted review by a professional translator.',
                     },
                   },
                   {
@@ -1319,7 +1349,23 @@ export default function Home() {
                     name: 'Is every translation checked by a human?',
                     acceptedAnswer: {
                       '@type': 'Answer',
-                      text: 'Yes. After BookLingua completes its translation and AI editorial-review stages, a native-speaker proofreader carries out an independent quality check. You receive their report alongside your translated files, so you can see how the book reads to a real person in the target language.',
+                      text: 'Selected passages are checked by a professional translator after BookLingua completes its translation and AI editorial-review stages. The translator focuses on passages where professional judgement is most valuable; this is not a line-by-line proofread of the complete manuscript.',
+                    },
+                  },
+                  {
+                    '@type': 'Question',
+                    name: 'What does the professional translator review include?',
+                    acceptedAnswer: {
+                      '@type': 'Answer',
+                      text: 'BookLingua selects passages that are particularly difficult to translate or where small choices could significantly affect tone, meaning or readability. These might include dialogue, humour, idioms, culturally specific references or emotionally important scenes. A professional translator reviews these passages as an additional human quality check. The review focuses on the parts of the book where professional judgement is most valuable; it is not a full line-by-line proofread of the complete manuscript.',
+                    },
+                  },
+                  {
+                    '@type': 'Question',
+                    name: 'Will my translated book sound exactly as though it was originally written in the target language?',
+                    acceptedAnswer: {
+                      '@type': 'Answer',
+                      text: 'Not necessarily—and that is normal for translated literature. A translation may retain some of the character, rhythm or structure of its original language. BookLingua aims to create a clear, consistent and enjoyable translation while preserving the author’s voice and meaning, rather than rewriting the book to remove every sign that it has been translated.',
                     },
                   },
                   {
@@ -1352,7 +1398,7 @@ export default function Home() {
       <style>{`@import url('https://fonts.googleapis.com/css2?family=EB+Garamond:ital,wght@0,400;0,500;0,600;1,400&display=swap');`}</style>
 
       <nav className="flex items-center justify-between px-8 py-6 max-w-5xl mx-auto">
-        <button onClick={() => { setCurrentView('landing'); setCheckoutStep(1) }} className="flex items-center gap-3">
+        <button onClick={() => { setCurrentView('landing'); setCheckoutStep(1); const url = new URL(window.location.href); url.searchParams.delete('start'); url.searchParams.delete('estimateWords'); url.searchParams.delete('languages'); window.history.pushState({}, '', url) }} className="flex items-center gap-3">
           <Logo size="lg" />
         </button>
 
@@ -1445,7 +1491,7 @@ export default function Home() {
                         <div className="flex items-center gap-4 mt-2">
                           <span className="text-brand font-semibold">{wordCount.toLocaleString()} words</span>
                           <span className="px-2 py-1 bg-brand-light text-brand-dark text-xs font-semibold rounded-full">
-                            {WORD_TIERS[selectedTier!]?.label}
+                        {selectedTier ? WORD_TIERS[selectedTier].label : 'Tailored quote required'}
                           </span>
                           <span className="px-2 py-1 bg-gray-100 text-gray-600 text-xs font-semibold rounded-full">
                             {fileFormat.toUpperCase()} - formatting preserved
@@ -1459,6 +1505,12 @@ export default function Home() {
                         ✕
                       </button>
                     </div>
+
+                    {priceCorrection && (
+                      <div role="status" className="mb-6 rounded-xl border border-violet-200 bg-[#F3F0F8] p-4 text-sm font-medium leading-6 text-gray-800">
+                        {priceCorrection} The uploaded manuscript count is authoritative and the corrected total will be shown before payment.
+                      </div>
+                    )}
 
                     <div className="grid md:grid-cols-2 gap-6 mb-6">
                       <div>
@@ -1675,15 +1727,16 @@ export default function Home() {
 
                     <button
                       onClick={() => setCheckoutStep(2)}
-                      disabled={!email || !bookTitle || !uploadComplete}
+                      disabled={!email || !bookTitle || !uploadComplete || !selectedTier}
                       className={`w-full py-4 rounded-2xl font-bold text-lg transition-all ${
-                        email && bookTitle && uploadComplete
+                        email && bookTitle && uploadComplete && selectedTier
                           ? 'bg-brand text-white shadow-xl hover:shadow-2xl'
                           : 'bg-gray-200 text-gray-400 cursor-not-allowed'
                       }`}
                     >
-                      Continue to Language Selection →
+                      {selectedTier ? 'Continue to Language Selection →' : 'Request a tailored quote for this manuscript'}
                     </button>
+                    {!selectedTier && uploadComplete && <a href="mailto:hello@booklingua.io?subject=Tailored%20BookLingua%20translation%20quote" onClick={() => trackEvent('pricing_quote_requested', { word_count: wordCount })} className="mt-3 block text-center font-semibold text-brand underline underline-offset-4">Request a quote →</a>}
                   </>
                 )}
               </div>

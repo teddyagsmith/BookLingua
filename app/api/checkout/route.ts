@@ -9,6 +9,8 @@ import { assertHardenedUploadReady } from '@/lib/hardened-upload'
 import { Resend } from 'resend'
 import { newOrderPipelineFields } from '@/lib/customer-package-version'
 import { bundleDiscountPercent } from '@/lib/bundle-pricing'
+import { CORE_LANGUAGE_CODES } from '@/lib/languages'
+import { WORD_TIERS, pricingTierForWordCount, PricingTierKey } from '@/lib/pricing'
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
   apiVersion: '2023-10-16',
@@ -140,14 +142,8 @@ async function validateVoucher(code: string, subtotal: number, email?: string): 
 }
 
 // Server-side price calculation — NEVER trust client-submitted prices
-const WORD_TIERS: Record<string, { maxWords: number; basePrice: number }> = {
-  small:  { maxWords: 40000,  basePrice: 99  },
-  medium: { maxWords: 80000,  basePrice: 149 },
-  large:  { maxWords: 150000, basePrice: 199 },
-}
-
 function calculateServerPrice(
-  tier: string,
+  tier: PricingTierKey,
   selectedLanguages: string[],
   selectedUpsells: string[],
 ): { total: number; nonVoucherable: number } {
@@ -181,10 +177,10 @@ function calculateServerPrice(
 }
 
 // Validate that the submitted tier matches the word count
-function determineTierFromWordCount(wordCount: number): string {
-  if (wordCount <= 40000) return 'small'
-  if (wordCount <= 80000) return 'medium'
-  return 'large'
+function determineTierFromWordCount(wordCount: number): PricingTierKey {
+  const tier = pricingTierForWordCount(wordCount)
+  if (!tier) throw new Error('Word count is outside standard pricing')
+  return tier.key
 }
 
 export async function POST(request: NextRequest) {
@@ -228,13 +224,19 @@ export async function POST(request: NextRequest) {
     const authoritativeFileFormat = authoritativeUpload ? String(authoritativeUpload.file_format) : String(fileFormat)
     if (!Array.isArray(selectedLanguages) || selectedLanguages.length === 0
       || selectedLanguages.some(language => typeof language !== 'string' || !/^[a-z]{2}(?:-[a-z]{2,5})?$/i.test(language))
+      || selectedLanguages.some(language => !CORE_LANGUAGE_CODES.has(language))
       || new Set(selectedLanguages).size !== selectedLanguages.length) {
       return NextResponse.json({ error: 'Invalid target languages' }, { status: 400 })
     }
 
     // ✅ SECURITY: Recalculate price server-side — ignore any client-submitted totalAmount
     // Also validate tier against word count — correct it if client sent wrong tier
-    const validatedTier = determineTierFromWordCount(authoritativeWordCount)
+    let validatedTier: PricingTierKey
+    try {
+      validatedTier = determineTierFromWordCount(authoritativeWordCount)
+    } catch {
+      return NextResponse.json({ error: 'Manuscripts over 150,000 words require a tailored quote.' }, { status: 400 })
+    }
     if (tier !== validatedTier) {
       console.warn(`Tier mismatch: client sent ${tier} for ${wordCount} words, corrected to ${validatedTier}`)
     }

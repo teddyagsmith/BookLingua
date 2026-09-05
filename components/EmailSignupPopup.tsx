@@ -11,6 +11,8 @@ export default function EmailSignupPopup() {
   const [error, setError] = useState('')
 
   useEffect(() => {
+    // Do not interrupt visitors using a shared/direct pricing-calculator link.
+    if (window.location.hash === '#pricing-calculator' || new URLSearchParams(window.location.search).has('pricingEstimate')) return
     // Don't show if already dismissed or subscribed
     const dismissed = sessionStorage.getItem('bl_popup_dismissed')
     if (dismissed) return
