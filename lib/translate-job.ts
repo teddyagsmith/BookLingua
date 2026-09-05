@@ -18,7 +18,7 @@ import { toCanonicalLaunchPack } from './launch-strategy'
 import { LAUNCH_PACK_SCHEMA_VERSION, launchMarket } from './launch-pack-schema'
 import { BOOKLINGUA_MODEL_CONFIG } from './model-config'
 import { finalizeSemanticOrder } from './semantic-finalization'
-import { editorialSystemPrompt, TRANSLATION_SYSTEM_PROMPT } from './editorial-prompt'
+import { editorialSystemPrompt, translationSystemPrompt } from './editorial-prompt'
 import { cachedLaunchPack, launchPackRequestIdentity } from './launch-pack-cache'
 import { recordModelTelemetry } from './model-telemetry'
 import { translateWithDeterministicJsonRecovery } from './semantic-model-recovery'
@@ -46,13 +46,13 @@ const LANGUAGE_NAMES: Record<string, string> = {
 }
 
 const LANGUAGE_SETTINGS: Record<string, string> = {
-  'es-es': `Spanish (Spain) — formal usted for professional/business contexts, tú for casual/conversational. Use Spanish punctuation rules (space before : ; ? !). Prefer European Spanish vocabulary and idioms.`,
-  'es-419': `Spanish (Latin America) — formal usted for professional/business contexts, tú for casual/conversational. Use Spanish punctuation rules (space before : ; ? !). Prefer Latin American vocabulary and idioms.`,
-  'fr': `French (France) — formal vous for professional/business contexts, tu for casual/conversational. Use French punctuation rules (space before : ; ? !).`,
-  'de': `German — follow the translation brief's document-wide reader register without exception. Use German punctuation rules.`,
-  'pt-pt': `Portuguese (Portugal) — formal você for professional/business contexts, tu for casual/conversational. Use Portuguese punctuation rules.`,
-  'pt-br': `Portuguese (Brazil) — formal você for professional/business contexts, tu for casual/conversational. Use Brazilian Portuguese vocabulary and idioms.`,
-  'it': `Italian — formal Lei for professional/business contexts, tu for casual/conversational. Use Italian punctuation rules.`,
+  'es-es': `Spanish (Spain) — address the reader in the register given in the system prompt, and never switch. Use Spanish punctuation rules (space before : ; ? !). Prefer European Spanish vocabulary and idioms.`,
+  'es-419': `Spanish (Latin America) — address the reader in the register given in the system prompt, and never switch. Use Spanish punctuation rules (space before : ; ? !). Prefer Latin American vocabulary and idioms.`,
+  'fr': `French (France) — address the reader in the register given in the system prompt, and never switch. Use French punctuation rules (space before : ; ? !).`,
+  'de': `German — address the reader in the register given in the system prompt, and never switch. Use German punctuation rules.`,
+  'pt-pt': `Portuguese (Portugal) — address the reader in the register given in the system prompt, and never switch. Use Portuguese punctuation rules.`,
+  'pt-br': `Portuguese (Brazil) — address the reader as você throughout; never tu. Use Brazilian Portuguese vocabulary and idioms.`,
+  'it': `Italian — address the reader in the register given in the system prompt, and never switch. Use Italian punctuation rules.`,
 }
 
 const GENRE_GUIDANCE: Record<string, string> = {
@@ -351,7 +351,7 @@ export const translateBook = inngest.createFunction(
                 try{
                   response = await anthropic.messages.create({
                     model: context.pass === 1 ? BOOKLINGUA_MODEL_CONFIG.translation : BOOKLINGUA_MODEL_CONFIG.editorial, max_tokens: 8192,
-                    system: context.pass === 1 ? TRANSLATION_SYSTEM_PROMPT : editorialSystemPrompt(LANGUAGE_NAMES[context.language] || context.language, context.genre),
+                    system: context.pass === 1 ? translationSystemPrompt(context.readerRegisterPrompt) : editorialSystemPrompt(LANGUAGE_NAMES[context.language] || context.language, context.genre, context.readerRegisterPrompt),
                     messages: [{ role: 'user', content: `${renderTranslationBriefPrompt(context.brief)}\n${context.pass === 1 ? 'Translation pass' : 'Editorial pass'}; target language ${context.language}.\n${JSON.stringify(requestBatch)}` }],
                   })
                   const text = response.content.find((block:any) => block.type === 'text')
