@@ -1,7 +1,7 @@
 import AdmZip from 'adm-zip'
 import path from 'path'
 
-export const ARTIFACT_VALIDATOR_VERSION = '1.5'
+export const ARTIFACT_VALIDATOR_VERSION = '1.6'
 export type ArtifactKind = 'epub' | 'docx'
 export interface ArtifactValidationIssue { code: string; message: string; location?: string }
 export interface ArtifactValidationResult {
@@ -152,7 +152,13 @@ export function validateArtifact(buffer: Buffer, kind: ArtifactKind, options: Ar
           const contentNumbers=new Set(chapterNumbers(headings))
           const localizedLandmarks:Record<string,Set<string>>={'pt-br':new Set(['capa','sumário']),'de':new Set(['umschlag','inhaltsverzeichnis']),'fr':new Set(['couverture','table des matières']),'es-es':new Set(['portada','índice'])}
           const landmarks=localizedLandmarks[options.expectedLanguage||'']||new Set<string>()
-          const unmatched=navigationHeadings.filter(value=>{const normalized=value.normalize('NFKC').toLocaleLowerCase().replace(/\s+/g,' ').trim();return!landmarks.has(normalized)&&!normalizedContent.has(normalized)&&!chapterNumbers([value]).some(number=>contentNumbers.has(number))})
+          const numberedNavigation=chapterNumbers(navigationHeadings)
+          // Some publisher EPUBs link "Chapter N" in nav to a content heading that
+          // contains only that chapter's subtitle. When the book has enough real
+          // content headings to account for every numbered nav entry, the href-based
+          // navigation remains useful even though text/number equality is impossible.
+          const subtitleOnlyChapterHeadings=!contentNumbers.size&&numberedNavigation.length>0&&headings.length>=new Set(numberedNavigation).size
+          const unmatched=navigationHeadings.filter(value=>{const normalized=value.normalize('NFKC').toLocaleLowerCase().replace(/\s+/g,' ').trim();return!landmarks.has(normalized)&&!normalizedContent.has(normalized)&&!(subtitleOnlyChapterHeadings&&chapterNumbers([value]).length)&&!chapterNumbers([value]).some(number=>contentNumbers.has(number))})
           if(headings.length&&unmatched.length)errors.push({code:'EPUB_NAV_TEXT_MISMATCH',message:`Navigation labels do not resolve to content headings: ${unmatched.slice(0,5).join(' | ')}`})
           const forbiddenEnglishNav = options.expectedLanguage === 'fr'
             ? /^(?:chapter|table of contents|cover)\b/i // "Introduction" is valid French.

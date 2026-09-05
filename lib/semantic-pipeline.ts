@@ -5,7 +5,7 @@ import { SupabaseClient } from '@supabase/supabase-js'
 import { parseSemanticDocx, parseSemanticEpub, parseSemanticTxt } from './semantic-parser'
 import { evaluateSemanticEligibility, SemanticDocumentV2 } from './semantic-document'
 import { createNodeTranslationInput, nodeBatchFingerprint, NodeTranslationInput, NodeTranslationOutput, validateAndMergeNodeOutput } from './node-translation-contract'
-import { buildFinalSemanticDocx, buildSemanticDocx, buildSemanticEpub, buildSemanticEpubFromDocument, buildSemanticReviewDocx, consolidatedArtifactNodes, epubEmphasisByLocation, normalizeEpubImages, resolveBookAuthor } from './semantic-artifacts'
+import { artifactDocxNodes, buildFinalSemanticDocx, buildSemanticDocx, buildSemanticEpub, buildSemanticEpubFromDocument, buildSemanticReviewDocx, consolidatedArtifactNodes, epubEmphasisByLocation, normalizeEpubImages, resolveBookAuthor } from './semantic-artifacts'
 import { buildChapterMap, renderChapterMapCsv, renderChapterMapDocx } from './chapter-map'
 import { validateArtifact } from './artifact-validation-v2'
 import { storeImmutableArtifact } from './artifact-store'
@@ -189,11 +189,12 @@ async function cachedTranslation(input: SemanticPipelineInput, batch: NodeTransl
  * against this rather than a fixed number, so a book with no italics is not failed for
  * having none, and a book with 517 emphasised blocks cannot deliver zero.
  */
-function sourceEmphasisCounts(source: Buffer, sourceFormat: 'epub'|'docx'|'txt'): { italic: number; bold: number; superscript: number } {
+function sourceEmphasisCounts(source: Buffer, sourceFormat: 'epub'|'docx'|'txt',locations?:Set<string>): { italic: number; bold: number; superscript: number } {
   if (sourceFormat !== 'epub') return { italic: 0, bold: 0, superscript: 0 }
   let italic = 0, bold = 0, superscript = 0
   try {
-    for (const runs of Array.from(epubEmphasisByLocation(source).values())) {
+    for (const [location,runs] of Array.from(epubEmphasisByLocation(source).entries())) {
+      if(locations&&!locations.has(location))continue
       for (const run of runs) {
         if (run.italic) italic++
         if (run.bold) bold++
@@ -339,7 +340,7 @@ export async function runSemanticPipeline(input: SemanticPipelineInput) {
   // The delivery contract reads the bytes the customer will open, not the pipeline's own
   // record of what it built. Everything asserted here has shipped broken at least once.
   const finalDocx = await buildFinalSemanticDocx(input.source, pass2, titleAuthority.effectiveValue)
-  const deliveredNodes = consolidatedArtifactNodes(pass2)
+  const deliveredNodes = artifactDocxNodes(pass2)
   const headingStyles: Record<string, number> = {}
   for (const node of deliveredNodes) {
     if (node.type !== 'heading') continue
@@ -353,7 +354,7 @@ export async function runSemanticPipeline(input: SemanticPipelineInput) {
     readerRegister,
     styles: headingStyles,
     minimumParagraphs: deliveredNodes.length,
-    emphasis: sourceEmphasisCounts(input.source, input.sourceFormat),
+    emphasis: sourceEmphasisCounts(input.source, input.sourceFormat,new Set(deliveredNodes.map(node=>node.sourceLocation))),
   })
   const blockingDeliveryFailures=deliveryFailures.filter(failure=>failure.severity!=='warning')
   await validationReport(input.supabase, {

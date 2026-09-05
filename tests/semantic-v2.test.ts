@@ -185,6 +185,16 @@ test('EPUB customer gate blocks wrong metadata, untranslated nav, and missing co
   for(const code of ['EPUB_LANGUAGE','EPUB_CREATOR','EPUB_NAV_CONTENT_UNVERIFIABLE','EPUB_NAV_WRONG_LANGUAGE'])assert.ok(result.errors.some(error=>error.code===code),code)
 })
 
+test('EPUB navigation chapter numbers may resolve to subtitle-only content headings',()=>{
+  const zip:any=new AdmZip();zip.addFile('mimetype',Buffer.from('application/epub+zip'));zip.getEntry('mimetype').header.method=0
+  zip.addFile('META-INF/container.xml',Buffer.from('<container><rootfiles><rootfile full-path="OPS/book.opf"/></rootfiles></container>'))
+  zip.addFile('OPS/book.opf',Buffer.from('<package><metadata xmlns:dc="http://purl.org/dc/elements/1.1/"><dc:title>Libro</dc:title><dc:language>es-es</dc:language><dc:creator>Autor</dc:creator><dc:identifier>id</dc:identifier></metadata><manifest><item id="b" href="b.xhtml" media-type="application/xhtml+xml"/><item id="n" href="nav.xhtml" media-type="application/xhtml+xml" properties="nav"/></manifest><spine><itemref idref="b"/></spine></package>'))
+  zip.addFile('OPS/b.xhtml',Buffer.from('<html lang="es-es"><body lang="es-es"><h1 id="c1">Crecer en Belfast</h1><p>Texto.</p><h1 id="c2">Dejar el hogar</h1><p>Texto.</p></body></html>'))
+  zip.addFile('OPS/nav.xhtml',Buffer.from('<html><body><nav><ol><li><a href="b.xhtml#c1">Capítulo 1</a></li><li><a href="b.xhtml#c2">Capítulo 2</a></li></ol></nav></body></html>'))
+  const result=validateArtifact(zip.toBuffer(),'epub',{expectedLanguage:'es-es',expectedCreator:'Autor'})
+  assert.ok(!result.errors.some(error=>error.code==='EPUB_NAV_TEXT_MISMATCH'),JSON.stringify(result.errors))
+})
+
 test('customer gate blocks double-escaped visible entities',()=>{
   const doc:any=new AdmZip();
   return Packer.toBuffer(new Document({sections:[{children:[new Paragraph('A &quot;broken&quot; line')]}]})).then(bytes=>{

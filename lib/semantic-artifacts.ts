@@ -125,7 +125,7 @@ export function consolidatedArtifactNodes(document:SemanticDocumentV2):SemanticN
   return output
 }
 
-function documentNodesWithGeneratedToc(document:SemanticDocumentV2):SemanticNodeV2[]{
+export function artifactDocxNodes(document:SemanticDocumentV2):SemanticNodeV2[]{
   const nodes=consolidatedArtifactNodes(document)
   const tocIndex=nodes.findIndex(node=>/^(?:table of contents|contents)$/i.test(decodeVisibleEntities(node.sourceText).trim()))
   const firstBodyHeading=nodes.findIndex((node,index)=>index>tocIndex&&node.type==='heading')
@@ -162,7 +162,7 @@ export async function buildSemanticDocx(document: SemanticDocumentV2, title: str
   assertTranslated(document)
   const children: Paragraph[] = []
   if (!translatedTitleAlreadyPresent(document, title)) children.push(new Paragraph({ text: title, heading: HeadingLevel.TITLE }))
-  documentNodesWithGeneratedToc(document).forEach((node, index) => {
+  artifactDocxNodes(document).forEach((node, index) => {
     const sourceRuns = emphasis?.get(node.sourceLocation)
     const distributed = sourceRuns && distributeEmphasis(sourceRuns, node.translatedText!)
     children.push(nodeParagraph(node, node.translatedText!, distributed ? emphasisTextRuns(distributed) : undefined, index))
@@ -227,7 +227,7 @@ export async function buildSemanticReviewDocx(pass1: SemanticDocumentV2, pass2: 
     new Paragraph('Read this as a polished translation with editorial changes marked in place. Yellow strikethrough shows wording removed during editorial review; adjacent yellow text shows its replacement. Unmarked text was unchanged. Accept or reject marked revisions in Word as appropriate.'),
     ...(changeCount === 0 ? [new Paragraph('Editorial review completed: no wording changes were required, so this document intentionally contains no highlighted revisions.')] : []),
   ]
-  const firstNodes=documentNodesWithGeneratedToc(pass1),secondNodes=documentNodesWithGeneratedToc(pass2)
+  const firstNodes=artifactDocxNodes(pass1),secondNodes=artifactDocxNodes(pass2)
   firstNodes.forEach((first, index) => {
     const second = secondNodes[index]
     if (!second || second.id !== first.id) throw new Error('Review semantic identity mismatch')
