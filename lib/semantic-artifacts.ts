@@ -7,6 +7,8 @@ import { SemanticDocumentV2, SemanticNodeV2, validateSemanticDocument } from './
 import { deterministicDocx } from './deterministic-docx'
 import { BOOKLINGUA_CLEAN_BOOK_STYLE } from './formatting-policy'
 import { TitleAuthority } from './authoritative-title'
+import { blockEmphasisRuns, distributeEmphasis, EmphasisRun, parseInlineStyles } from './inline-emphasis'
+import { epubBlockMarkup } from './semantic-parser'
 
 function heading(level: number | null): typeof HeadingLevel[keyof typeof HeadingLevel] {
   return level === 1 ? HeadingLevel.HEADING_1 : level === 2 ? HeadingLevel.HEADING_2 : level === 3 ? HeadingLevel.HEADING_3 : HeadingLevel.HEADING_4
@@ -16,6 +18,30 @@ function assertTranslated(document: SemanticDocumentV2): void {
   const errors = validateSemanticDocument(document)
   if (errors.length) throw new Error(errors.join('; '))
   if (document.nodes.some(node => !node.translatedText?.trim())) throw new Error('Semantic artifact input has missing translated nodes')
+}
+
+function emphasisTextRuns(runs: EmphasisRun[]): TextRun[] {
+  return runs.map(run => new TextRun({
+    text: decodeVisibleEntities(run.text),
+    italics: run.italic || undefined,
+    bold: run.bold || undefined,
+    superScript: run.superscript || undefined,
+  }))
+}
+
+/** Emphasis for each node, keyed by sourceLocation, recovered from an EPUB source. */
+export function epubEmphasisByLocation(source: Buffer): Map<string, EmphasisRun[]> {
+  const zip: any = new AdmZip(source)
+  const css = zip.getEntries()
+    .filter((entry: any) => entry.entryName.toLowerCase().endsWith('.css'))
+    .map((entry: any) => entry.getData().toString('utf8')).join('\n')
+  const styles = parseInlineStyles(css)
+  const result = new Map<string, EmphasisRun[]>()
+  for (const [location, inner] of Array.from(epubBlockMarkup(source))) {
+    const runs = blockEmphasisRuns(inner, styles)
+    if (runs.some(run => run.italic || run.bold || run.superscript)) result.set(location, runs)
+  }
+  return result
 }
 
 function nodeParagraph(node: SemanticNodeV2, text: string, runs?: TextRun[], index = 0): Paragraph {
@@ -132,11 +158,15 @@ export function decodeVisibleEntities(value:string):string{
   return output
 }
 
-export async function buildSemanticDocx(document: SemanticDocumentV2, title: string, mode: 'pass1' | 'final'): Promise<Buffer> {
+export async function buildSemanticDocx(document: SemanticDocumentV2, title: string, mode: 'pass1' | 'final', emphasis?: Map<string, EmphasisRun[]>): Promise<Buffer> {
   assertTranslated(document)
   const children: Paragraph[] = []
   if (!translatedTitleAlreadyPresent(document, title)) children.push(new Paragraph({ text: title, heading: HeadingLevel.TITLE }))
-  documentNodesWithGeneratedToc(document).forEach((node, index) => children.push(nodeParagraph(node, node.translatedText!, undefined, index)))
+  documentNodesWithGeneratedToc(document).forEach((node, index) => {
+    const sourceRuns = emphasis?.get(node.sourceLocation)
+    const distributed = sourceRuns && distributeEmphasis(sourceRuns, node.translatedText!)
+    children.push(nodeParagraph(node, node.translatedText!, distributed ? emphasisTextRuns(distributed) : undefined, index))
+  })
   return deterministicDocx(ensureDefaultNormalStyle(Buffer.from(await Packer.toBuffer(new Document({
     styles: semanticStyles(),
     sections: [{ properties: { page: { margin: BOOKLINGUA_CLEAN_BOOK_STYLE.pageMarginsTwips } }, children }],
@@ -320,7 +350,8 @@ export async function buildFinalSemanticDocx(source:Buffer,document:SemanticDocu
       if(document.parserConfidence>=0.85)throw error
     }
   }
-  return buildSemanticDocx(document,title,'final')
+  const emphasis = document.sourceFormat === 'epub' ? epubEmphasisByLocation(source) : undefined
+  return buildSemanticDocx(document,title,'final',emphasis)
 }
 
 function replaceTextPreservingInline(inner: string, translated: string): string {

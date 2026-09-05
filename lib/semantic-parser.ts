@@ -52,7 +52,7 @@ function nodesFromSegments(input: {
   }
 }
 
-const BLOCK_PATTERN = /<(h[1-6]|p|li)\b([^>]*)>([\s\S]*?)<\/\1>/gi
+export const BLOCK_PATTERN = /<(h[1-6]|p|li)\b([^>]*)>([\s\S]*?)<\/\1>/gi
 
 /** Class names used by block elements, for building the heading model. */
 export function collectBlockClasses(html: string): Map<string, number> {
@@ -115,6 +115,42 @@ function countNavEntries(entries: Array<{ entryName: string; getData(): Buffer }
   const navPoints = (text.match(/<navPoint\b/gi) || []).length
   if (navPoints) return navPoints
   return (text.match(/<a\b[^>]*href=/gi) || []).length
+}
+
+/** Every parsed block with its sourceLocation and original inner HTML, enumerated exactly
+ *  as parseSemanticEpub does, so callers can recover per-block markup after the fact. */
+export function epubBlockMarkup(buffer: Buffer): Map<string, string> {
+  const zip = new AdmZip(buffer)
+  const entries = zip.getEntries()
+  const container = entries.find(entry => entry.entryName === 'META-INF/container.xml')
+  const rootfile = container?.getData().toString('utf8').match(/<rootfile\b[^>]*>/i)?.[0]
+  const opfPath = rootfile ? attributes(rootfile)['full-path'] : undefined
+  const result = new Map<string, string>()
+  if (!opfPath) return result
+  const opf = entries.find(entry => entry.entryName === opfPath)?.getData().toString('utf8')
+  if (!opf) return result
+  const opfDir = opfPath.includes('/') ? opfPath.slice(0, opfPath.lastIndexOf('/') + 1) : ''
+  const manifest = new Map<string, string>()
+  for (const match of Array.from(opf.matchAll(/<item\b[^>]*>/gi))) {
+    const item = attributes(match[0]); if (item.id && item.href) manifest.set(item.id, item.href)
+  }
+  for (const idref of Array.from(opf.matchAll(/<itemref\b[^>]*>/gi)).map(match => attributes(match[0]).idref).filter(Boolean)) {
+    const href = manifest.get(idref)
+    if (!href) continue
+    let contentPath: string
+    try { contentPath = safeRelative(opfDir, href) } catch { continue }
+    const html = entries.find(entry => entry.entryName === contentPath)?.getData().toString('utf8')
+    if (!html) continue
+    let index = 0
+    BLOCK_PATTERN.lastIndex = 0
+    let match: RegExpExecArray | null
+    while ((match = BLOCK_PATTERN.exec(html)) !== null) {
+      if (!blockText(match[3])) continue
+      result.set(`${contentPath}:block:${index}`, match[3])
+      index++
+    }
+  }
+  return result
 }
 
 export function parseSemanticEpub(buffer: Buffer, sourceHash: string): SemanticDocumentV2 {
