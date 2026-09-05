@@ -1,6 +1,7 @@
 import AdmZip from 'adm-zip'
 import { createHash } from 'crypto'
 import { ReaderRegister, readerRegisterViolations, languageHasReaderRegister } from './reader-register'
+import { quoteStyle } from './typography'
 
 /**
  * The delivery contract.
@@ -45,12 +46,15 @@ export function inspectDeliveredDocx(buffer: Buffer): DocxFacts {
     // Without a style flagged default, Pages renders every paragraph as the first style
     // it finds. LibreOffice guesses sanely, which is how this shipped unnoticed.
     hasDefaultStyle: /w:default="1"/.test(styles),
-    text: (Array.from(document.matchAll(/<w:t[^>]*>([^<]*)<\/w:t>/g)) as RegExpMatchArray[]).map(match => match[1]).join(' '),
+    text: (Array.from(document.matchAll(/<w:p[ >][\s\S]*?<\/w:p>/g)) as RegExpMatchArray[]).map(paragraph =>
+      (Array.from(paragraph[0].matchAll(/<w:t[^>]*>([^<]*)<\/w:t>/g)) as RegExpMatchArray[]).map(match=>match[1]).join('')
+    ).join('\n'),
   }
 }
 
 export interface DeliveryExpectation {
   language: string
+  genre?: string
   readerRegister: ReaderRegister
   /** Required paragraph counts per style. Structure must survive translation unchanged. */
   styles: Record<string, number>
@@ -69,7 +73,22 @@ const CORRUPTION = [
   { code: 'ASCII_APOSTROPHE', pattern: /[A-Za-zÀ-ÿ]'[A-Za-zÀ-ÿ]/g, describe: 'straight apostrophe between letters' },
 ]
 
-export interface ContractFailure { code: string; detail: string }
+export interface ContractFailure { code: string; detail: string; severity?: 'warning' }
+
+function escapePattern(value:string):string{return value.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')}
+
+/** Remove character dialogue before evaluating the narrator/author's reader address. */
+export function stripQuotedSpeech(text:string,language:string):string{
+  const style=quoteStyle(language)
+  let prose=text
+  if(style){
+    const open=style.open.trim(),close=style.close.trim()
+    prose=prose.replace(new RegExp(`${escapePattern(open)}[\\s\\S]*?${escapePattern(close)}`,'g'),' ')
+  }
+  return prose.replace(/^[\u2013\u2014\u2015]\s*.*$/gm,' ')
+}
+
+const FICTION_GENRES=/romance|fantasy|romantasy|fiction|young adult|\bya\b|children|middle grade|thriller|mystery|horror|erotic/i
 
 /**
  * Assertions on the delivered file. A failure here fails the build; nothing in this list
@@ -106,11 +125,12 @@ export function checkDeliveredDocx(facts: DocxFacts, expectation: DeliveryExpect
     }
   }
   if (languageHasReaderRegister(expectation.language)) {
-    const violations = readerRegisterViolations(facts.text, expectation.language, expectation.readerRegister)
+    const violations = readerRegisterViolations(stripQuotedSpeech(facts.text,expectation.language), expectation.language, expectation.readerRegister)
     if (violations.length) {
       failures.push({
         code: 'READER_REGISTER',
         detail: `${violations.length} uses of the wrong form of address for a ${expectation.readerRegister} book, e.g. "${violations[0].excerpt}"`,
+        ...(FICTION_GENRES.test(expectation.genre||'')?{severity:'warning' as const}:{}),
       })
     }
   }

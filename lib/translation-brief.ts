@@ -1,6 +1,5 @@
 import { SupabaseClient } from '@supabase/supabase-js'
 import { createHash } from 'crypto'
-import { defaultReaderRegister, ReaderRegister, readerRegisterInstruction } from './reader-register'
 
 export const TRANSLATION_BRIEF_SCHEMA_VERSION = '1.0'
 
@@ -20,7 +19,6 @@ export interface TranslationBriefV1 {
   approvedAt: string
   revision: number
   approvalSource: 'author_scan' | 'legacy_import' | 'admin'
-  readerRegister: ReaderRegister
   items: TranslationBriefItem[]
 }
 
@@ -54,10 +52,7 @@ export function buildTranslationBrief(input: {
   revision?: number
   approvalSource?: TranslationBriefV1['approvalSource']
   decisions: Array<Record<string, unknown>>
-  genre?: string
-  readerRegister?: ReaderRegister
 }): TranslationBriefV1 {
-  const readerRegister=input.readerRegister||defaultReaderRegister(input.language,input.genre)
   return {
     schemaVersion: TRANSLATION_BRIEF_SCHEMA_VERSION,
     language: input.language,
@@ -65,7 +60,6 @@ export function buildTranslationBrief(input: {
     approvedAt: input.approvedAt,
     revision: input.revision || 1,
     approvalSource: input.approvalSource || 'author_scan',
-    readerRegister,
     items: input.decisions.map((decision, index) => ({
       id: `brief-${index + 1}`,
       sourceTerm: String(decision.term || decision.sourceTerm || ''),
@@ -84,11 +78,7 @@ export function renderTranslationBriefPrompt(brief: TranslationBriefV1): string 
   return `TRANSLATION BRIEF v${brief.schemaVersion} (${brief.language})
 Brief fingerprint: ${brief.sourceManifestFingerprint}
 Follow these author-approved decisions in this pass without exception:
-${instructions}
-
-READER REGISTER (document-wide absolute rule):
-${readerRegisterInstruction(brief.readerRegister)}
-Apply this to pronouns, possessives, verb forms, imperatives, headings, captions and rhetorical questions in every batch.`
+${instructions}`
 }
 
 export async function loadTranslationBrief(
@@ -130,8 +120,6 @@ export async function storeTranslationBriefs(input: {
   approvedAt: string
   approvalSource?: TranslationBriefV1['approvalSource']
   decisions: Array<Record<string, unknown>>
-  genre?: string
-  readerRegisters?: Partial<Record<string,ReaderRegister>>
 }): Promise<void> {
   if (!input.approvedAt) throw new Error('Author approval timestamp is required')
   for (const language of input.languages) {
@@ -139,7 +127,7 @@ export async function storeTranslationBriefs(input: {
       .select('revision, content_fingerprint').eq('order_id', input.orderId).eq('language', language)
       .eq('schema_version', TRANSLATION_BRIEF_SCHEMA_VERSION).order('revision', { ascending: false }).limit(1).maybeSingle()
     if (latestError) throw new Error(`Failed to inspect translation brief history: ${latestError.message}`)
-    const brief = buildTranslationBrief({ ...input, language, readerRegister:input.readerRegisters?.[language], revision: (latest?.revision || 0) + 1 })
+    const brief = buildTranslationBrief({ ...input, language, revision: (latest?.revision || 0) + 1 })
     const contentFingerprint = translationBriefFingerprint(brief)
     if (latest?.content_fingerprint === contentFingerprint) continue
     const { error } = await input.supabase.from('translation_briefs').insert({
@@ -163,12 +151,10 @@ export function prepareTranslationBriefRows(input: {
   approvedAt: string
   decisions: Array<Record<string, unknown>>
   approvalSource?: TranslationBriefV1['approvalSource']
-  genre?: string
-  readerRegisters?: Partial<Record<string,ReaderRegister>>
 }): Array<Record<string, unknown>> {
   if (!input.approvedAt) throw new Error('Author approval timestamp is required')
   return input.languages.map(language => {
-    const brief = buildTranslationBrief({ ...input, language, readerRegister:input.readerRegisters?.[language], revision: 1 })
+    const brief = buildTranslationBrief({ ...input, language, revision: 1 })
     return {
       language,
       schema_version: brief.schemaVersion,

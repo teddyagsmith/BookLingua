@@ -3,6 +3,7 @@ import { google } from 'googleapis'
 import { createHash } from 'node:crypto'
 import { Readable } from 'node:stream'
 import { readFile } from 'node:fs/promises'
+import {assertDeliveryContract,checkUploadedObject} from '../lib/delivery-contract'
 
 const ORDER_ID='bdacf80e-7e6d-4b8b-8e81-e7f442b123ec'
 const FOLDER_ID='1MMCHxu9N7bPk8WDp27XD2h0xEbZLp0aK'
@@ -19,9 +20,9 @@ async function main(){
   const buildId=build.id
   const {data:manifestRow,error:manifestError}=await db.from('package_manifests').select('manifest').eq('order_id',ORDER_ID).eq('language','de').eq('build_id',buildId).eq('status','pass').single()
   if(manifestError||!manifestRow)throw new Error(manifestError?.message||'Passed manifest missing')
-  const before=await drive.files.list({q:`'${FOLDER_ID}' in parents and trashed=false`,fields:'files(id,name,mimeType)',pageSize:1000})
+  const before=await drive.files.list({q:`'${FOLDER_ID}' in parents and trashed=false`,fields:'files(id,name,mimeType,size,modifiedTime)',pageSize:1000})
   const old=before.data.files||[]
-  const staged:Array<{id:string;name:string;md5:string;size:number}>=[]
+  const staged:Array<{id:string;name:string;md5:string;size:number;data:Buffer}>=[]
   try{
     for(const artifact of manifestRow.manifest.artifacts){
       const {data,error}=await db.storage.from(artifact.storageBucket).download(artifact.storagePath)
@@ -32,7 +33,7 @@ async function main(){
       const uploaded=await drive.files.create({requestBody:{name:stagedName,parents:[FOLDER_ID]},media:{mimeType:mime(artifact.filename),body:Readable.from(bytes)},fields:'id,name,size,md5Checksum'})
       const localMd5=createHash('md5').update(bytes).digest('hex')
       if(uploaded.data.md5Checksum!==localMd5||Number(uploaded.data.size)!==bytes.length)throw new Error(`Drive checksum mismatch: ${artifact.filename}`)
-      staged.push({id:uploaded.data.id!,name:artifact.filename,md5:localMd5,size:bytes.length})
+      staged.push({id:uploaded.data.id!,name:artifact.filename,md5:localMd5,size:bytes.length,data:bytes})
     }
     if(staged.length!==10)throw new Error(`Expected 10 replacements, staged ${staged.length}`)
     for(const file of old)await drive.files.update({fileId:file.id!,requestBody:{trashed:true}})
@@ -45,6 +46,7 @@ async function main(){
   const files=after.data.files||[]
   if(files.length!==10)throw new Error(`Final Drive inventory has ${files.length} files, expected 10`)
   for(const expected of staged){const actual=files.find(file=>file.name===expected.name);if(!actual||actual.md5Checksum!==expected.md5||Number(actual.size)!==expected.size)throw new Error(`Final verification failed: ${expected.name}`)}
+  for(const expected of staged){const metadata=(await drive.files.get({fileId:expected.id,fields:'id,size,modifiedTime'})).data,media=await drive.files.get({fileId:expected.id,alt:'media'},{responseType:'arraybuffer'}),served=Buffer.from(media.data as ArrayBuffer),previous=old.find(file=>file.name===expected.name);assertDeliveryContract(checkUploadedObject(expected.data,{fileId:metadata.id!,sizeBytes:Number(metadata.size),modifiedTime:metadata.modifiedTime||undefined,checksum:createHash('sha256').update(served).digest('hex')},previous?.id?{fileId:previous.id,sizeBytes:Number(previous.size),modifiedTime:previous.modifiedTime||undefined}:undefined),`Castor Drive ${expected.name}`)}
   console.log(JSON.stringify({folderId:FOLDER_ID,buildId,oldFilesTrashed:old.length,newFilesVerified:files.length,files:files.map(file=>({name:file.name,size:Number(file.size),md5:file.md5Checksum}))},null,2))
 }
 main().catch(error=>{console.error(error);process.exit(1)})

@@ -66,7 +66,6 @@ export async function POST(request: NextRequest) {
       sessionId,
       uploadToken,
       book_setting,
-      readerRegisters,
     } = session.metadata!
     if (HARDENED_V1_ENABLED && !verifyUploadIdentity(sessionId, uploadToken)) {
       return NextResponse.json({ error: 'Invalid upload identity' }, { status: 400 })
@@ -114,7 +113,7 @@ export async function POST(request: NextRequest) {
         .single()
 
       if (tempUpload) {
-        await linkSourceUploadToOrder(getSupabaseAdmin(), order.id, tempUpload, languages, selectedGenre, JSON.parse(readerRegisters || '{}'))
+        await linkSourceUploadToOrder(getSupabaseAdmin(), order.id, tempUpload, languages)
 
         // Carry over pre-payment glossary decisions and cultural terms if present
         if (!HARDENED_V1_ENABLED && tempUpload.glossary_decisions) {

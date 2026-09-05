@@ -29,6 +29,7 @@ function docx(options: {
 
 const expectation = {
   language: 'de',
+  genre: 'Self-Help',
   readerRegister: 'formal' as const,
   styles: { Heading1: 2 },
   paragraphs: 9,
@@ -64,6 +65,18 @@ test('register drift fails the delivered German file', () => {
   const register = failures.find(failure => failure.code === 'READER_REGISTER')
   assert.ok(register, 'expected a register failure')
   assert.match(register!.detail, /wrong form of address for a formal book/)
+})
+
+test('German romance dialogue inside low-high quotes does not violate narration register',()=>{
+  const facts=inspectDeliveredDocx(docx({text:'Mara sagte: „Du bedeutest mir alles, dein Herz gehört zu mir.“'}))
+  assert.deepEqual(checkDeliveredDocx(facts,{...expectation,genre:'Romance'}).filter(f=>f.code==='READER_REGISTER'),[])
+})
+
+test('German self-help instruction outside quotes remains a hard register failure',()=>{
+  const facts=inspectDeliveredDocx(docx({text:'Beginne damit, deine Gewohnheiten zu prüfen.'}))
+  const failure=checkDeliveredDocx(facts,{...expectation,genre:'Self-Help'}).find(f=>f.code==='READER_REGISTER')
+  assert.ok(failure)
+  assert.equal(failure!.severity,undefined)
 })
 
 test('languages of one order must be structurally the same book', () => {

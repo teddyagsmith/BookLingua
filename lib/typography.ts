@@ -10,10 +10,10 @@
 
 const APOSTROPHE = '’'
 
-interface QuoteStyle { open: string; close: string }
+export interface QuoteStyle { open: string; close: string }
 
 /** Book-publishing convention per language. */
-const QUOTE_STYLES: Record<string, QuoteStyle> = {
+export const QUOTE_STYLES: Record<string, QuoteStyle> = {
   fr: { open: '« ', close: ' »' },
   de: { open: '„', close: '“' },
   'es-es': { open: '«', close: '»' },
@@ -23,7 +23,7 @@ const QUOTE_STYLES: Record<string, QuoteStyle> = {
   it: { open: '«', close: '»' },
 }
 
-function quoteStyle(language: string): QuoteStyle | undefined {
+export function quoteStyle(language: string): QuoteStyle | undefined {
   return QUOTE_STYLES[language] || QUOTE_STYLES[language.split('-')[0]]
 }
 

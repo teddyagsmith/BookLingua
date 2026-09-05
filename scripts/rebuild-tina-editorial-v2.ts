@@ -85,7 +85,7 @@ async function main() {
     const priorBrief = briefRow.brief as TranslationBriefV1
     const registerItem={id:'reader-register',sourceTerm:'Reader address and every second-person form',issueType:'reader_register',authorDecision:'formal_sie',targetInstruction:'Use formal Sie/Ihr/Ihnen consistently throughout all author-to-reader passages. Never switch to du/dich/dir/dein in those passages, including headings.'}
     const hasRegisterItem=priorBrief.items.some(item=>item.issueType==='reader_register'&&item.authorDecision==='formal_sie')
-    const brief:TranslationBriefV1=priorBrief.readerRegister==='formal_sie'&&hasRegisterItem?priorBrief:{...priorBrief,revision:Number(briefRow.revision)+1,approvedAt:new Date().toISOString(),approvalSource:'admin',readerRegister:'formal_sie',items:[...priorBrief.items.filter(item=>item.issueType!=='reader_register'),registerItem]}
+    const brief:TranslationBriefV1=hasRegisterItem?priorBrief:{...priorBrief,revision:Number(briefRow.revision)+1,approvedAt:new Date().toISOString(),approvalSource:'admin',items:[...priorBrief.items.filter(item=>item.issueType!=='reader_register'),registerItem]}
     if(brief!==priorBrief){
       const {error:briefInsertError}=await db.from('translation_briefs').insert({order_id:ORDER,language,schema_version:brief.schemaVersion,revision:brief.revision,source_manifest_fingerprint:brief.sourceManifestFingerprint,content_fingerprint:translationBriefFingerprint(brief),approved_at:brief.approvedAt,approval_source:brief.approvalSource,brief})
       if(briefInsertError)throw new Error(`${language}: formal register brief insert failed: ${briefInsertError.message}`)

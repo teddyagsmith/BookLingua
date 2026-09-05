@@ -349,18 +349,20 @@ export async function runSemanticPipeline(input: SemanticPipelineInput) {
   }
   const deliveryFailures = checkDeliveredDocx(inspectDeliveredDocx(finalDocx), {
     language: input.language,
+    genre: input.genre,
     readerRegister,
     styles: headingStyles,
     minimumParagraphs: deliveredNodes.length,
     emphasis: sourceEmphasisCounts(input.source, input.sourceFormat),
   })
+  const blockingDeliveryFailures=deliveryFailures.filter(failure=>failure.severity!=='warning')
   await validationReport(input.supabase, {
     orderId: input.orderId, language: input.language, buildId, stage: 'delivery_contract',
-    passed: deliveryFailures.length === 0,
+    passed: blockingDeliveryFailures.length === 0,
     errors: deliveryFailures.length ? deliveryFailures.map(failure => ({ code: failure.code, message: failure.detail })) : undefined,
     metrics: { readerRegister, headingStyles, nodes: deliveredNodes.length },
   })
-  if (deliveryFailures.length) throw new Error(`Delivery contract failed for ${input.language}: ${describeFailures(deliveryFailures)}`)
+  if (blockingDeliveryFailures.length) throw new Error(`Delivery contract failed for ${input.language}: ${describeFailures(blockingDeliveryFailures)}`)
   await storeValidated(input, buildId, 'final_docx', `${input.title} - ${input.language} - Final.docx`, finalDocx, 'docx', true)
   const map = buildChapterMap(pass2)
   const sourceHeadingCount=consolidatedArtifactNodes(sourceDocument).filter(node=>node.type==='heading').length
