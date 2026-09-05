@@ -22,6 +22,7 @@ import { assertCompleteBatchCoverage, createDeterministicSemanticBatches, semant
 import { recordModelTelemetry } from './model-telemetry'
 import { assertSourceAwareDuplicateParity, assertSourceAwareHeadingDuplicateParity } from './semantic-duplicate-validation'
 import { EDITORIAL_PROMPT_VERSION, TRANSLATION_PROMPT_VERSION } from './editorial-prompt'
+import { normalizeTypography } from './typography'
 
 /** Below this share of nodes changed, an editorial pass is treated as having done nothing. */
 export const EDITORIAL_MIN_CHANGE_RATIO = 0.01
@@ -164,6 +165,14 @@ async function cachedTranslation(input: SemanticPipelineInput, batch: NodeTransl
   return validated
 }
 
+/** Typewriter punctuation is corrected on the way out of every pass, so the stored
+ *  documents, the review diff and every artifact agree. */
+function normalizePassTypography(nodes: SemanticDocumentV2['nodes'], language: string): SemanticDocumentV2['nodes'] {
+  return nodes.map(node => node.translatedText
+    ? { ...node, translatedText: normalizeTypography(node.translatedText, language) }
+    : node)
+}
+
 async function runBatchedPass(input: SemanticPipelineInput, authoritative: SemanticDocumentV2['nodes'], pass: 1|2): Promise<SemanticDocumentV2['nodes']> {
   const modelId = pass === 1 ? input.translationModel || BOOKLINGUA_MODEL_CONFIG.translation : input.editorialModel || BOOKLINGUA_MODEL_CONFIG.editorial
   const batches = createDeterministicSemanticBatches(authoritative, input.maxBatchOutputWords)
@@ -233,14 +242,14 @@ export async function runSemanticPipeline(input: SemanticPipelineInput) {
   const buildId = input.buildId || deterministicSemanticBuildId(input.orderId, input.language, sourceHash, input.brief.revision)
   const { error: buildError } = await input.supabase.rpc('begin_order_language_build', { p_order_id: input.orderId, p_language: input.language, p_build_id: buildId })
   if (buildError) throw new Error(`Build allocation failed: ${buildError.message}`)
-  const pass1 = { ...sourceDocument, nodes: await runBatchedPass(input, sourceDocument.nodes, 1) }
+  const pass1 = { ...sourceDocument, nodes: normalizePassTypography(await runBatchedPass(input, sourceDocument.nodes, 1), input.language) }
   assertSourceAwareDuplicateParity(sourceDocument.nodes, pass1.nodes)
   // Display headings can be split across adjacent EPUB blocks. Compare the same
   // consolidated headings that customer artifacts use, otherwise a repeated short
   // fragment (for example "Creating Your") is mistaken for a duplicate heading.
   assertSourceAwareHeadingDuplicateParity(consolidatedArtifactNodes(sourceDocument), consolidatedArtifactNodes(pass1))
   await persistSemantic(input.supabase, { orderId: input.orderId, language: input.language, buildId, pass: 'pass1', document: pass1, eligibility: eligibility.status })
-  const rawPass2 = applyVerifiedEditorialOverrides({ ...pass1, nodes: await runBatchedPass(input, pass1.nodes, 2) },input.verifiedEditorialOverrides||[])
+  const rawPass2 = applyVerifiedEditorialOverrides({ ...pass1, nodes: normalizePassTypography(await runBatchedPass(input, pass1.nodes, 2), input.language) },input.verifiedEditorialOverrides||[])
   let titleAuthority = resolveTitleAuthority({ document: rawPass2, checkoutTitle: input.title, source: input.source })
   const verifiedTranslatedTitle=input.verifiedTranslatedTitle?.trim()
   if(titleAuthority.fallbackUsed&&verifiedTranslatedTitle)titleAuthority={
