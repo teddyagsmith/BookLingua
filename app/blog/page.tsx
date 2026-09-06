@@ -98,6 +98,7 @@ export default function BlogPage({ searchParams }: BlogPageProps) {
         <Link href="/" className="flex items-center gap-3"><Logo /></Link>
         <div className="flex items-center gap-3 sm:gap-6">
           <ResourcesMenu />
+          <Link href="/pricing" className="text-gray-600 hover:text-brand-dark font-medium transition-colors hidden sm:block">Pricing</Link>
           <Link href="/examples" className="text-gray-600 hover:text-brand-dark font-medium transition-colors hidden sm:block">Examples</Link>
           <Link href="/publishers" className="text-gray-600 hover:text-brand-dark font-medium transition-colors hidden sm:block">Publishers</Link>
           <Link href="/" className="px-4 py-2 sm:px-6 sm:py-2.5 bg-brand text-white rounded-full text-sm sm:text-base font-semibold shadow-lg hover:shadow-xl transition-all whitespace-nowrap">Start Translating</Link>

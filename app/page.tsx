@@ -7,7 +7,6 @@ import { getSupabase } from '@/lib/supabase'
 import { bundleDiscountPercent } from '@/lib/bundle-pricing'
 import ResourcesMenu from '@/components/ResourcesMenu'
 import SiteFooter from '@/components/SiteFooter'
-import PricingCalculator, { PricingCalculatorSelection } from '@/components/PricingCalculator'
 import { trackEvent } from '@/lib/analytics'
 import { CORE_LANGUAGES } from '@/lib/languages'
 import { WORD_TIERS, PricingTierKey, pricingTierForWordCount } from '@/lib/pricing'
@@ -249,7 +248,7 @@ export default function Home() {
   const [showScanStep, setShowScanStep] = useState(false)
   const [affiliateCode, setAffiliateCode] = useState('')
   const [priceCorrection, setPriceCorrection] = useState('')
-  const calculatorEstimateRef = useRef<PricingCalculatorSelection | null>(null)
+  const calculatorEstimateRef = useRef<{ wordCount: number; languages: string[]; tier: PricingTierKey; discountPercent: number; total: number } | null>(null)
 
   const determineTier = (words: number): PricingTierKey | null => pricingTierForWordCount(words)?.key || null
 
@@ -411,19 +410,6 @@ export default function Home() {
     window.addEventListener('popstate', applyLocation)
     return () => window.removeEventListener('popstate', applyLocation)
   }, [])
-
-  const startFromCalculator = (selection: PricingCalculatorSelection) => {
-    calculatorEstimateRef.current = selection
-    setSelectedLanguages(selection.languages)
-    setCurrentView('upload')
-    setCheckoutStep(1)
-    const url = new URL(window.location.href)
-    url.searchParams.set('start', '1')
-    url.searchParams.set('estimateWords', String(selection.wordCount))
-    url.searchParams.set('languages', selection.languages.join(','))
-    window.history.pushState({ pricingCalculator: true }, '', url)
-    window.scrollTo({ top: 0, behavior: 'smooth' })
-  }
 
   const handleDrag = useCallback((e: React.DragEvent) => {
     e.preventDefault()
@@ -696,6 +682,9 @@ export default function Home() {
             </div>
             <div className="flex items-center gap-3 sm:gap-6">
               <ResourcesMenu />
+              <a href="/pricing" className="text-gray-600 hover:text-brand-dark font-medium transition-colors hidden sm:block">
+                Pricing
+              </a>
               <a href="/examples" className="text-gray-600 hover:text-brand-dark font-medium transition-colors hidden sm:block">
                 Examples
               </a>
@@ -1098,8 +1087,8 @@ export default function Home() {
             <div className="text-center mb-16">
               <h2 className="text-4xl font-bold text-gray-900 mb-4" style={serifFont}>Simple, transparent pricing</h2>
               <p className="text-xl text-gray-600">Per language • Includes AI editorial review and targeted review by a professional translator</p>
-              <p className="text-lg text-brand font-medium mt-3">Upload your book and we’ll automatically count the words, apply the correct price band and calculate any multi-language discount.</p>
-              <a href="#pricing-calculator" className="mt-2 inline-block font-semibold text-brand underline underline-offset-4">Want to check the price first? Use the calculator below.</a>
+              <p className="mt-4 text-base text-gray-600">Professional translators review passages that require particular care. This is not a full-manuscript human proofread.</p>
+              <a href="/pricing#professional-review" className="mt-2 inline-block font-semibold text-brand underline underline-offset-4">Find out what’s included →</a>
             </div>
 
             <div className="grid md:grid-cols-3 gap-6 max-w-4xl mx-auto mb-16">
@@ -1152,15 +1141,19 @@ export default function Home() {
               </p>
             </div>
 
-            <PricingCalculator onStart={startFromCalculator} />
-
-            <div className="text-center mt-12">
+            <div className="text-center mt-10">
+              <p className="mb-5 text-lg text-gray-700">Enter your word count and choose your languages to see your full price, including any multi-language discount.</p>
+              <div className="flex flex-col items-center justify-center gap-3 sm:flex-row">
+                <a href="/pricing#calculator" className="inline-flex px-10 py-4 bg-brand text-white rounded-2xl font-bold text-lg shadow-xl hover:shadow-2xl transition-all">
+                  Calculate your translation price
+                </a>
               <button
                 onClick={() => { trackStartTranslation('pricing'); setCurrentView('upload') }}
-                className="px-10 py-4 bg-brand text-white rounded-2xl font-bold text-lg shadow-xl hover:shadow-2xl transition-all"
+                className="px-10 py-4 bg-white border-2 border-brand-light text-brand-dark rounded-2xl font-bold text-lg hover:bg-[#F3F0F8] transition-all"
               >
-                Upload Your Book to See Your Price →
+                Start your translation
               </button>
+              </div>
             </div>
           </div>
         </section>

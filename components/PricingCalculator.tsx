@@ -87,7 +87,7 @@ export default function PricingCalculator({ onStart }: Props) {
   }
 
   return (
-    <div ref={calculatorRef} id="pricing-calculator" className="mt-12 scroll-mt-8 rounded-3xl border border-[#E4DDEE] bg-white p-5 shadow-xl shadow-violet-900/5 sm:p-8 lg:p-10">
+    <div ref={calculatorRef} id="calculator" className="scroll-mt-24 rounded-3xl border border-[#E4DDEE] bg-white p-5 shadow-xl shadow-violet-900/5 sm:p-8 lg:p-10">
       <div className="mx-auto max-w-3xl text-center">
         <h3 className="text-3xl font-bold text-gray-900 sm:text-4xl" style={{ fontFamily: "'EB Garamond', Georgia, serif" }}>Calculate the cost of translating your book</h3>
         <p className="mt-3 text-lg text-gray-600">Enter your manuscript’s word count and choose your languages to see your price, including any multi-language discount.</p>
