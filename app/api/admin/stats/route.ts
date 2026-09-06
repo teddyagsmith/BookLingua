@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getSupabaseAdmin } from '@/lib/supabase'
+import { effectiveOrderCost, summarizeAdminCosts } from '@/lib/admin-costs'
 
 export async function GET(request: NextRequest) {
   // Simple password auth via header
@@ -21,13 +22,12 @@ export async function GET(request: NextRequest) {
     const orderIds=(orders||[]).map(order=>order.id)
     const modelCalls:any[]=[]
     if(orderIds.length)for(let from=0;;from+=1000){
-      const {data,error:modelCallsError}=await getSupabaseAdmin().from('model_call_events').select('order_id,success,estimated_cost_usd').in('order_id',orderIds).range(from,from+999)
+      const {data,error:modelCallsError}=await getSupabaseAdmin().from('model_call_events').select('order_id,success,estimated_cost_usd,created_at').in('order_id',orderIds).range(from,from+999)
       if(modelCallsError){console.error('Model cost query error:',modelCallsError);break}
       modelCalls.push(...(data||[]))
       if((data||[]).length<1000)break
     }
-    const eventCosts=new Map<string,number>()
-    for(const call of modelCalls||[])if(call.success&&call.estimated_cost_usd!=null)eventCosts.set(call.order_id,(eventCosts.get(call.order_id)||0)+Number(call.estimated_cost_usd))
+    const costSummary=summarizeAdminCosts(modelCalls)
     const {data:readerRequests}=orderIds.length
       ? await getSupabaseAdmin().from('reader_panel_requests').select('order_id,language,build_id,state,sample_filename,sample_word_count,email_state,requested_at,verdict_notes').in('order_id',orderIds)
       : {data:[] as any[]}
@@ -37,8 +37,9 @@ export async function GET(request: NextRequest) {
       if(!current||date>current)completedByEmail.set(order.email.toLowerCase(),date)
     }
     const ordersWithReaderPanel=(orders||[]).map(order=>{
-      const eventCost=eventCosts.get(order.id)
-      const effectiveCost=order.api_cost==null&&eventCost!=null?Number(eventCost.toFixed(4)):order.api_cost
+      const eventCost=costSummary.byOrder.get(order.id)
+      const effective=effectiveOrderCost(order.api_cost,eventCost)
+      const effectiveCost=effective.cost
       const newerCompleted=(completedByEmail.get(order.email.toLowerCase())?.getTime()||0)>new Date(order.created_at).getTime()
       const staleCheckout=['pending','processing'].includes(order.status)&&!order.source_linked_at&&Date.now()-new Date(order.created_at).getTime()>24*60*60*1000
       const inconsistentTerminal=['pending_review','processing'].includes(order.status)&&Boolean(order.completed_at)
@@ -48,7 +49,7 @@ export async function GET(request: NextRequest) {
       const effectiveMargin=order.margin_pct==null&&effectiveCost!=null&&Number(order.amount_paid)>0
         ? ((Number(order.amount_paid)-Number(effectiveCost))/Number(order.amount_paid))*100
         : order.margin_pct
-      return{...order,api_cost:effectiveCost,margin_pct:effectiveMargin,api_cost_estimated:order.api_cost==null&&eventCost!=null,admin_archived,reader_panel_requests:(readerRequests||[]).filter(row=>row.order_id===order.id)}
+      return{...order,api_cost:effectiveCost,margin_pct:effectiveMargin,api_cost_estimated:effective.estimated,admin_archived,reader_panel_requests:(readerRequests||[]).filter(row=>row.order_id===order.id)}
     })
 
     // Fetch abandoned uploads: temp_uploads older than 1 hour (still in checkout = not abandoned yet)
@@ -86,7 +87,7 @@ export async function GET(request: NextRequest) {
     const avgMargin = marginsWithData.length > 0
       ? marginsWithData.reduce((s, o) => s + Number(o.margin_pct), 0) / marginsWithData.length
       : null
-    const totalApiCost = completedOrders.reduce((s, o) => s + Number(o.api_cost || 0), 0)
+    const totalApiCost = visibleOrders.reduce((s, o) => s + Number(o.api_cost || 0), 0)
 
     return NextResponse.json({
       orders: ordersWithReaderPanel,
@@ -103,6 +104,8 @@ export async function GET(request: NextRequest) {
         pendingReview: pendingReviewOrders.length,
         avgMargin,
         totalApiCost,
+        todayApiCost: costSummary.today,
+        weekApiCost: costSummary.week,
         alerts: [...failedOrders, ...stuckOrders],
         abandonedCount: abandonedUploads?.length || 0,
       },

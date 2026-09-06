@@ -43,6 +43,8 @@ type Stats = {
   pendingReview: number
   avgMargin: number | null
   totalApiCost: number
+  todayApiCost: number
+  weekApiCost: number
   alerts: Order[]
   abandonedCount: number
 }
@@ -318,12 +320,12 @@ export default function AdminPage() {
             <div className="bg-white rounded-xl p-4 shadow-sm border border-gray-100">
               <p className="text-xs text-gray-500 uppercase font-medium">Today</p>
               <p className="text-2xl font-bold text-gray-900 mt-1">{fmt$(stats.todayRevenue)}</p>
-              <p className="text-sm text-gray-500">{stats.todayOrders} order{stats.todayOrders !== 1 ? 's' : ''}</p>
+              <p className="text-sm text-gray-500">{stats.todayOrders} order{stats.todayOrders !== 1 ? 's' : ''} · API {fmt$(stats.todayApiCost)}</p>
             </div>
             <div className="bg-white rounded-xl p-4 shadow-sm border border-gray-100">
               <p className="text-xs text-gray-500 uppercase font-medium">This week</p>
               <p className="text-2xl font-bold text-gray-900 mt-1">{fmt$(stats.weekRevenue)}</p>
-              <p className="text-sm text-gray-500">{stats.weekOrders} orders</p>
+              <p className="text-sm text-gray-500">{stats.weekOrders} orders · API {fmt$(stats.weekApiCost)}</p>
             </div>
             <div className="bg-white rounded-xl p-4 shadow-sm border border-gray-100">
               <p className="text-xs text-gray-500 uppercase font-medium">All time</p>
@@ -335,7 +337,7 @@ export default function AdminPage() {
               <p className="text-2xl font-bold text-gray-900 mt-1">
                 {stats.avgMargin != null ? `${stats.avgMargin.toFixed(0)}%` : '—'}
               </p>
-              <p className="text-sm text-gray-500">API cost {fmt$(stats.totalApiCost)}</p>
+              <p className="text-sm text-gray-500">API cost {fmt$(stats.totalApiCost)} incl. rebuilds</p>
             </div>
           </div>
         )}
