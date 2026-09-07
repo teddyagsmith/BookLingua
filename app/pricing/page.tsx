@@ -37,6 +37,7 @@ export default function PricingPage() {
         <div className="flex items-center gap-3 sm:gap-6">
           <ResourcesMenu />
           <Link href="/examples" className="hidden font-medium text-gray-600 hover:text-brand-dark sm:block">Examples</Link>
+          <Link href="/publishers" className="hidden font-medium text-gray-600 hover:text-brand-dark sm:block">Publishers</Link>
           <Link href="/?start=1" className="whitespace-nowrap rounded-full bg-brand px-4 py-2 text-sm font-semibold text-white shadow-lg sm:px-6 sm:text-base">Start Translating</Link>
         </div>
       </div>
