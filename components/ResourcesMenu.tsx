@@ -1,6 +1,6 @@
 import Link from 'next/link'
 
-export default function ResourcesMenu({ className = '' }: { className?: string }) {
+export default function ResourcesMenu({ className = '', priceCalculatorHref = '/pricing' }: { className?: string; priceCalculatorHref?: string }) {
   return (
     <details className={`group relative hidden sm:block ${className}`}>
       <summary className="cursor-pointer list-none text-gray-600 hover:text-brand-dark font-medium transition-colors [&::-webkit-details-marker]:hidden">
@@ -13,7 +13,7 @@ export default function ResourcesMenu({ className = '' }: { className?: string }
         <Link href="/blog?category=using-booklingua" className="block rounded-xl px-4 py-3 text-sm font-medium text-gray-700 hover:bg-brand-light hover:text-brand-dark">
           Using BookLingua
         </Link>
-        <Link href="/pricing" className="block rounded-xl px-4 py-3 text-sm font-medium text-gray-700 hover:bg-brand-light hover:text-brand-dark">
+        <Link href={priceCalculatorHref} className="block rounded-xl px-4 py-3 text-sm font-medium text-gray-700 hover:bg-brand-light hover:text-brand-dark">
           Price Calculator
         </Link>
       </div>
