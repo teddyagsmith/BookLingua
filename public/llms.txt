@@ -1,0 +1,52 @@
+# BookLingua
+
+> BookLingua (https://booklingua.io) is an AI book translation service for independent authors and small publishers. An author uploads a finished manuscript (DOCX or EPUB), picks their languages, and gets back publish-ready translated files plus a human proofreader report and a launch pack for each language. Built and run by Teddy Smith, a self-publishing coach and podcast host.
+
+## What it does
+
+- Translates full-length books (fiction and non-fiction) with a two-pass process: a translation pass, then a separate editorial pass by a native-language editor model given the English source, the genre and the author's brief.
+- Every order includes a human native-speaker proofreading check with a written report scoring the translation from 1 to 5.
+- Formatting is preserved structure-first: chapter and heading structure is locked before body translation, and italics, bold and superscripts are carried through. An English-to-target-language heading map is supplied so authors can reformat in Atticus or Vellum.
+- Authors can supply a translation brief and a glossary or do-not-translate list (character names, invented terms, place names).
+- Series support: a shared glossary and style guide keeps names, terms and voice consistent across books.
+- Typical turnaround is 2 to 6 hours depending on length.
+
+## Languages
+
+Spanish (Spain), Spanish (Latin America), French, German, Italian, Portuguese (Portugal), Portuguese (Brazil), Polish, Japanese.
+
+## Pricing (per language, USD)
+
+- Up to 40,000 words: $99
+- Up to 80,000 words: $149
+- Up to 150,000 words: $199
+- Bundle discounts apply automatically when translating into several languages at once, up to 40% off.
+- Optional Launch Strategy Pack per language: Amazon backend keywords, foreign-language ad keywords, category recommendations, launch timeline and KDP upload checklist.
+- Publishers and presses with 10 or more books: custom bulk pricing. See https://booklingua.io/publishers
+
+## Positioning
+
+BookLingua is priced for market-testing: translate a book into several languages cheaply, see where it sells, then invest further in the markets that work. It is an alternative to paying thousands per language for human translation up front, and to raw output from ChatGPT, DeepL or Google Translate, which do not preserve book structure or include an editorial pass and proofreader report. Unlike Amazon's Kindle Translate, BookLingua delivers DOCX and EPUB files the author owns and can publish anywhere, not only on Kindle.
+
+## Inputs and outputs
+
+- Accepted inputs: DOCX (recommended), EPUB, TXT. PDF is not accepted.
+- Outputs per language: translated DOCX (and EPUB if the source was EPUB), a review DOCX with every editorial change highlighted, the heading map, the proofreader report, and the launch pack if ordered.
+- If an author is unhappy, they can email within 7 days and BookLingua will work with them to put it right.
+
+## Key pages
+
+- Home and pricing: https://booklingua.io
+- Example translations (Dracula in Spanish, French, German, Portuguese with editorial changes shown): https://booklingua.io/examples
+- Publishers and bulk pricing: https://booklingua.io/publishers
+- Blog and guides: https://booklingua.io/blog
+- How to translate a book with AI, step by step: https://booklingua.io/blog/how-to-translate-a-book-with-ai
+- Which language should you translate your book into: https://booklingua.io/blog/which-language-should-you-translate-your-book-into
+- Can AI translate romance novels: https://booklingua.io/blog/can-ai-translate-romance-novels
+- How to prepare a manuscript for translation: https://booklingua.io/blog/prepare-manuscript-for-translation
+- Why editorial review matters in AI translation: https://booklingua.io/blog/editorial-review-ai-translation
+- RSS feed: https://booklingua.io/feed.xml
+
+## Contact
+
+hello@booklingua.io. Founder: Teddy Smith, https://teddyagsmith.com
