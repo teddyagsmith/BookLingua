@@ -5,6 +5,7 @@ import Image from 'next/image'
 import EmailSignupPopup from '@/components/EmailSignupPopup'
 import { getSupabase } from '@/lib/supabase'
 import { bundleDiscountPercent } from '@/lib/bundle-pricing'
+import { checkoutDisplayPricing, launchPackPrice } from '@/lib/checkout-display-pricing'
 import ResourcesMenu from '@/components/ResourcesMenu'
 import SiteFooter from '@/components/SiteFooter'
 
@@ -278,60 +279,27 @@ export default function Home() {
     return (baseTotal - discount).toFixed(2)
   }
 
-  const calculateUpsellTotal = () => {
-    return selectedUpsells.reduce((total, id) => {
-      if (id === 'mrr-shoutout') return total + 69
-      const upsell = UPSELLS.find(u => u.id === id)
-      if (!upsell) return total
-      if (upsell.id === 'launch-pack') {
-        return total + (selectedLanguages.length > 1 ? upsell.priceAll! : upsell.price)
-      }
-      return total + upsell.price
-    }, 0)
-  }
+  const currentPricing = () => checkoutDisplayPricing({
+    basePrice: selectedTier ? WORD_TIERS[selectedTier].basePrice : null,
+    languageCount: selectedLanguages.length,
+    selectedUpsells,
+    voucher: voucherApplied
+      ? { discount: voucherApplied.discount, type: voucherApplied.type as 'percent' | 'fixed' }
+      : null,
+  })
 
-  const calculateTotal = () => {
-    const translationCost = parseFloat(calculatePrice(selectedTier, selectedLanguages.length))
-    const upsellCost = calculateUpsellTotal()
-    return (translationCost + upsellCost).toFixed(2)
-  }
-
-  // Returns the amount that CAN be discounted (excludes MRR shoutout and Launch Pack which are never discounted)
-  const calculateVoucherableSubtotal = () => {
-    let nonVoucherable = 0
-    if (selectedUpsells.includes('mrr-shoutout')) nonVoucherable += 69
-    if (selectedUpsells.includes('launch-pack')) {
-      nonVoucherable += selectedLanguages.length > 1 ? 49 : 29
-    }
-    return parseFloat(calculateTotal()) - nonVoucherable
-  }
+  const calculateUpsellTotal = () => currentPricing().addOnTotal.toFixed(2)
+  const calculateTotal = () => currentPricing().subtotal.toFixed(2)
+  const calculateVoucherableSubtotal = () => currentPricing().voucherableSubtotal
 
   // Returns the actual voucher discount amount to display (recalculates dynamically)
   const getVoucherDiscountAmount = () => {
     if (!voucherApplied) return '0.00'
-    const voucherableSubtotal = calculateVoucherableSubtotal()
-    if (voucherApplied.type === 'percent') {
-      return (voucherableSubtotal * voucherApplied.discount / 100).toFixed(2)
-    }
-    return Math.min(parseFloat(voucherApplied.discountAmount), voucherableSubtotal).toFixed(2)
+    return currentPricing().voucherDiscount.toFixed(2)
   }
 
   const calculateFinalTotal = () => {
-    if (!voucherApplied) {
-      return calculateTotal()
-    }
-    const mrrCost = selectedUpsells.includes('mrr-shoutout') ? 69 : 0
-    const launchPackCost = selectedUpsells.includes('launch-pack')
-      ? (selectedLanguages.length > 1 ? 49 : 29)
-      : 0
-    const voucherableSubtotal = calculateVoucherableSubtotal()
-    let discountAmount: number
-    if (voucherApplied.type === 'percent') {
-      discountAmount = voucherableSubtotal * (voucherApplied.discount / 100)
-    } else {
-      discountAmount = Math.min(parseFloat(voucherApplied.discountAmount), voucherableSubtotal)
-    }
-    return Math.max(voucherableSubtotal - discountAmount + mrrCost + launchPackCost, 1).toFixed(2)
+    return currentPricing().finalTotal.toFixed(2)
   }
 
   const applyVoucher = async () => {
@@ -2048,7 +2016,14 @@ export default function Home() {
                             )}
                           </div>
                           <div className="text-right">
-                            <p className="text-xl font-bold text-gray-900">${upsell.price}</p>
+                            <p className="text-xl font-bold text-gray-900">
+                              ${upsell.id === 'launch-pack' ? launchPackPrice(selectedLanguages.length) : upsell.price}
+                            </p>
+                            {upsell.id === 'launch-pack' && (
+                              <p className="text-xs text-gray-500">
+                                {selectedLanguages.length > 1 ? 'all selected languages' : 'one language'}
+                              </p>
+                            )}
                             {upsell.originalPrice && (
                               <p className="text-xs text-gray-400 line-through">${upsell.originalPrice}</p>
                             )}
