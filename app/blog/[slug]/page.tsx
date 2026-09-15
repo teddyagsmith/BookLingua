@@ -9,6 +9,7 @@ import NewsletterPopup from '@/components/NewsletterPopup'
 import ResourcesMenu from '@/components/ResourcesMenu'
 import SiteFooter from '@/components/SiteFooter'
 import rehypeSlug from 'rehype-slug'
+import remarkGfm from 'remark-gfm'
 
 const siteUrl = 'https://booklingua.io'
 
@@ -216,6 +217,7 @@ export default function BlogPostPage({ params }: BlogPostPageProps) {
             components={mdxComponents}
             options={{
               mdxOptions: {
+                remarkPlugins: [remarkGfm],
                 rehypePlugins: [rehypeSlug],
               },
             }}
