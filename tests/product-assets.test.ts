@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { existsSync, readFileSync } from 'fs'
+import { existsSync, readFileSync, readdirSync } from 'fs'
 import { createHash } from 'crypto'
 import { join } from 'path'
 import AdmZip from 'adm-zip'
@@ -47,4 +47,21 @@ test('versioned upload guide asset exists with the recorded hash', () => {
   assert.match(xml, /Final Translation/)
   assert.match(xml, /Translation Review/)
   assert.match(xml, /Launch Pack/)
+})
+
+test('blog bodies do not repeat the title or description rendered by the article template', () => {
+  const directory = join(process.cwd(), 'content', 'blog')
+  for (const file of readdirSync(directory).filter((name) => name.endsWith('.mdx'))) {
+    const source = readFileSync(join(directory, file), 'utf8')
+    const frontmatterEnd = source.indexOf('\n---', 4)
+    assert.notEqual(frontmatterEnd, -1, `${file} is missing closing frontmatter`)
+    const frontmatter = source.slice(0, frontmatterEnd)
+    const body = source.slice(frontmatterEnd + 4).trimStart()
+    const title = frontmatter.match(/^title:\s*["']?(.+?)["']?\s*$/m)?.[1]
+    const description = frontmatter.match(/^description:\s*["']?(.+?)["']?\s*$/m)?.[1]
+    assert.ok(title, `${file} is missing a title`)
+    assert.ok(description, `${file} is missing a description`)
+    assert.notEqual(body.split('\n')[0].replace(/^#\s+/, '').trim(), title, `${file} repeats its title in the body`)
+    assert.equal(body.startsWith(description!), false, `${file} repeats its description in the body`)
+  }
 })
