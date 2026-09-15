@@ -64,7 +64,7 @@ export default function CaseStudyMockup() {
           <div>
             <p className="mb-4 text-sm font-bold uppercase tracking-[.2em] text-brand">Case study</p>
             <h1 className="mb-6 text-5xl font-bold leading-tight md:text-6xl" style={serifFont}>
-              How we translated a complete romantasy manuscript into French and German
+              AI Book Translation Case Study: A Romantasy Novel in French and German
             </h1>
             <p className="max-w-2xl text-xl leading-relaxed text-gray-600">
               <em>Bride of the Hollow King</em> is a published gothic fae romance of approximately 38,000 words. We used BookLingua to prepare complete French and German manuscripts while preserving its invented world, atmosphere and romantic tension.
@@ -157,6 +157,60 @@ export default function CaseStudyMockup() {
                   <p className="mt-2 text-sm leading-relaxed text-gray-600">{copy}</p>
                 </div>
               ))}
+            </div>
+          </div>
+        </section>
+
+        <section className="bg-white py-20">
+          <div className="mx-auto max-w-4xl px-6">
+            <p className="text-sm font-bold uppercase tracking-wider text-brand">The complete-book test</p>
+            <h2 className="mt-2 text-4xl font-bold" style={serifFont}>Can AI translate a complete novel?</h2>
+            <div className="mt-7 space-y-5 text-lg leading-relaxed text-gray-600">
+              <p>
+                AI can translate a complete novel, but generating a first draft is not the same as producing a manuscript that is ready for readers. A novel has to remain coherent across tens of thousands of words: names, invented places, recurring imagery, character voices and romantic tension all need to survive from the opening chapter to the final scene.
+              </p>
+              <p>
+                For this 38,000-word romantasy novel, BookLingua treated the English edition as the authoritative source and produced full French and German translations. The system carried the same terminology and stylistic instructions through the manuscript rather than translating isolated pages without context. This was particularly important for terms such as Hollow Court, Hollow King, Blackthorn Wood and Thorn Throne, which needed deliberate and consistent treatment in each language.
+              </p>
+              <p>
+                The result demonstrates what AI book translation can do well: process an entire manuscript efficiently while preserving plot, atmosphere and momentum. It also demonstrates why editorial review still matters. The first translation was the beginning of the process, not the finished product.
+              </p>
+            </div>
+          </div>
+        </section>
+
+        <section className="py-20">
+          <div className="mx-auto max-w-5xl px-6">
+            <div className="text-center">
+              <p className="text-sm font-bold uppercase tracking-wider text-brand">Translation and refinement</p>
+              <h2 className="mt-2 text-4xl font-bold" style={serifFont}>How the two-pass editing process worked</h2>
+            </div>
+            <div className="mt-12 grid gap-6 md:grid-cols-2">
+              <article className="rounded-3xl border border-brand-light bg-white p-8 shadow-sm">
+                <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-brand font-bold text-white">1</span>
+                <h3 className="mt-5 text-2xl font-bold" style={serifFont}>Complete manuscript translation</h3>
+                <p className="mt-3 leading-relaxed text-gray-600">
+                  The first pass translated the complete English manuscript into French and German using genre-aware instructions. It prioritised meaning, continuity and the dark romantic tone while keeping names and invented-world terminology consistent.
+                </p>
+              </article>
+              <article className="rounded-3xl border border-brand-light bg-white p-8 shadow-sm">
+                <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-brand font-bold text-white">2</span>
+                <h3 className="mt-5 text-2xl font-bold" style={serifFont}>Separate editorial pass</h3>
+                <p className="mt-3 leading-relaxed text-gray-600">
+                  A second pass reviewed the translations as fiction, looking for prose that was accurate but too literal, awkward collocations, inconsistent terminology and dialogue or imagery that did not sound natural in the target language. Suggested changes were shown visibly in Review Documents.
+                </p>
+              </article>
+            </div>
+            <div className="mt-8 rounded-3xl border border-amber-200 bg-amber-50 p-8">
+              <h3 className="text-2xl font-bold" style={serifFont}>What the professional reviewers changed</h3>
+              <div className="mt-4 space-y-4 leading-relaxed text-gray-700">
+                <p>
+                  Native French and German professionals then reviewed the opening three chapters. The French reviewer found that some isolated phrases and metaphors followed English sentence structures too closely. The German reviewer highlighted a small number of literal image descriptions and unnatural word combinations. These were not plot errors; they were the kinds of details that distinguish understandable prose from natural genre fiction.
+                </p>
+                <p>
+                  BookLingua acted on that feedback before producing the final manuscripts. Literal constructions were recast to sound natural in French or German, awkward combinations were smoothed, and recurring fantasy terms were checked for consistency. The corrections were applied beyond the sampled passages wherever the same pattern appeared, then incorporated into the clean final files. This feedback loop—translate, edit, obtain native-language review and correct—is the important difference between accepting raw AI output and preparing a book for publication.
+                </p>
+              </div>
             </div>
           </div>
         </section>
@@ -276,6 +330,31 @@ export default function CaseStudyMockup() {
               <Link href="/" className="rounded-2xl bg-brand px-8 py-4 font-bold text-white shadow-lg">Upload your book</Link>
               <Link href="/examples" className="font-semibold text-brand-dark underline underline-offset-4">See more translation examples</Link>
             </div>
+          </div>
+        </section>
+
+        <section className="bg-white py-20">
+          <div className="mx-auto max-w-4xl px-6">
+            <div className="text-center">
+              <p className="text-sm font-bold uppercase tracking-wider text-brand">Frequently asked questions</p>
+              <h2 className="mt-2 text-4xl font-bold" style={serifFont}>AI book translation FAQ</h2>
+            </div>
+            <div className="mt-10 space-y-5">
+              {[
+                ['Can AI translate a whole book?', 'Yes. AI can translate a complete manuscript, but a book-length project needs consistent terminology, genre-aware instructions and a separate editorial review. Raw machine output should not be treated as a publication-ready novel.'],
+                ['How accurate is AI book translation?', 'It can be highly accurate for meaning and plot, but literary quality also depends on voice, rhythm, dialogue and cultural context. In this case, both native-language reviewers scored the translations 4/5 overall and said they would keep reading, while still identifying phrases that benefited from refinement.'],
+                ['Does an AI-translated novel still need human review?', 'Yes. Professional native-language review helps identify literal phrasing and stylistic issues that an automated process may miss. BookLingua used the reviewers’ feedback to correct the final French and German manuscripts.'],
+                ['How much does it cost to translate a 38,000-word book?', 'BookLingua’s current small-book tier covers manuscripts up to 40,000 words from $99 per language. The exact total depends on the number of languages and any optional extras; use the pricing calculator for a current quote.'],
+              ].map(([question, answer]) => (
+                <article key={question} className="rounded-2xl border border-brand-light bg-cream p-6">
+                  <h3 className="text-xl font-bold" style={serifFont}>{question}</h3>
+                  <p className="mt-2 leading-relaxed text-gray-600">{answer}</p>
+                </article>
+              ))}
+            </div>
+            <p className="mt-8 text-center text-gray-600">
+              Read our <Link href="/blog/how-to-translate-a-book-with-ai" className="font-semibold text-brand-dark underline">complete AI book translation guide</Link> or <Link href="/pricing" className="font-semibold text-brand-dark underline">calculate the cost of your manuscript</Link>.
+            </p>
           </div>
         </section>
       </main>
