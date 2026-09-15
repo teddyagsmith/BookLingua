@@ -13,7 +13,7 @@ export default function ResourcesMenu({ className = '' }: { className?: string }
         <Link href="/blog?category=using-booklingua" className="block rounded-xl px-4 py-3 text-sm font-medium text-gray-700 hover:bg-brand-light hover:text-brand-dark">
           Using BookLingua
         </Link>
-        <Link href="/case-studies/ai-book-translation-hollow-king" className="block rounded-xl px-4 py-3 text-sm font-medium text-gray-700 hover:bg-brand-light hover:text-brand-dark">
+        <Link href="/examples#case-study" className="block rounded-xl px-4 py-3 text-sm font-medium text-gray-700 hover:bg-brand-light hover:text-brand-dark">
           Case Studies
         </Link>
       </div>

@@ -784,6 +784,39 @@ export default function ExamplesPage() {
         </div>
       </nav>
 
+      {/* Featured customer case study */}
+      <section id="case-study" className="scroll-mt-6 px-4 sm:px-8 pb-6">
+        <div className="mx-auto grid max-w-7xl items-center gap-8 overflow-hidden rounded-3xl border border-brand-light bg-white p-6 shadow-xl sm:p-8 lg:grid-cols-[1fr_auto]">
+          <div>
+            <p className="mb-3 text-sm font-bold uppercase tracking-[.18em] text-brand">Featured case study</p>
+            <h1 className="mb-4 text-3xl font-bold leading-tight text-gray-900 sm:text-4xl" style={serifFont}>
+              How we translated <em>Bride of the Hollow King</em> into French and German
+            </h1>
+            <p className="mb-6 max-w-3xl text-lg leading-relaxed text-gray-600">
+              See how BookLingua handled a complete 38,000-word gothic romantasy—including its atmosphere,
+              invented world and romantic tension—and what native-language reviewers thought of the results.
+            </p>
+            <Link
+              href="/case-studies/ai-book-translation-hollow-king"
+              className="inline-flex items-center gap-2 rounded-full bg-brand px-6 py-3 font-semibold text-white shadow-lg transition-all hover:-translate-y-0.5 hover:shadow-xl"
+            >
+              Read the complete case study <span aria-hidden="true">→</span>
+            </Link>
+          </div>
+          <div className="relative mx-auto h-52 w-64 sm:h-60 sm:w-72" aria-hidden="true">
+            <div className="absolute left-2 top-5 h-44 w-28 -rotate-6 overflow-hidden rounded-xl shadow-lg sm:h-52 sm:w-32">
+              <Image src="/images/case-studies/hollow-king/cover-fr.jpg" alt="" fill className="object-cover" sizes="128px" />
+            </div>
+            <div className="absolute right-2 top-5 h-44 w-28 rotate-6 overflow-hidden rounded-xl shadow-lg sm:h-52 sm:w-32">
+              <Image src="/images/case-studies/hollow-king/cover-de.jpg" alt="" fill className="object-cover" sizes="128px" />
+            </div>
+            <div className="absolute left-1/2 top-0 h-48 w-32 -translate-x-1/2 overflow-hidden rounded-xl shadow-xl ring-4 ring-white sm:h-56 sm:w-36">
+              <Image src="/images/case-studies/hollow-king/cover-en.jpg" alt="" fill className="object-cover" sizes="144px" />
+            </div>
+          </div>
+        </div>
+      </section>
+
       {/* Hero */}
       <header className="relative overflow-hidden">
         <div className="absolute inset-0 opacity-30">
