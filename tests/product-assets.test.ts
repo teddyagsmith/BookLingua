@@ -61,7 +61,26 @@ test('blog bodies do not repeat the title or description rendered by the article
     const description = frontmatter.match(/^description:\s*["']?(.+?)["']?\s*$/m)?.[1]
     assert.ok(title, `${file} is missing a title`)
     assert.ok(description, `${file} is missing a description`)
+    assert.equal(/^#\s+/m.test(body), false, `${file} adds a second page-level heading in the body`)
     assert.notEqual(body.split('\n')[0].replace(/^#\s+/, '').trim(), title, `${file} repeats its title in the body`)
     assert.equal(body.startsWith(description!), false, `${file} repeats its description in the body`)
+
+    const headings = [...body.matchAll(/^(#{2,6})\s+(.+)$/gm)]
+    let previousLevel = 1
+    for (const [, hashes] of headings) {
+      const level = hashes.length
+      assert.ok(level <= previousLevel + 1, `${file} skips a heading level`)
+      previousLevel = level
+    }
+
+    const headingSlugs = new Set(headings.map(([, , heading]) => heading
+      .toLowerCase()
+      .replace(/[’']/g, '')
+      .replace(/[^\p{L}\p{N}\s-]/gu, '')
+      .trim()
+      .replace(/\s+/g, '-')))
+    for (const [, anchor] of body.matchAll(/\[[^\]]+\]\(#([^)]+)\)/g)) {
+      assert.equal(headingSlugs.has(anchor), true, `${file} links to missing heading #${anchor}`)
+    }
   }
 })
