@@ -710,6 +710,18 @@ export default function Home() {
                   </a>
                 </div>
 
+                <div className="mt-6 flex flex-wrap items-center gap-x-6 gap-y-3 text-sm text-gray-600">
+                  <div className="flex items-center gap-2">
+                    <span className="font-bold tracking-wider text-amber-500" aria-label="Five stars">★★★★★</span>
+                    <span className="font-semibold text-gray-800">Loved by published authors</span>
+                  </div>
+                  <div className="hidden h-5 w-px bg-gray-300 sm:block" />
+                  <div className="flex items-center gap-2">
+                    <span className="flex h-7 w-7 items-center justify-center rounded-full bg-brand-light font-bold text-brand-dark">50+</span>
+                    <span><strong className="text-gray-800">translation editions</strong> commissioned</span>
+                  </div>
+                </div>
+
                 <div className="relative mt-8 lg:hidden">
                   <div className="absolute -inset-3 bg-gradient-to-r from-amber-300/20 to-brand/20 rounded-3xl blur-xl" />
                   <div className="relative overflow-hidden rounded-2xl bg-gray-950 shadow-xl border border-brand-light/50 aspect-video">
@@ -831,6 +843,63 @@ export default function Home() {
                 <span className="text-2xl">🔒</span>
                 <span>Secure & private</span>
               </div>
+            </div>
+          </div>
+        </section>
+
+        {/* Customer testimonials */}
+        <section className="bg-[#F8F6FC] py-20 border-b border-brand-light/60">
+          <div className="max-w-6xl mx-auto px-8">
+            <div className="text-center max-w-2xl mx-auto mb-12">
+              <p className="text-sm font-bold uppercase tracking-wider text-brand mb-3">From translated manuscript to new readers</p>
+              <h2 className="text-4xl font-bold text-gray-900 mb-4" style={serifFont}>Authors are already publishing worldwide</h2>
+              <p className="text-lg text-gray-600">Real results from authors who used BookLingua to take their books into new markets.</p>
+            </div>
+
+            <div className="grid gap-6 lg:grid-cols-2">
+              <figure className="relative bg-white rounded-3xl p-8 shadow-sm border border-brand-light/70">
+                <div className="text-5xl leading-none text-brand-light font-serif absolute top-5 right-7" aria-hidden="true">“</div>
+                <div className="flex items-center gap-4 mb-6">
+                  <Image
+                    src="/lily-bleu-testimonial.jpg"
+                    alt="Lily Bleu"
+                    width={64}
+                    height={64}
+                    className="h-16 w-16 rounded-full object-cover ring-4 ring-[#F3F0F8]"
+                  />
+                  <div>
+                    <p className="font-bold text-gray-900">Lily Bleu</p>
+                    <p className="text-sm text-gray-500">French author · Published in France and Germany</p>
+                    <p className="mt-1 text-amber-500 tracking-wider" aria-label="Five stars">★★★★★</p>
+                  </div>
+                </div>
+                <blockquote className="text-lg leading-relaxed text-gray-700">
+                  “The translation is incredibly accurate, as if written by a qualified translator. My book is now live on Amazon France and Germany, and I didn’t need to make any changes to the manuscript. Great service!”
+                </blockquote>
+              </figure>
+
+              <figure className="relative bg-white rounded-3xl p-8 shadow-sm border border-brand-light/70">
+                <div className="text-5xl leading-none text-brand-light font-serif absolute top-5 right-7" aria-hidden="true">“</div>
+                <div className="flex items-center gap-4 mb-6">
+                  <div className="flex h-16 w-16 items-center justify-center rounded-full bg-gradient-to-br from-brand to-brand-dark text-xl font-bold text-white ring-4 ring-[#F3F0F8]">MS</div>
+                  <div>
+                    <p className="font-bold text-gray-900">Maxine Savage</p>
+                    <p className="text-sm text-gray-500">Author of <em>Playing With Diamonds</em></p>
+                    <p className="mt-1 text-amber-500 tracking-wider" aria-label="Five stars">★★★★★</p>
+                  </div>
+                </div>
+                <blockquote className="text-lg leading-relaxed text-gray-700">
+                  “I launched the translated book in Italy and already have over 500 paid downloads and 20,000 Kindle read pages. Very happy to get a new audience in a new country!”
+                </blockquote>
+              </figure>
+            </div>
+
+            <div className="mt-10 flex flex-wrap items-center justify-center gap-x-10 gap-y-4 text-center">
+              <div><span className="block text-3xl font-bold text-brand-dark">50+</span><span className="text-sm text-gray-600">translation editions commissioned</span></div>
+              <div className="hidden h-10 w-px bg-brand-light sm:block" />
+              <div><span className="block text-3xl font-bold text-brand-dark">6+</span><span className="text-sm text-gray-600">languages available</span></div>
+              <div className="hidden h-10 w-px bg-brand-light sm:block" />
+              <div><span className="block text-3xl font-bold text-brand-dark">2–6 hrs</span><span className="text-sm text-gray-600">typical turnaround</span></div>
             </div>
           </div>
         </section>
