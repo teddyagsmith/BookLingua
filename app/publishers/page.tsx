@@ -200,6 +200,19 @@ export default function PublishersPage() {
         </div>
       </section>
 
+      {/* Resources */}
+      <section className="bg-white py-20">
+        <div className="mx-auto max-w-4xl px-8 text-center">
+          <h2 className="text-4xl font-bold text-gray-900" style={serifFont}>Planning an international catalogue?</h2>
+          <p className="mx-auto mt-4 max-w-2xl text-lg leading-relaxed text-gray-600">Explore the complete workflow, compare translation costs and inspect a finished book-length case study before planning your rollout.</p>
+          <div className="mt-8 flex flex-wrap justify-center gap-4">
+            <Link href="/blog/how-to-translate-a-book-with-ai" className="rounded-full border border-brand-light px-5 py-3 font-semibold text-brand-dark hover:bg-brand-light">Translation workflow</Link>
+            <Link href="/blog/how-much-does-it-cost-to-translate-a-book" className="rounded-full border border-brand-light px-5 py-3 font-semibold text-brand-dark hover:bg-brand-light">Cost guide</Link>
+            <Link href="/case-studies/ai-book-translation-hollow-king" className="rounded-full border border-brand-light px-5 py-3 font-semibold text-brand-dark hover:bg-brand-light">Case study</Link>
+          </div>
+        </div>
+      </section>
+
       {/* CTA */}
       <section className="py-28 bg-brand relative overflow-hidden">
         <div className="absolute inset-0 opacity-10 pointer-events-none">

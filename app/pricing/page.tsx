@@ -47,6 +47,7 @@ export default function PricingPage() {
       <section className="px-5 pb-10 pt-14 text-center sm:pt-16">
         <h1 className="text-5xl font-bold text-gray-900 sm:text-6xl" style={{fontFamily:"'EB Garamond', Georgia, serif"}}>Clear pricing for every book</h1>
         <p className="mx-auto mt-5 max-w-3xl text-lg leading-8 text-gray-600">Enter your manuscript’s word count and choose your target languages to calculate your price. Every translation includes BookLingua’s AI editorial review and targeted review by a professional translator.</p>
+        <p className="mx-auto mt-4 max-w-2xl text-sm leading-6 text-gray-500">Not sure how the options compare? Read our <Link href="/blog/how-much-does-it-cost-to-translate-a-book" className="font-semibold text-brand-dark underline underline-offset-4">complete book-translation cost guide</Link>.</p>
       </section>
 
       <section className="mx-auto max-w-7xl px-5 pb-20 sm:px-8"><PricingCalculator onStart={start} /></section>

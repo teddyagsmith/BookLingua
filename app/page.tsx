@@ -1164,14 +1164,17 @@ export default function Home() {
                 {
                   q: 'How much does AI book translation cost?',
                   a: 'Our pricing is based on word count: $99 for up to 40k words, $149 for up to 80k words, and $199 for up to 150k words — per language. If you translate into multiple languages, bundle discounts apply automatically, up to 20% off when you translate into 6 or more languages.',
+                  link: { href: '/blog/how-much-does-it-cost-to-translate-a-book', label: 'Compare translation costs →' },
                 },
                 {
                   q: 'Is AI book translation good enough to publish?',
                   a: 'It can be — with the right process. BookLingua combines a cultural scan, AI translation, a separate AI editorial-review pass, consistency checks, and targeted review by a professional translator of passages that require particular care. This is not a full-manuscript human proofread.',
+                  link: { href: '/blog/can-ai-translate-a-novel', label: 'See the complete novel test →' },
                 },
                 {
                   q: 'What languages can I translate my book into?',
                   a: 'We currently support Spanish (Spain), Spanish (Latin America), French, German, Italian, Portuguese (Portugal), Portuguese (Brazil), Polish, and Japanese.',
+                  link: { href: '/blog/which-language-should-you-translate-your-book-into', label: 'Compare language markets →' },
                 },
                 {
                   q: 'Can AI translate fiction and keep my author voice?',
@@ -1188,6 +1191,7 @@ export default function Home() {
                 {
                   q: 'What does the professional translator review include?',
                   a: 'BookLingua selects passages that are particularly difficult to translate or where small choices could significantly affect tone, meaning or readability. These might include dialogue, humour, idioms, culturally specific references or emotionally important scenes. A professional translator reviews these passages as an additional human quality check. The review focuses on the parts of the book where professional judgement is most valuable; it is not a full line-by-line proofread of the complete manuscript.',
+                  link: { href: '/blog/editorial-review-ai-translation', label: 'Read about editorial review →' },
                 },
                 {
                   q: 'Will my translated book sound exactly as though it was originally written in the target language?',
