@@ -355,6 +355,9 @@ export default function CaseStudyMockup() {
             <p className="mt-8 text-center text-gray-600">
               Read our <Link href="/blog/how-to-translate-a-book-with-ai" className="font-semibold text-brand-dark underline">complete AI book translation guide</Link> or <Link href="/pricing" className="font-semibold text-brand-dark underline">calculate the cost of your manuscript</Link>.
             </p>
+            <p className="mt-4 text-center text-gray-600">
+              You can also read the <Link href="/blog/can-ai-translate-a-novel" className="font-semibold text-brand-dark underline">full analysis of what this novel test taught us</Link>, explore the challenges of <Link href="/blog/can-ai-translate-romance-novels" className="font-semibold text-brand-dark underline">translating romance and romantasy</Link>, or follow the <Link href="/blog/how-to-publish-translated-book-amazon-kdp" className="font-semibold text-brand-dark underline">Amazon KDP publishing guide</Link> used for the German edition.
+            </p>
           </div>
         </section>
       </main>
