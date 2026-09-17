@@ -28,6 +28,7 @@ const reviewerFindings = [
     verdict: 'Would keep reading',
     strengths: 'Immersive atmosphere, consistent character voices, strong momentum and cohesive fantasy imagery across all three chapters.',
     refinement: 'The reviewer recommended a light stylistic pass for isolated phrases and metaphors that followed English structures too closely.',
+    reportHref: '/files/case-studies/hollow-king/french-human-review.pdf',
   },
   {
     flag: '🇩🇪',
@@ -42,6 +43,58 @@ const reviewerFindings = [
     verdict: 'Would keep reading without hesitation',
     strengths: 'Strong pacing, emotional weight and language that feels at home in the romantasy genre.',
     refinement: 'The reviewer identified a small number of literal image descriptions and collocations to smooth before publication.',
+    reportHref: '/files/case-studies/hollow-king/german-human-review.pdf',
+  },
+]
+
+const deliveryItems = [
+  {
+    icon: 'DOCX',
+    title: 'Final DOCX',
+    copy: 'The clean, editable translation used for personal edits, print formatting or importing into Atticus or Vellum.',
+  },
+  {
+    icon: 'EPUB',
+    title: 'Final EPUB',
+    copy: 'The ready-made ebook file, with chapter structure and navigation preserved for previewing and publication.',
+  },
+  {
+    icon: 'EDIT',
+    title: 'Review DOCX',
+    copy: 'The AI editorial changes shown visibly in context, including the wording considered and the accepted replacement.',
+  },
+  {
+    icon: 'MAP',
+    title: 'Chapter Map',
+    copy: 'A section-by-section map connecting the original headings with the translated edition.',
+  },
+  {
+    icon: 'NOTES',
+    title: 'Translation Notes',
+    copy: 'Selected explanations covering terminology, voice, localisation and important language decisions.',
+  },
+  {
+    icon: 'HUMAN',
+    title: 'Professional translator reports',
+    copy: 'Independent native-language feedback on selected passages, including scores, strengths and specific refinements.',
+    links: [
+      ['View French report', '/files/case-studies/hollow-king/french-human-review.pdf'],
+      ['View German report', '/files/case-studies/hollow-king/german-human-review.pdf'],
+    ],
+  },
+  {
+    icon: 'LAUNCH',
+    title: 'Launch Packs',
+    copy: 'Market-specific descriptions, keywords, categories, pricing guidance and practical 30-day launch plans.',
+    links: [
+      ['View French Launch Pack', '/files/case-studies/hollow-king/french-launch-pack.pdf'],
+      ['View German Launch Pack', '/files/case-studies/hollow-king/german-launch-pack.pdf'],
+    ],
+  },
+  {
+    icon: 'GUIDE',
+    title: 'Upload Guide',
+    copy: 'Step-by-step guidance for reviewing the files, formatting the book and publishing through platforms such as Amazon KDP.',
   },
 ]
 
@@ -249,32 +302,34 @@ export default function CaseStudyMockup() {
           </div>
         </section>
 
-        <section className="py-20">
+        <section className="py-20" id="delivery-package">
           <div className="mx-auto max-w-6xl px-6">
             <div className="text-center">
               <h2 className="text-4xl font-bold" style={serifFont}>What the author receives</h2>
-              <p className="mx-auto mt-4 max-w-2xl text-gray-600">Supporting files make it possible to review the work and prepare each manuscript for its market.</p>
+              <p className="mx-auto mt-4 max-w-3xl text-gray-600">Each language comes with a complete delivery package—not just a translated manuscript. The supporting files make the work transparent and help the author prepare the new edition for publication.</p>
               <div className="mt-4 flex justify-center gap-2"><span>🇫🇷</span><span>🇩🇪</span></div>
             </div>
             <div className="mt-12 grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
-              {[
-                ['/images/case-studies/hollow-king/final-manuscript-fr.png', 'Final manuscript', 'A clean French or German manuscript.'],
-                ['/images/case-studies/hollow-king/review-document-fr.png', 'Review Document', 'AI editorial changes shown in context.'],
-                ['/images/case-studies/hollow-king/translation-notes-fr.png', 'Translation notes', 'Selected terminology and language decisions.'],
-                ['/images/case-studies/hollow-king/final-manuscript-fr.png', 'Launch Pack', 'Description, keywords, categories, pricing and upload checklist.'],
-              ].map(([image, title, copy]) => (
-                <article key={title} className="overflow-hidden rounded-3xl border border-brand-light bg-white shadow-sm">
-                  <div className="relative h-44 overflow-hidden bg-gray-100">
-                    <Image src={image} alt="" fill className="object-cover object-top" sizes="(max-width: 768px) 100vw, 25vw" />
-                    <div className="absolute inset-0 bg-gradient-to-t from-white/60 to-transparent" />
-                  </div>
-                  <div className="p-6">
-                    <h3 className="text-xl font-bold" style={serifFont}>{title}</h3>
-                    <p className="mt-2 text-sm leading-relaxed text-gray-600">{copy}</p>
-                  </div>
+              {deliveryItems.map((item) => (
+                <article key={item.title} className="flex flex-col rounded-3xl border border-brand-light bg-white p-6 shadow-sm">
+                  <span className="inline-flex w-fit rounded-lg bg-brand-light px-3 py-1.5 text-[11px] font-bold tracking-wider text-brand-dark">{item.icon}</span>
+                  <h3 className="mt-5 text-xl font-bold" style={serifFont}>{item.title}</h3>
+                  <p className="mt-2 flex-1 text-sm leading-relaxed text-gray-600">{item.copy}</p>
+                  {item.links && (
+                    <div className="mt-5 space-y-2 border-t border-brand-light pt-4">
+                      {item.links.map(([label, href]) => (
+                        <a key={href} href={href} target="_blank" rel="noreferrer" className="block text-sm font-bold text-brand-dark underline underline-offset-4">
+                          {label} ↗
+                        </a>
+                      ))}
+                    </div>
+                  )}
                 </article>
               ))}
             </div>
+            <p className="mx-auto mt-10 max-w-3xl text-center text-gray-600">
+              Read the <Link href="/blog/understanding-your-booklingua-delivery-package" className="font-semibold text-brand-dark underline underline-offset-4">complete delivery-package guide</Link> for a detailed explanation of every file and how to use it.
+            </p>
           </div>
         </section>
 
@@ -312,12 +367,15 @@ export default function CaseStudyMockup() {
                   <p className="mt-5 font-semibold text-emerald-900">✓ {review.verdict}</p>
                   <div className="mt-6 space-y-4 text-sm leading-relaxed text-gray-600">
                     <p><strong className="text-gray-800">What worked:</strong> {review.strengths}</p>
-                    <p><strong className="text-gray-800">What to refine:</strong> {review.refinement}</p>
+                    <p><strong className="text-gray-800">Targeted refinements:</strong> {review.refinement}</p>
                   </div>
+                  <a href={review.reportHref} target="_blank" rel="noreferrer" className="mt-7 inline-flex rounded-xl bg-emerald-700 px-5 py-3 text-sm font-bold text-white shadow-sm">
+                    View the full {review.title.toLowerCase()} report ↗
+                  </a>
                 </article>
               ))}
             </div>
-            <p className="mx-auto mt-8 max-w-3xl text-center text-sm leading-relaxed text-gray-500">The scores and quotations above come from independent native-language reader-panel feedback. The reviewers also flagged specific phrases for final editorial refinement rather than giving an unqualified pass.</p>
+            <p className="mx-auto mt-8 max-w-3xl text-center text-sm leading-relaxed text-gray-500">The scores and quotations above come from independent native-language feedback. Both reviewers found the translations enjoyable and suitable for the genre while identifying a limited number of phrases for targeted refinement. BookLingua reviewed those findings and incorporated the relevant corrections into the final manuscripts.</p>
           </div>
         </section>
 
