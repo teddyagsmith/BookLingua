@@ -94,6 +94,7 @@ async function sendOrderConfirmationAndNotifyAdmin(order: any, sessionMetadata: 
 
 // Voucher codes - add/remove codes here
 const VOUCHER_CODES: Record<string, { discount: number; type: 'percent' | 'fixed'; description: string; maxUses?: number; expiresAt?: string; oncePerEmail?: boolean }> = {
+  'LOVEWITHOUTBORDERS': { discount: 15, type: 'percent', description: '15% off International Translation Day offer', expiresAt: '2026-10-01T00:00:00Z', oncePerEmail: true },
   'LAUNCH20': { discount: 20, type: 'percent', description: '20% off launch discount', oncePerEmail: true },
   'FIRST50': { discount: 50, type: 'fixed', description: '$50 off first order', oncePerEmail: true },
   'FRIEND10': { discount: 10, type: 'percent', description: '10% friend referral', oncePerEmail: true },
