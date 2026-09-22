@@ -39,6 +39,11 @@ export default function RootLayout({
     <html lang="en">
       <head>
         <Script
+          src="https://analytics.ahrefs.com/analytics.js"
+          data-key="Q6qxU43SYraWgkC2LWz2DQ"
+          strategy="afterInteractive"
+        />
+        <Script
           src="https://www.revshare.so/tracking.js"
           strategy="afterInteractive"
           data-program-id="6a5a0eae6e5359ccacaa24b1"
