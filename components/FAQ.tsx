@@ -41,7 +41,7 @@ const faqs = [
   },
   {
     question: "What about copyright and confidentiality?",
-    answer: "Your content remains 100% yours. We never share, publish, or use your book content for any purpose other than providing your translation. Your files are securely stored and automatically deleted 30 days after delivery."
+    answer: "Your content remains 100% yours. We use it only to provide and support your order, with access limited to authorised personnel, service providers and professional reviewers involved in delivery. Files are stored privately and can be deleted on request after delivery. See How We Protect Your Manuscript for full details."
   },
 ]
 
