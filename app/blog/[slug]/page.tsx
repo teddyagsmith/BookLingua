@@ -96,8 +96,10 @@ export default function BlogPostPage({ params }: BlogPostPageProps) {
     datePublished: post.date,
     dateModified: post.date,
     author: {
-      '@type': 'Organization',
+      '@type': 'Person',
       name: post.author,
+      url: 'https://teddyagsmith.com',
+      image: `${siteUrl}/images/teddy-smith-headshot.jpeg`,
     },
     publisher: {
       '@type': 'Organization',
@@ -189,12 +191,23 @@ export default function BlogPostPage({ params }: BlogPostPageProps) {
             {post.title}
           </h1>
           <p className="text-xl text-gray-600 leading-relaxed mb-6">{post.description}</p>
-          <div className="flex flex-wrap items-center gap-4 text-sm text-gray-500">
-            <span className="font-medium text-gray-700">{post.author}</span>
-            <span>·</span>
-            <time dateTime={post.date}>{formattedDate}</time>
-            <span>·</span>
-            <span>{post.readingTime}</span>
+          <div className="flex items-center gap-4 rounded-2xl border border-brand-light/80 bg-white/70 p-4 sm:max-w-2xl">
+            <Image
+              src="/images/teddy-smith-headshot.jpeg"
+              alt="Teddy Smith"
+              width={64}
+              height={64}
+              className="h-14 w-14 flex-none rounded-full object-cover object-top sm:h-16 sm:w-16"
+            />
+            <div>
+              <p className="font-semibold text-gray-900">Written by <a href="https://teddyagsmith.com" className="text-brand-dark hover:underline">{post.author}</a></p>
+              <p className="mt-0.5 text-sm leading-5 text-gray-600">BookLingua founder, author and host of <em>The Publishing Performance Show</em></p>
+              <div className="mt-1.5 flex flex-wrap items-center gap-2 text-xs text-gray-500">
+                <time dateTime={post.date}>{formattedDate}</time>
+                <span aria-hidden="true">·</span>
+                <span>{post.readingTime}</span>
+              </div>
+            </div>
           </div>
         </header>
 

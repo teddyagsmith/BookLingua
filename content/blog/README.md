@@ -18,7 +18,7 @@ The BookLingua guides section lives at `/blog` and is built from MDX files.
 title: "Your Post Title"
 description: "A short description for SEO and listing cards."
 date: "2026-08-06"
-author: "BookLingua"
+author: "Teddy Smith"
 category: "blog"        # or "guide"
 tags: ["translation", "KDP"]
 keywords: ["keyword one", "keyword two"]

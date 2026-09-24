@@ -48,7 +48,7 @@ export function getAllPosts(): BlogPost[] {
       title: data.title || slug,
       description: data.description || '',
       date: data.date ? new Date(data.date).toISOString() : new Date().toISOString(),
-      author: data.author || 'BookLingua',
+      author: data.author || 'Teddy Smith',
       category: isPostCategory(data.category) ? data.category : 'translation-advice',
       tags: Array.isArray(data.tags) ? data.tags : [],
       keywords: Array.isArray(data.keywords) ? data.keywords : [],
