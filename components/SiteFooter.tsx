@@ -1,4 +1,5 @@
 import Image from 'next/image'
+import Link from 'next/link'
 import type { ReactNode } from 'react'
 
 export default function SiteFooter({ note }: { note?: ReactNode }) {
@@ -17,6 +18,9 @@ export default function SiteFooter({ note }: { note?: ReactNode }) {
           <a href="mailto:hello@booklingua.io" className="text-amber-400 hover:text-amber-300 transition-colors">
             hello@booklingua.io
           </a>
+        </p>
+        <p className="mb-2">
+          <Link href="/affiliates" className="hover:text-white transition-colors">Affiliate Programme</Link>
         </p>
         <p>© 2026 BookLingua. All rights reserved.</p>
         {note && <div className="mt-2 text-xs text-gray-600">{note}</div>}
