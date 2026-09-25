@@ -94,7 +94,7 @@ export default function BlogPage({ searchParams }: BlogPageProps) {
       <style>{`@import url('https://fonts.googleapis.com/css2?family=EB+Garamond:ital,wght@0,400;0,500;0,600;1,400&display=swap');`}</style>
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }} />
 
-      <nav className="relative z-10 flex items-center justify-between px-4 sm:px-8 py-6 max-w-7xl mx-auto">
+      <nav className="relative z-50 flex items-center justify-between px-4 sm:px-8 py-6 max-w-7xl mx-auto">
         <Link href="/" className="flex items-center gap-3"><Logo /></Link>
         <div className="flex items-center gap-3 sm:gap-6">
           <ResourcesMenu />

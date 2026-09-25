@@ -644,7 +644,7 @@ export default function Home() {
             <div className="absolute top-40 right-20 w-96 h-96 bg-brand-light rounded-full blur-3xl" />
           </div>
 
-          <nav className="relative z-10 flex items-center justify-between px-4 sm:px-8 py-3 max-w-7xl mx-auto">
+          <nav className="relative z-50 flex items-center justify-between px-4 sm:px-8 py-3 max-w-7xl mx-auto">
             <div className="flex items-center gap-3 min-w-0">
               <Logo size="lg" />
             </div>
