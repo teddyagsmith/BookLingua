@@ -127,7 +127,7 @@ export default function BlogPostPage({ params }: BlogPostPageProps) {
       />
 
       {/* Nav */}
-      <nav className="relative z-10 flex items-center justify-between px-4 sm:px-8 py-6 max-w-7xl mx-auto">
+      <nav className="relative z-50 flex items-center justify-between px-4 sm:px-8 py-6 max-w-7xl mx-auto">
         <Link href="/" className="flex items-center gap-3">
           <Logo size="lg" />
         </Link>
