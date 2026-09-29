@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { FormEvent, useEffect, useMemo, useRef, useState } from 'react'
 import { trackEvent } from '@/lib/analytics'
 import { bundleDiscountPercent } from '@/lib/bundle-pricing'
 import { CORE_LANGUAGES } from '@/lib/languages'
@@ -30,6 +30,10 @@ export default function PricingCalculator({ onStart }: Props) {
   const [touched, setTouched] = useState(false)
   const [selectedLanguages, setSelectedLanguages] = useState<string[]>([])
   const [reviewOpen, setReviewOpen] = useState(false)
+  const [estimateEmail, setEstimateEmail] = useState('')
+  const [marketingConsent, setMarketingConsent] = useState(false)
+  const [estimateStatus, setEstimateStatus] = useState<'idle' | 'sending' | 'sent' | 'error'>('idle')
+  const [estimateError, setEstimateError] = useState('')
   const viewed = useRef(false)
   const calculatorRef = useRef<HTMLDivElement>(null)
   const validWordCount = parseWordCount(wordCountInput)
@@ -77,6 +81,7 @@ export default function PricingCalculator({ onStart }: Props) {
     : ''
 
   const toggleLanguage = (code: string) => {
+    setEstimateStatus('idle')
     setSelectedLanguages(current => {
       const selecting = !current.includes(code)
       const next = selecting ? [...current, code] : current.filter(item => item !== code)
@@ -84,6 +89,40 @@ export default function PricingCalculator({ onStart }: Props) {
       if (selecting && next.length === 2) trackEvent('pricing_multiple_languages_selected', { language_count: next.length })
       return next
     })
+  }
+
+  const emailEstimate = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    if (!result || !validWordCount) return
+    setEstimateStatus('sending')
+    setEstimateError('')
+    try {
+      const params = new URLSearchParams(window.location.search)
+      const utm = Object.fromEntries(['utm_source', 'utm_medium', 'utm_campaign', 'utm_term', 'utm_content'].map(key => [key, params.get(key)]))
+      const response = await fetch('/api/pricing-estimate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email: estimateEmail,
+          wordCount: validWordCount,
+          languages: selectedLanguages,
+          marketingConsent,
+          source: 'pricing_calculator',
+          pageUrl: window.location.href,
+          referrer: document.referrer || null,
+          utm,
+        }),
+      })
+      const body = await response.json().catch(() => ({}))
+      if (!response.ok) throw new Error(body.error || 'We could not send your estimate. Please try again.')
+      setEstimateStatus('sent')
+      trackEvent('pricing_estimate_emailed', { word_count: validWordCount, language_count: result.languageCount, total: result.total, marketing_consent: marketingConsent })
+      const fbq = (window as Window & { fbq?: (...args: unknown[]) => void }).fbq
+      fbq?.('track', 'Lead', { content_name: 'Pricing estimate', value: result.total, currency: 'USD' })
+    } catch (error) {
+      setEstimateStatus('error')
+      setEstimateError(error instanceof Error ? error.message : 'We could not send your estimate. Please try again.')
+    }
   }
 
   return (
@@ -108,7 +147,7 @@ export default function PricingCalculator({ onStart }: Props) {
               aria-invalid={Boolean(validationMessage)}
               aria-describedby={validationMessage ? 'pricing-word-error' : tier ? 'pricing-word-band' : undefined}
               onBlur={() => { setTouched(true); if (validWordCount) trackEvent('pricing_word_count_entered', { word_count: validWordCount }) }}
-              onChange={event => setWordCountInput(event.target.value)}
+              onChange={event => { setWordCountInput(event.target.value); setEstimateStatus('idle') }}
               onKeyDown={event => { if (event.key === '-' || event.key === '+' || event.key === 'e' || event.key === 'E') event.preventDefault() }}
               className="mt-2 w-full rounded-xl border-2 border-gray-200 px-4 py-3 text-lg text-gray-900 outline-none transition focus:border-brand focus:ring-4 focus:ring-violet-100"
             />
@@ -156,6 +195,20 @@ export default function PricingCalculator({ onStart }: Props) {
             <button type="button" aria-expanded={reviewOpen} aria-controls="translator-review-details" onClick={() => { const next = !reviewOpen; setReviewOpen(next); if (next) trackEvent('translator_review_explanation_opened') }} className="mt-3 text-left font-semibold text-brand underline underline-offset-4">What does the professional translator review include?</button>
             {reviewOpen && <div id="translator-review-details" className="mt-3 space-y-3 text-sm leading-6 text-gray-700"><p>BookLingua identifies passages that are particularly difficult to translate—such as dialogue, humour, idioms, culturally specific references or sections where tone and meaning are especially important. Selected passages are reviewed by a professional translator for clarity, consistency, tone and readability.</p><p>Like any translated work, the finished book may retain some of the character and structure of its original language. Our aim is not to erase every trace of translation, but to produce a clear, consistent and enjoyable reading experience that remains faithful to the author’s original voice.</p><p>The professional translator reviews selected passages rather than proofreading the complete manuscript line by line.</p></div>}
             <button type="button" onClick={() => { trackEvent('pricing_start_translation_clicked', { word_count: validWordCount!, language_count: result.languageCount, discount_percent: result.discountPercent, total: result.total }); onStart({ wordCount: validWordCount!, languages: selectedLanguages, tier: result.tier.key, discountPercent: result.discountPercent, total: result.total }) }} className="mt-6 w-full rounded-xl bg-brand px-6 py-4 text-lg font-bold text-white shadow-lg transition hover:shadow-xl">Start your translation</button>
+            <div className="mt-6 border-t border-violet-200 pt-6">
+              <h5 className="text-lg font-bold text-gray-900">Email me this estimate</h5>
+              <p className="mt-1 text-sm text-gray-600">Optional — the price stays visible without entering your email.</p>
+              {estimateStatus === 'sent' ? <div role="status" className="mt-4 rounded-xl border border-green-200 bg-green-50 p-4 text-sm font-semibold text-green-800">Estimate sent. Check your inbox for the full breakdown and a link to start your translation.</div> : <form className="mt-4 space-y-3" onSubmit={emailEstimate}>
+                <label htmlFor="pricing-estimate-email" className="block text-sm font-semibold text-gray-800">Email address</label>
+                <input id="pricing-estimate-email" type="email" required autoComplete="email" value={estimateEmail} onChange={event => setEstimateEmail(event.target.value)} placeholder="you@example.com" className="w-full rounded-xl border-2 border-gray-200 px-4 py-3 text-gray-900 outline-none transition focus:border-brand focus:ring-4 focus:ring-violet-100" />
+                <label className="flex items-start gap-3 text-sm leading-5 text-gray-700">
+                  <input type="checkbox" checked={marketingConsent} onChange={event => setMarketingConsent(event.target.checked)} className="mt-0.5 h-5 w-5 shrink-0 accent-violet-700" />
+                  <span>Yes, send me BookLingua news, offers and translation tips. This is optional and separate from receiving my estimate. See the <a href="/privacy" className="font-semibold text-brand underline underline-offset-2">privacy notice</a>.</span>
+                </label>
+                <button type="submit" disabled={estimateStatus === 'sending'} className="w-full rounded-xl border-2 border-brand bg-white px-5 py-3 font-bold text-brand transition hover:bg-violet-50 disabled:cursor-wait disabled:opacity-60">{estimateStatus === 'sending' ? 'Sending…' : 'Email me this estimate'}</button>
+                {estimateStatus === 'error' && <p role="alert" className="text-sm font-medium text-red-700">{estimateError}</p>}
+              </form>}
+            </div>
           </div> : <div className="flex min-h-56 flex-col items-center justify-center text-center"><span className="text-4xl" aria-hidden="true">📚</span><h4 className="mt-4 text-xl font-bold text-gray-900">Your translation price</h4><p className="mt-2 text-gray-600">Enter a valid word count and select at least one language to see the full breakdown.</p></div>}
         </aside>
       </div>
