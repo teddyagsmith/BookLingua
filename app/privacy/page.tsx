@@ -21,7 +21,7 @@ export default function PrivacyPage() {
           <li><strong>Manuscript information:</strong> uploaded files, extracted text, translation choices, terminology decisions and generated deliverables.</li>
           <li><strong>Payment information:</strong> Stripe processes card details. BookLingua receives payment status, transaction identifiers and limited billing information, not your full card number.</li>
           <li><strong>Communications:</strong> messages, feedback and support history.</li>
-          <li><strong>Newsletter information:</strong> email address, signup source, delivery and engagement information.</li>
+          <li><strong>Estimate and newsletter information:</strong> email address, requested estimate details, signup source, advertising attribution parameters, consent choice, delivery and engagement information.</li>
           <li><strong>Website information:</strong> device, browser, pages visited, referral source and similar usage information where optional analytics are accepted.</li>
         </LegalList>
       </LegalSection>
