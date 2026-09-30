@@ -1616,15 +1616,16 @@ export default function Home() {
                     {/* Book Setting */}
                     <div className="mb-6">
                       <label className="block text-sm font-semibold text-gray-700 mb-1">
-                        Where is your book set, and what local language should we keep?
-                        <span className="ml-2 text-xs font-normal text-gray-500">Optional - helps preserve cultural authenticity</span>
+                        Book setting, local language and glossary
+                        <span className="ml-2 text-xs font-normal text-gray-500">Optional — helps preserve cultural authenticity and consistency</span>
                       </label>
+                      <p className="mb-2 text-sm leading-6 text-gray-600">Tell us where your book is set and paste in any glossary you already use. This could include character or people names, place names, organisations, invented words, spells, brands, acronyms, specialist terminology, preferred translations, or terms that must stay untranslated.</p>
                       <textarea
                         value={bookSetting}
                         onChange={e => setBookSetting(e.target.value)}
                         rows={3}
                         className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-violet-400 bg-white text-gray-800 resize-none"
-                        placeholder={`Examples:\n• Set in America - keep DA, precinct, Secretary of State, the Oval Office as-is\n• Set in the UK - keep Prime Minister (don't translate to Chancellor), NHS, barrister\n• Fantasy world - all place names and invented words are untranslatable\n• Historical France - use period titles (Monsieur le Président, not President)`}
+                        placeholder={`Examples:\n• Setting: America — keep DA, precinct and the Oval Office as written\n• Character names: Mara Voss, Dr Elias Reed\n• Place names: Blackthorn Wood, Hollow Court\n• Invented terms or spells: Aethermark, Lux Veritas — do not translate\n• Preferred term: "The Assembly" → "L'Assemblée" throughout`}
                       />
                     </div>
 
