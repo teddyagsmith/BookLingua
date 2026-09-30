@@ -31,6 +31,29 @@ type AbandonedUpload = {
   created_at: string
 }
 
+type FollowUpStatus = 'new' | 'contacted' | 'qualified' | 'converted' | 'not_interested'
+
+type EstimateLead = {
+  id: string
+  email: string
+  word_count: number
+  languages: string[]
+  price_tier: string
+  subtotal: number
+  discount_percent: number
+  discount_amount: number
+  total: number
+  marketing_consent: boolean
+  email_status: 'pending' | 'sent' | 'failed'
+  created_at: string
+  source: string
+  utm_source: string | null
+  utm_medium: string | null
+  utm_campaign: string | null
+  follow_up_status: FollowUpStatus
+  followed_up_at: string | null
+}
+
 type Stats = {
   todayRevenue: number
   todayOrders: number
@@ -47,6 +70,8 @@ type Stats = {
   weekApiCost: number
   alerts: Order[]
   abandonedCount: number
+  estimateLeadCount: number
+  newEstimateLeadCount: number
 }
 
 type InspectionLink = { language: string; label: string; url: string }
@@ -87,6 +112,14 @@ const LANG_NAMES: Record<string, string> = {
   'pt-pt': 'PT', 'pt-br': 'PT-BR',
 }
 
+const FOLLOW_UP_LABELS: Record<FollowUpStatus, string> = {
+  new: 'New',
+  contacted: 'Contacted',
+  qualified: 'Qualified',
+  converted: 'Converted',
+  not_interested: 'Not interested',
+}
+
 function fmt$(n: number) { return `$${n.toFixed(2)}` }
 function fmtDate(s: string) {
   return new Date(s).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })
@@ -106,14 +139,33 @@ export default function AdminPage() {
   const [error, setError] = useState('')
   const [orders, setOrders] = useState<Order[]>([])
   const [abandonedUploads, setAbandonedUploads] = useState<AbandonedUpload[]>([])
+  const [estimateLeads, setEstimateLeads] = useState<EstimateLead[]>([])
   const [stats, setStats] = useState<Stats | null>(null)
   const [filter, setFilter] = useState<string>('current')
-  const [activeTab, setActiveTab] = useState<'orders' | 'abandoned'>('orders')
+  const [activeTab, setActiveTab] = useState<'orders' | 'leads' | 'abandoned'>('orders')
   const [search, setSearch] = useState('')
   const [lastRefresh, setLastRefresh] = useState<Date | null>(null)
   const [actionLoading, setActionLoading] = useState<string | null>(null)
   const [actionMsg, setActionMsg] = useState<Record<string, string>>({})
   const [inspectionLinks, setInspectionLinks] = useState<Record<string, InspectionLink[]>>({})
+
+  const handleLeadStatus = async (leadId: string, followUpStatus: FollowUpStatus) => {
+    setActionLoading(leadId)
+    try {
+      const res = await fetch(`/api/admin/pricing-leads/${leadId}`, {
+        method: 'PATCH',
+        headers: { 'x-admin-password': password, 'content-type': 'application/json' },
+        body: JSON.stringify({ followUpStatus }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'Update failed')
+      setEstimateLeads(current => current.map(lead => lead.id === leadId ? { ...lead, ...data.lead } : lead))
+    } catch (error) {
+      setActionMsg(current => ({ ...current, [leadId]: `❌ ${error instanceof Error ? error.message : 'Update failed'}` }))
+    } finally {
+      setActionLoading(null)
+    }
+  }
 
   const handleApprove = async (order: Order) => {
     const languages = (Array.isArray(order.languages) ? order.languages : []).map(language => LANG_NAMES[language] || language.toUpperCase())
@@ -201,6 +253,7 @@ export default function AdminPage() {
       const data = await res.json()
       setOrders(data.orders)
       setAbandonedUploads(data.abandonedUploads || [])
+      setEstimateLeads(data.estimateLeads || [])
       setStats(data.stats)
       setAuthed(true)
       setLastRefresh(new Date())
@@ -234,6 +287,12 @@ export default function AdminPage() {
       return o.email.toLowerCase().includes(q) || o.book_title.toLowerCase().includes(q) || o.id.includes(q)
     }
     return true
+  })
+
+  const filteredEstimateLeads = estimateLeads.filter(lead => {
+    if (!search) return true
+    const q = search.toLowerCase()
+    return lead.email.toLowerCase().includes(q) || lead.utm_campaign?.toLowerCase().includes(q) || lead.follow_up_status.includes(q)
   })
 
   // ── Login screen ──────────────────────────────────────────────────────────
@@ -351,6 +410,13 @@ export default function AdminPage() {
             Orders
           </button>
           <button
+            onClick={() => setActiveTab('leads')}
+            className={`px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-1.5 ${activeTab === 'leads' ? 'bg-violet-600 text-white' : 'bg-white text-gray-600 border border-gray-200 hover:bg-gray-50'}`}
+          >
+            Estimate Leads
+            {stats && stats.newEstimateLeadCount > 0 && <span className={`text-xs px-1.5 py-0.5 rounded-full font-bold ${activeTab === 'leads' ? 'bg-white/30 text-white' : 'bg-violet-100 text-violet-700'}`}>{stats.newEstimateLeadCount}</span>}
+          </button>
+          <button
             onClick={() => setActiveTab('abandoned')}
             className={`px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-1.5 ${activeTab === 'abandoned' ? 'bg-amber-500 text-white' : 'bg-white text-gray-600 border border-gray-200 hover:bg-gray-50'}`}
           >
@@ -362,6 +428,40 @@ export default function AdminPage() {
             )}
           </button>
         </div>
+
+        {/* Estimate Leads Panel */}
+        {activeTab === 'leads' && (
+          <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+            <div className="p-4 border-b border-gray-100 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <h2 className="font-semibold text-gray-800">Estimate Leads</h2>
+                <p className="text-sm text-gray-500 mt-0.5">Everyone who requested a personalised pricing estimate in the last 90 days</p>
+              </div>
+              <input type="text" placeholder="Search email, campaign, status…" value={search} onChange={event => setSearch(event.target.value)} className="border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-violet-400" />
+            </div>
+            {filteredEstimateLeads.length === 0 ? <div className="text-center py-12 text-gray-400">No estimate leads found</div> : <>
+              <div className="hidden lg:block overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead className="bg-gray-50 text-gray-500 text-xs uppercase"><tr><th className="px-4 py-3 text-left">Lead</th><th className="px-4 py-3 text-left">Estimate</th><th className="px-4 py-3 text-left">Languages</th><th className="px-4 py-3 text-left">Attribution</th><th className="px-4 py-3 text-left">Consent / Email</th><th className="px-4 py-3 text-left">Follow-up</th></tr></thead>
+                  <tbody className="divide-y divide-gray-50">{filteredEstimateLeads.map(lead => <tr key={lead.id} className="align-top hover:bg-violet-50/40">
+                    <td className="px-4 py-3"><a href={`mailto:${lead.email}`} className="font-medium text-violet-700 hover:underline">{lead.email}</a><p className="mt-1 text-xs text-gray-400">{fmtDate(lead.created_at)} · {ago(lead.created_at)}</p></td>
+                    <td className="px-4 py-3"><p className="font-semibold text-gray-900">{fmt$(Number(lead.total))}</p><p className="text-xs text-gray-500">{lead.word_count.toLocaleString()} words{lead.discount_percent ? ` · ${lead.discount_percent}% off` : ''}</p></td>
+                    <td className="px-4 py-3"><div className="flex max-w-[180px] flex-wrap gap-1">{lead.languages.map(language => <span key={language} className="rounded bg-violet-50 px-1.5 py-0.5 text-xs font-medium text-violet-700">{LANG_NAMES[language] || language.toUpperCase()}</span>)}</div></td>
+                    <td className="px-4 py-3 text-xs text-gray-600"><p>{lead.utm_source || lead.source || 'Direct'}</p>{lead.utm_campaign && <p className="mt-1 text-gray-400">{lead.utm_campaign}</p>}</td>
+                    <td className="px-4 py-3 text-xs"><p className={lead.marketing_consent ? 'font-medium text-green-700' : 'text-gray-400'}>{lead.marketing_consent ? '✓ Marketing opt-in' : 'Estimate only'}</p><p className={`mt-1 ${lead.email_status === 'sent' ? 'text-green-700' : lead.email_status === 'failed' ? 'text-red-600' : 'text-amber-600'}`}>Email {lead.email_status}</p></td>
+                    <td className="px-4 py-3"><select aria-label={`Follow-up status for ${lead.email}`} disabled={actionLoading === lead.id} value={lead.follow_up_status} onChange={event => handleLeadStatus(lead.id, event.target.value as FollowUpStatus)} className="rounded-lg border border-gray-200 bg-white px-2 py-1.5 text-sm"><option value="new">New</option><option value="contacted">Contacted</option><option value="qualified">Qualified</option><option value="converted">Converted</option><option value="not_interested">Not interested</option></select>{actionMsg[lead.id] && <p className="mt-1 text-xs text-red-600">{actionMsg[lead.id]}</p>}</td>
+                  </tr>)}</tbody>
+                </table>
+              </div>
+              <div className="lg:hidden divide-y divide-gray-100">{filteredEstimateLeads.map(lead => <div key={lead.id} className="p-4 space-y-3">
+                <div className="flex items-start justify-between gap-3"><div className="min-w-0"><a href={`mailto:${lead.email}`} className="block truncate font-medium text-violet-700">{lead.email}</a><p className="text-xs text-gray-400">{fmtDate(lead.created_at)}</p></div><p className="text-xl font-bold text-gray-900">{fmt$(Number(lead.total))}</p></div>
+                <p className="text-sm text-gray-600">{lead.word_count.toLocaleString()} words · {lead.languages.map(language => LANG_NAMES[language] || language.toUpperCase()).join(', ')}</p>
+                <div className="flex flex-wrap gap-2 text-xs"><span className={lead.marketing_consent ? 'rounded bg-green-100 px-2 py-1 text-green-800' : 'rounded bg-gray-100 px-2 py-1 text-gray-600'}>{lead.marketing_consent ? 'Marketing opt-in' : 'Estimate only'}</span><span className="rounded bg-gray-100 px-2 py-1 text-gray-600">{lead.utm_campaign || lead.utm_source || 'Direct'}</span></div>
+                <select aria-label={`Follow-up status for ${lead.email}`} disabled={actionLoading === lead.id} value={lead.follow_up_status} onChange={event => handleLeadStatus(lead.id, event.target.value as FollowUpStatus)} className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm">{Object.entries(FOLLOW_UP_LABELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select>
+              </div>)}</div>
+            </>}
+          </div>
+        )}
 
         {/* Abandoned Uploads Panel */}
         {activeTab === 'abandoned' && (
