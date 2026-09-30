@@ -67,14 +67,14 @@ export default function PricingCalculator({ onStart }: Props) {
   }, [])
 
   useEffect(() => {
-    if (!result) return
+    if (!result || estimateStatus !== 'sent') return
     trackEvent('pricing_result_displayed', {
-        word_count: validWordCount!,
+      word_count: validWordCount!,
       language_count: result.languageCount,
       discount_percent: result.discountPercent,
       total: result.total,
     })
-  }, [result?.tier.key, result?.languageCount])
+  }, [estimateStatus, result?.tier.key, result?.languageCount])
 
   const validationMessage = touched && !validWordCount
     ? (!wordCountInput.trim() ? 'Enter your manuscript word count to see your price.' : 'Enter a whole number greater than zero, using numbers only.')
@@ -129,7 +129,7 @@ export default function PricingCalculator({ onStart }: Props) {
     <div ref={calculatorRef} id="calculator" className="scroll-mt-24 rounded-3xl border border-[#E4DDEE] bg-white p-5 shadow-xl shadow-violet-900/5 sm:p-8 lg:p-10">
       <div className="mx-auto max-w-3xl text-center">
         <h3 className="text-3xl font-bold text-gray-900 sm:text-4xl" style={{ fontFamily: "'EB Garamond', Georgia, serif" }}>Calculate the cost of translating your book</h3>
-        <p className="mt-3 text-lg text-gray-600">Enter your manuscript’s word count and choose your languages to see your price, including any multi-language discount.</p>
+        <p className="mt-3 text-lg text-gray-600">Enter your manuscript’s word count, choose your languages, and get your personalised translation estimate by email.</p>
       </div>
 
       <div className="mt-10 grid gap-8 lg:grid-cols-[minmax(0,1.15fr)_minmax(300px,.85fr)]">
@@ -174,6 +174,24 @@ export default function PricingCalculator({ onStart }: Props) {
               {' · '}{bundleDiscountPercent(selectedLanguages.length) ? `${bundleDiscountPercent(selectedLanguages.length)}% multi-language discount applied` : 'Standard price'}
             </p>
           </fieldset>
+
+          {result && !overLimit && <fieldset>
+            <legend className="flex items-center gap-3 text-xl font-bold text-gray-900"><span className="flex h-8 w-8 items-center justify-center rounded-full bg-brand text-sm text-white">3</span>Where should we send your translation estimate?</legend>
+            <p className="mt-4 text-gray-600">Enter your email to reveal your personalised total immediately. We’ll also send you a copy so you can come back to it later.</p>
+            {estimateStatus === 'sent' ? <div role="status" className="mt-5 rounded-xl border border-green-200 bg-green-50 p-4 font-semibold text-green-800">Your estimate is ready and a copy is on its way to <span className="break-all">{estimateEmail}</span>.</div> : <form className="mt-5 space-y-4" onSubmit={emailEstimate}>
+              <div>
+                <label htmlFor="pricing-estimate-email" className="block font-semibold text-gray-800">Email address</label>
+                <input id="pricing-estimate-email" type="email" required autoComplete="email" value={estimateEmail} onChange={event => { setEstimateEmail(event.target.value); setEstimateStatus('idle') }} placeholder="you@example.com" className="mt-2 w-full rounded-xl border-2 border-gray-200 px-4 py-3 text-lg text-gray-900 outline-none transition focus:border-brand focus:ring-4 focus:ring-violet-100" />
+              </div>
+              <label className="flex items-start gap-3 text-sm leading-5 text-gray-700">
+                <input type="checkbox" checked={marketingConsent} onChange={event => setMarketingConsent(event.target.checked)} className="mt-0.5 h-5 w-5 shrink-0 accent-violet-700" />
+                <span>Yes, send me BookLingua news, offers and translation tips. This is optional and separate from receiving my estimate. See the <a href="/privacy" className="font-semibold text-brand underline underline-offset-2">privacy notice</a>.</span>
+              </label>
+              <button type="submit" disabled={estimateStatus === 'sending'} className="w-full rounded-xl bg-brand px-6 py-4 text-lg font-bold text-white shadow-lg transition hover:shadow-xl disabled:cursor-wait disabled:opacity-60">{estimateStatus === 'sending' ? 'Preparing your estimate…' : 'Get my free estimate'}</button>
+              <p className="text-center text-xs leading-5 text-gray-500">Your estimate request is recorded separately from marketing consent. No newsletter unless you tick the box above.</p>
+              {estimateStatus === 'error' && <p role="alert" className="text-sm font-medium text-red-700">{estimateError}</p>}
+            </form>}
+          </fieldset>}
         </div>
 
         <aside className="min-w-0 rounded-2xl bg-gradient-to-br from-[#F3F0F8] to-amber-50 p-5 sm:p-7" aria-live="polite" aria-atomic="true">
@@ -181,7 +199,7 @@ export default function PricingCalculator({ onStart }: Props) {
             <h4 className="text-2xl font-bold text-gray-900">Your manuscript is over 150,000 words</h4>
             <p className="mt-3 text-gray-700">Please contact us for a tailored price.</p>
             <a href="mailto:hello@booklingua.io?subject=Tailored%20BookLingua%20translation%20quote" onClick={() => trackEvent('pricing_quote_requested', { word_count: validWordCount! })} className="mt-6 inline-flex w-full justify-center rounded-xl bg-brand px-6 py-3 font-bold text-white shadow-lg transition hover:shadow-xl">Request a quote</a>
-          </div> : result ? <div>
+          </div> : result && estimateStatus === 'sent' ? <div>
             <h4 className="text-2xl font-bold text-gray-900">Your translation price</h4>
             <dl className="mt-5 space-y-3 text-sm sm:text-base">
               <div className="flex flex-col gap-1 sm:flex-row sm:justify-between sm:gap-4"><dt className="text-gray-600">Manuscript</dt><dd className="font-semibold text-gray-900 sm:text-right">{validWordCount!.toLocaleString()} words</dd></div>
@@ -195,21 +213,7 @@ export default function PricingCalculator({ onStart }: Props) {
             <button type="button" aria-expanded={reviewOpen} aria-controls="translator-review-details" onClick={() => { const next = !reviewOpen; setReviewOpen(next); if (next) trackEvent('translator_review_explanation_opened') }} className="mt-3 text-left font-semibold text-brand underline underline-offset-4">What does the professional translator review include?</button>
             {reviewOpen && <div id="translator-review-details" className="mt-3 space-y-3 text-sm leading-6 text-gray-700"><p>BookLingua identifies passages that are particularly difficult to translate—such as dialogue, humour, idioms, culturally specific references or sections where tone and meaning are especially important. Selected passages are reviewed by a professional translator for clarity, consistency, tone and readability.</p><p>Like any translated work, the finished book may retain some of the character and structure of its original language. Our aim is not to erase every trace of translation, but to produce a clear, consistent and enjoyable reading experience that remains faithful to the author’s original voice.</p><p>The professional translator reviews selected passages rather than proofreading the complete manuscript line by line.</p></div>}
             <button type="button" onClick={() => { trackEvent('pricing_start_translation_clicked', { word_count: validWordCount!, language_count: result.languageCount, discount_percent: result.discountPercent, total: result.total }); onStart({ wordCount: validWordCount!, languages: selectedLanguages, tier: result.tier.key, discountPercent: result.discountPercent, total: result.total }) }} className="mt-6 w-full rounded-xl bg-brand px-6 py-4 text-lg font-bold text-white shadow-lg transition hover:shadow-xl">Start your translation</button>
-            <div className="mt-6 border-t border-violet-200 pt-6">
-              <h5 className="text-lg font-bold text-gray-900">Email me this estimate</h5>
-              <p className="mt-1 text-sm text-gray-600">Optional — the price stays visible without entering your email.</p>
-              {estimateStatus === 'sent' ? <div role="status" className="mt-4 rounded-xl border border-green-200 bg-green-50 p-4 text-sm font-semibold text-green-800">Estimate sent. Check your inbox for the full breakdown and a link to start your translation.</div> : <form className="mt-4 space-y-3" onSubmit={emailEstimate}>
-                <label htmlFor="pricing-estimate-email" className="block text-sm font-semibold text-gray-800">Email address</label>
-                <input id="pricing-estimate-email" type="email" required autoComplete="email" value={estimateEmail} onChange={event => setEstimateEmail(event.target.value)} placeholder="you@example.com" className="w-full rounded-xl border-2 border-gray-200 px-4 py-3 text-gray-900 outline-none transition focus:border-brand focus:ring-4 focus:ring-violet-100" />
-                <label className="flex items-start gap-3 text-sm leading-5 text-gray-700">
-                  <input type="checkbox" checked={marketingConsent} onChange={event => setMarketingConsent(event.target.checked)} className="mt-0.5 h-5 w-5 shrink-0 accent-violet-700" />
-                  <span>Yes, send me BookLingua news, offers and translation tips. This is optional and separate from receiving my estimate. See the <a href="/privacy" className="font-semibold text-brand underline underline-offset-2">privacy notice</a>.</span>
-                </label>
-                <button type="submit" disabled={estimateStatus === 'sending'} className="w-full rounded-xl border-2 border-brand bg-white px-5 py-3 font-bold text-brand transition hover:bg-violet-50 disabled:cursor-wait disabled:opacity-60">{estimateStatus === 'sending' ? 'Sending…' : 'Email me this estimate'}</button>
-                {estimateStatus === 'error' && <p role="alert" className="text-sm font-medium text-red-700">{estimateError}</p>}
-              </form>}
-            </div>
-          </div> : <div className="flex min-h-56 flex-col items-center justify-center text-center"><span className="text-4xl" aria-hidden="true">📚</span><h4 className="mt-4 text-xl font-bold text-gray-900">Your translation price</h4><p className="mt-2 text-gray-600">Enter a valid word count and select at least one language to see the full breakdown.</p></div>}
+          </div> : <div className="flex min-h-56 flex-col items-center justify-center text-center"><span className="text-4xl" aria-hidden="true">📚</span><h4 className="mt-4 text-xl font-bold text-gray-900">Your personalised estimate</h4><p className="mt-2 text-gray-600">{result ? 'Complete step 3 to reveal your total immediately and receive a copy by email.' : 'Enter a valid word count and select at least one language to continue.'}</p></div>}
         </aside>
       </div>
     </div>
