@@ -36,6 +36,14 @@ export async function GET(request: NextRequest) {
       console.error('Abandoned uploads query error:', abandonedError)
     }
 
+    const { data: estimateLeads, error: estimateLeadsError } = await getSupabaseAdmin()
+      .from('pricing_estimate_leads')
+      .select('id, email, word_count, languages, price_tier, subtotal, discount_percent, discount_amount, total, marketing_consent, email_status, created_at, source, utm_source, utm_medium, utm_campaign, follow_up_status, followed_up_at')
+      .gte('created_at', since)
+      .order('created_at', { ascending: false })
+
+    if (estimateLeadsError) throw estimateLeadsError
+
     const now = new Date()
     const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate()).toISOString()
     const weekStart = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString()
@@ -63,6 +71,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({
       orders: ordersWithReaderPanel,
       abandonedUploads: abandonedUploads || [],
+      estimateLeads: estimateLeads || [],
       stats: {
         todayRevenue,
         todayOrders: todayOrders.length,
@@ -77,6 +86,8 @@ export async function GET(request: NextRequest) {
         totalApiCost,
         alerts: [...failedOrders, ...stuckOrders],
         abandonedCount: abandonedUploads?.length || 0,
+        estimateLeadCount: estimateLeads?.length || 0,
+        newEstimateLeadCount: estimateLeads?.filter(lead => lead.follow_up_status === 'new').length || 0,
       },
     })
   } catch (err) {
