@@ -122,6 +122,32 @@ export default function AffiliatesPage() {
         </div>
       </section>
 
+      <section className="px-5 pb-16 sm:px-8 sm:pb-20">
+        <div className="mx-auto grid max-w-5xl gap-8 rounded-3xl border border-brand/25 bg-[#17233C] px-6 py-9 text-white shadow-lg sm:px-9 sm:py-10 lg:grid-cols-[1.1fr_0.9fr] lg:items-center">
+          <div>
+            <p className="mb-2 text-xs font-bold uppercase tracking-[0.18em] text-[#CFC5EB]">A useful event for your members</p>
+            <h2 className="text-3xl font-semibold leading-tight sm:text-4xl" style={serifFont}>Invite Teddy to speak to your author community</h2>
+            <div className="mt-4 space-y-3 leading-7 text-slate-200">
+              <p>BookLingua founder Teddy Smith is available for online talks and Q&amp;A sessions for writing groups, author communities and publishing programmes.</p>
+              <p>The talks are practical and educational rather than sales presentations. Affiliate partners can share their tracked BookLingua link in the follow-up materials and earn commission from eligible orders.</p>
+            </div>
+            <a href="mailto:hello@booklingua.io?subject=BookLingua%20author%20community%20talk" className="mt-6 inline-flex items-center justify-center rounded-full bg-brand px-6 py-3 font-semibold text-white shadow-md transition hover:-translate-y-0.5 hover:shadow-lg">Ask about arranging a talk <span className="ml-2" aria-hidden="true">→</span></a>
+          </div>
+          <div className="rounded-2xl border border-[#CFC5EB]/30 bg-white/10 p-5 sm:p-6">
+            <p className="font-semibold text-white">Sessions can be tailored to the group and cover:</p>
+            <ul className="mt-4 space-y-3 text-sm leading-6 text-slate-200 sm:text-base">
+              {[
+                'Marketing books to new readers',
+                'Publishing through Amazon Kindle Direct Publishing',
+                'Using AI to translate books',
+                'Choosing and approaching international markets',
+                'What authors should check before publishing a translated edition',
+              ].map(topic => <li key={topic} className="flex gap-3"><span className="text-[#CFC5EB]" aria-hidden="true">✦</span><span>{topic}</span></li>)}
+            </ul>
+          </div>
+        </div>
+      </section>
+
       <section className="bg-[#17233C] px-5 py-20 text-white sm:px-8 sm:py-24">
         <div className="mx-auto max-w-7xl">
           <p className="mb-3 text-sm font-bold uppercase tracking-[0.18em] text-[#CFC5EB]">Simple and transparent</p>
