@@ -36,6 +36,7 @@ export default function PricingCalculator({ onStart }: Props) {
   const [estimateError, setEstimateError] = useState('')
   const viewed = useRef(false)
   const calculatorRef = useRef<HTMLDivElement>(null)
+  const estimateResultRef = useRef<HTMLDivElement>(null)
   const validWordCount = parseWordCount(wordCountInput)
   const overLimit = validWordCount !== null && validWordCount > 150_000
   const tier = validWordCount ? pricingTierForWordCount(validWordCount) : null
@@ -75,6 +76,11 @@ export default function PricingCalculator({ onStart }: Props) {
       total: result.total,
     })
   }, [estimateStatus, result?.tier.key, result?.languageCount])
+
+  useEffect(() => {
+    if (estimateStatus !== 'sent' || !window.matchMedia('(max-width: 1023px)').matches) return
+    requestAnimationFrame(() => estimateResultRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }))
+  }, [estimateStatus])
 
   const validationMessage = touched && !validWordCount
     ? (!wordCountInput.trim() ? 'Enter your manuscript word count to see your price.' : 'Enter a whole number greater than zero, using numbers only.')
@@ -145,14 +151,14 @@ export default function PricingCalculator({ onStart }: Props) {
               placeholder="e.g. 72,000"
               value={wordCountInput}
               aria-invalid={Boolean(validationMessage)}
-              aria-describedby={validationMessage ? 'pricing-word-error' : tier ? 'pricing-word-band' : undefined}
+              aria-describedby={validationMessage ? 'pricing-word-error' : tier && estimateStatus === 'sent' ? 'pricing-word-band' : undefined}
               onBlur={() => { setTouched(true); if (validWordCount) trackEvent('pricing_word_count_entered', { word_count: validWordCount }) }}
               onChange={event => { setWordCountInput(event.target.value); setEstimateStatus('idle') }}
               onKeyDown={event => { if (event.key === '-' || event.key === '+' || event.key === 'e' || event.key === 'E') event.preventDefault() }}
               className="mt-2 w-full rounded-xl border-2 border-gray-200 px-4 py-3 text-lg text-gray-900 outline-none transition focus:border-brand focus:ring-4 focus:ring-violet-100"
             />
             {validationMessage && <p id="pricing-word-error" role="alert" className="mt-2 text-sm font-medium text-red-700">{validationMessage}</p>}
-            {tier && <div id="pricing-word-band" className="mt-3 rounded-xl bg-[#F3F0F8] p-4"><p className="font-semibold text-gray-900">{tier.description}</p><p className="mt-1 font-bold text-brand">${tier.basePrice} per language</p></div>}
+            {tier && estimateStatus === 'sent' && <div id="pricing-word-band" className="mt-3 rounded-xl bg-[#F3F0F8] p-4"><p className="font-semibold text-gray-900">{tier.description}</p><p className="mt-1 font-bold text-brand">${tier.basePrice} per language</p></div>}
           </fieldset>
 
           <fieldset disabled={!validWordCount || overLimit} className="disabled:opacity-60">
@@ -177,7 +183,7 @@ export default function PricingCalculator({ onStart }: Props) {
 
           {result && !overLimit && <fieldset>
             <legend className="flex items-center gap-3 text-xl font-bold text-gray-900"><span className="flex h-8 w-8 items-center justify-center rounded-full bg-brand text-sm text-white">3</span>Where should we send your translation estimate?</legend>
-            <p className="mt-4 text-gray-600">Enter your email to reveal your personalised total immediately. We’ll also send you a copy so you can come back to it later.</p>
+            <p className="mt-4 text-gray-600">{estimateStatus === 'sent' ? 'Your personalised estimate is shown here. We’ve also emailed you a copy.' : 'Enter your email to reveal your personalised total immediately. We’ll also send you a copy so you can come back to it later.'}</p>
             {estimateStatus === 'sent' ? <div role="status" className="mt-5 rounded-xl border border-green-200 bg-green-50 p-4 font-semibold text-green-800">Your estimate is ready and a copy is on its way to <span className="break-all">{estimateEmail}</span>.</div> : <form className="mt-5 space-y-4" onSubmit={emailEstimate}>
               <div>
                 <label htmlFor="pricing-estimate-email" className="block font-semibold text-gray-800">Email address</label>
@@ -199,7 +205,7 @@ export default function PricingCalculator({ onStart }: Props) {
             <h4 className="text-2xl font-bold text-gray-900">Your manuscript is over 150,000 words</h4>
             <p className="mt-3 text-gray-700">Please contact us for a tailored price.</p>
             <a href="mailto:hello@booklingua.io?subject=Tailored%20BookLingua%20translation%20quote" onClick={() => trackEvent('pricing_quote_requested', { word_count: validWordCount! })} className="mt-6 inline-flex w-full justify-center rounded-xl bg-brand px-6 py-3 font-bold text-white shadow-lg transition hover:shadow-xl">Request a quote</a>
-          </div> : result && estimateStatus === 'sent' ? <div>
+          </div> : result && estimateStatus === 'sent' ? <div ref={estimateResultRef} className="scroll-mt-6">
             <h4 className="text-2xl font-bold text-gray-900">Your translation price</h4>
             <dl className="mt-5 space-y-3 text-sm sm:text-base">
               <div className="flex flex-col gap-1 sm:flex-row sm:justify-between sm:gap-4"><dt className="text-gray-600">Manuscript</dt><dd className="font-semibold text-gray-900 sm:text-right">{validWordCount!.toLocaleString()} words</dd></div>
