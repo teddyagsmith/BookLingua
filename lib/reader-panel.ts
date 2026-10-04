@@ -1,11 +1,11 @@
 import { createHash } from 'crypto'
-import { AlignmentType, Document, HeadingLevel, Packer, Paragraph, TextRun } from 'docx'
+import { AlignmentType, Document, Packer, Paragraph, TextRun } from 'docx'
 import { deterministicDocx } from './deterministic-docx'
 import { SemanticDocumentV2, SemanticNodeV2 } from './semantic-document'
 import { customerLanguageName, sanitizeCustomerFilenamePart } from './customer-delivery'
 import { signReaderPanelToken } from './download-token'
 
-export const READER_SAMPLE_VERSION = 'reader-sample-v2-flowing-layout'
+export const READER_SAMPLE_VERSION = 'reader-sample-v3-readable-layout'
 export const READER_PANEL_TEMPLATE_VERSION = 'reader-panel-email-v1'
 export const READER_PANEL_RECIPIENT = 'gilly@myromancereads.com'
 export const READER_PANEL_FEEDBACK_FORM_FILENAME = 'BookLingua_Reader_Panel_Feedback_Form.docx'
@@ -15,6 +15,38 @@ export type ReaderSampleSection = { label:'Opening'|'Middle'|'Translation stress
 
 const words=(value:string|null)=>value?.trim().split(/\s+/).filter(Boolean).length||0
 const prose=(node:SemanticNodeV2)=>node.type!=='heading'&&node.type!=='scene_break'&&words(node.translatedText)>0
+const BODY_HEADING=/^(?:chapter|chapitre|cap[ií]tulo|kapitel|prologue|prolog|pr[oó]logo|introduction|introducci[oó]n|einleitung|part|teil)\b/i
+
+function openingBodyIndex(nodes:SemanticNodeV2[]):number{
+  for(let index=0;index<nodes.length;index++){
+    const node=nodes[index]
+    if(node.type!=='heading'||!BODY_HEADING.test(node.sourceText?.trim()||''))continue
+    const lookahead=nodes.slice(index+1,index+13)
+    const proseWords=lookahead.filter(prose).reduce((total,item)=>total+words(item.translatedText),0)
+    const headingCount=lookahead.filter(item=>item.type==='heading').length
+    if(proseWords>=100&&headingCount<=3)return index
+  }
+  return nodes.findIndex(node=>prose(node)&&words(node.translatedText)>=20)
+}
+
+export function translatedReaderTitle(document:SemanticDocumentV2,bookTitle:string):string{
+  const normalise=(value:string)=>value.toLocaleLowerCase().replace(/[^a-z0-9\u00c0-\u024f]+/gi,' ').trim()
+  const wanted=normalise(bookTitle.replace(/\s+-\s+[^-]+$/,''))
+  const exact=document.nodes.find(node=>node.type==='heading'&&normalise(node.sourceText||'')===wanted)
+  return exact?.translatedText?.trim()||bookTitle
+}
+
+function mergeDropCaps(nodes:SemanticNodeV2[]):SemanticNodeV2[]{
+  const merged:SemanticNodeV2[]=[]
+  for(let index=0;index<nodes.length;index++){
+    const node=nodes[index],next=nodes[index+1]
+    if(node.type==='paragraph'&&next?.type==='paragraph'&&/^[A-Za-z\u00c0-\u024f]$/.test(node.translatedText?.trim()||'')&&next.translatedText?.trim()){
+      merged.push({...next,translatedText:`${node.translatedText!.trim()}${next.translatedText!.trimStart()}`,sourceText:`${node.sourceText?.trim()||''}${next.sourceText?.trimStart()||''}`,order:node.order})
+      index++
+    }else merged.push(node)
+  }
+  return merged
+}
 
 function continuousWindow(nodes:SemanticNodeV2[],anchor:number,target:number):ReaderSampleSection['nodes']{
   if(!nodes.length)return[]
@@ -30,10 +62,12 @@ function stressScore(node:SemanticNodeV2):number{
 }
 
 export function selectReaderSample(document:SemanticDocumentV2,targetPerSection=2700):ReaderSampleSection[]{
-  const eligible=document.nodes.filter(node=>node.translatedText?.trim())
+  const populated=document.nodes.filter(node=>node.translatedText?.trim())
+  const bodyStart=openingBodyIndex(populated)
+  const eligible=populated.slice(Math.max(0,bodyStart))
   const proseIndexes=eligible.map((node,index)=>prose(node)?index:-1).filter(index=>index>=0)
   if(!proseIndexes.length)throw new Error('Reader sample has no translated prose')
-  const opening=continuousWindow(eligible,proseIndexes[0],targetPerSection)
+  const opening=continuousWindow(eligible,0,targetPerSection)
   const middleAnchor=proseIndexes[Math.floor(proseIndexes.length/2)]
   const middle=continuousWindow(eligible,middleAnchor,targetPerSection)
   const excluded=new Set([...opening,...middle].map(node=>node.id))
@@ -52,20 +86,23 @@ export function readerSampleFilename(bookTitle:string,language:string):string{re
 export async function buildReaderSampleDocx(input:{document:SemanticDocumentV2;translatedTitle:string;language:string;sections?:ReaderSampleSection[]}):Promise<Buffer>{
   const sections=input.sections||selectReaderSample(input.document),count=readerSampleWordCount(sections)
   const children:Paragraph[]=[
-    new Paragraph({text:'BookLingua Reader Panel',heading:HeadingLevel.TITLE,alignment:AlignmentType.CENTER}),
-    new Paragraph({children:[new TextRun({text:input.translatedTitle,bold:true,size:32})],alignment:AlignmentType.CENTER,spacing:{after:240}}),
-    new Paragraph({text:customerLanguageName(input.language),alignment:AlignmentType.CENTER}),
-    new Paragraph({text:`Approximate sample word count: ${count.toLocaleString('en-GB')}`,alignment:AlignmentType.CENTER,spacing:{after:360}}),
-    new Paragraph({text:"Read this naturally as you would any other book. Please don't actively proofread while reading. If something feels translated or interrupts your reading, note the chapter/paragraph so you can include it in the feedback form.",alignment:AlignmentType.CENTER,pageBreakBefore:false}),
+    new Paragraph({children:[new TextRun({text:'BookLingua Reader Panel',bold:true,size:38,font:'Arial',color:'241B3A'})],alignment:AlignmentType.CENTER,spacing:{after:280}}),
+    new Paragraph({children:[new TextRun({text:input.translatedTitle,bold:true,size:32,font:'Georgia',color:'111111'})],alignment:AlignmentType.CENTER,spacing:{after:180}}),
+    new Paragraph({children:[new TextRun({text:customerLanguageName(input.language),size:22,font:'Arial',color:'444444'})],alignment:AlignmentType.CENTER}),
+    new Paragraph({children:[new TextRun({text:`Approximate sample word count: ${count.toLocaleString('en-GB')}`,size:20,font:'Arial',color:'666666'})],alignment:AlignmentType.CENTER,spacing:{after:420}}),
+    new Paragraph({children:[new TextRun({text:"Read this naturally as you would any other book. Please don't actively proofread while reading. If something feels translated or interrupts your reading, note the chapter/paragraph so you can include it in the feedback form.",size:22,font:'Arial',color:'333333'})],alignment:AlignmentType.CENTER,spacing:{line:300},pageBreakBefore:false}),
   ]
   for(const section of sections){
-    children.push(new Paragraph({text:section.label,heading:HeadingLevel.HEADING_1,pageBreakBefore:true}))
-    for(const node of section.nodes){
-      if(node.type==='heading')children.push(new Paragraph({text:node.translatedText!,heading:node.headingLevel===1?HeadingLevel.HEADING_2:HeadingLevel.HEADING_3}))
-      else if(node.type==='scene_break')children.push(new Paragraph({text:'* * *',alignment:AlignmentType.CENTER}))
+    children.push(new Paragraph({children:[new TextRun({text:section.label,bold:true,size:30,font:'Arial',color:'241B3A'})],pageBreakBefore:true,spacing:{after:300}}))
+    const renderedNodes=mergeDropCaps(section.nodes)
+    for(let nodeIndex=0;nodeIndex<renderedNodes.length;nodeIndex++){
+      const node=renderedNodes[nodeIndex]
+      if(node.type==='heading')children.push(new Paragraph({children:[new TextRun({text:node.translatedText!,bold:true,size:node.headingLevel===1?30:26,font:'Georgia',color:'111111'})],alignment:AlignmentType.CENTER,spacing:{before:240,after:220},keepNext:true}))
+      else if(node.type==='scene_break')children.push(new Paragraph({children:[new TextRun({text:'* * *',size:24,font:'Georgia',color:'333333'})],alignment:AlignmentType.CENTER,spacing:{before:180,after:180}}))
+      else if(renderedNodes[nodeIndex-1]?.type==='heading'&&words(node.translatedText)<=10)children.push(new Paragraph({children:[new TextRun({text:node.translatedText!,italics:true,size:24,font:'Georgia',color:'333333'})],alignment:AlignmentType.CENTER,spacing:{after:220}}))
       else children.push(new Paragraph({
-        text:node.translatedText!,
-        alignment:AlignmentType.JUSTIFIED,
+        children:[new TextRun({text:node.translatedText!,size:24,font:'Georgia',color:'111111'})],
+        alignment:AlignmentType.LEFT,
         spacing:{after:100,line:276},
         indent:node.type==='paragraph'?{firstLine:360}:undefined,
         bullet:node.type==='list_item'?{level:0}:undefined,
@@ -78,7 +115,9 @@ export async function buildReaderSampleDocx(input:{document:SemanticDocumentV2;t
       }))
     }
   }
-  return deterministicDocx(Buffer.from(await Packer.toBuffer(new Document({sections:[{
+  return deterministicDocx(Buffer.from(await Packer.toBuffer(new Document({
+    styles:{default:{document:{run:{font:'Georgia',size:24,color:'111111'},paragraph:{spacing:{line:300}}}}},
+    sections:[{
     properties:{page:{size:{width:11906,height:16838},margin:{top:1134,right:1134,bottom:1134,left:1134}}},
     children,
   }]}))))
@@ -103,7 +142,8 @@ export async function createReaderPanelRequests(input:{supabase:any;orderId:stri
     const document=semantic.document as SemanticDocumentV2,sections=selectReaderSample(document),wordCount=readerSampleWordCount(sections)
     if(wordCount<7000||wordCount>9000)throw new Error(`Reader sample word count outside 7,000–9,000 for ${language}: ${wordCount}`)
     const identity=readerPanelIdentity(input.orderId,language,build.id,input.customerPackageVersion)
-    const filename=readerSampleFilename(input.bookTitle,language),buffer=await buildReaderSampleDocx({document,translatedTitle:document.nodes.find(node=>node.type==='heading')?.translatedText||input.bookTitle,language,sections})
+    const translatedTitle=translatedReaderTitle(document,input.bookTitle)
+    const filename=readerSampleFilename(input.bookTitle,language),buffer=await buildReaderSampleDocx({document,translatedTitle,language,sections})
     const sha256=createHash('sha256').update(buffer).digest('hex'),bucket='booklingua-private-artifacts',storagePath=`${input.orderId}/${language}/${build.id}/reader_sample/${sha256}/${filename}`
     const {error:uploadError}=await input.supabase.storage.from(bucket).upload(storagePath,buffer,{upsert:false,contentType:'application/vnd.openxmlformats-officedocument.wordprocessingml.document'})
     if(uploadError&&!/already exists/i.test(uploadError.message))throw new Error(`Reader sample upload failed: ${uploadError.message}`)
@@ -116,7 +156,7 @@ export async function createReaderPanelRequests(input:{supabase:any;orderId:stri
     }else if(insertError)throw new Error(`Reader request persistence failed: ${insertError.message}`)
     if(row.email_state==='sent'){results.push({language,wordCount,emailSent:false,duplicate:true});continue}
     const token=signReaderPanelToken(identity),sampleUrl=`${input.appUrl}/api/reader-panel/${identity}/sample?token=${token}`,feedbackUrl=`${input.appUrl}/${READER_PANEL_FEEDBACK_FORM_FILENAME}`
-    const email=renderReaderPanelEmail({bookTitle:input.bookTitle,translatedTitle:document.nodes.find(node=>node.type==='heading')?.translatedText||input.bookTitle,language,genre:input.genre,wordCount,sections,sampleUrl,feedbackUrl})
+    const email=renderReaderPanelEmail({bookTitle:input.bookTitle,translatedTitle,language,genre:input.genre,wordCount,sections,sampleUrl,feedbackUrl})
     const sent=await input.send({from:'BookLingua Reader Panel <hello@booklingua.io>',to:[READER_PANEL_RECIPIENT],subject:email.subject,html:email.html},{idempotencyKey:`reader-panel/${identity}`})
     const {error:updateError}=await input.supabase.from('reader_panel_requests').update({email_state:'sent',provider_message_id:sent.id||null,requested_at:new Date().toISOString()}).eq('id',row.id).eq('email_state','pending')
     if(updateError)throw new Error(`Reader request completion failed: ${updateError.message}`)
