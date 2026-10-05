@@ -2,7 +2,7 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import {readFileSync} from 'node:fs'
 import { PackageArtifact,PackageManifestV1 } from '../lib/package-manifest'
-import { CUSTOMER_ARTIFACT_TYPES,customerArtifactFilename,customerContentDisposition,customerDeliveryAllowed,customerVisibleArtifacts,resolveCustomerDeliveryOrigin,sanitizeCustomerFilenamePart } from '../lib/customer-delivery'
+import { CUSTOMER_ARTIFACT_TYPES,customerArtifactFilename,customerBundleFilename,customerContentDisposition,customerDeliveryAllowed,customerVisibleArtifacts,resolveCustomerDeliveryOrigin,sanitizeCustomerFilenamePart } from '../lib/customer-delivery'
 import { buildCustomerArtifactDownloadUrl,buildCustomerPortalUrl,verifyCustomerArtifactToken,verifyCustomerPortalToken } from '../lib/download-token'
 import { renderCustomerPackageEmail } from '../lib/email-templates'
 
@@ -27,6 +27,17 @@ test('customer filenames use exact labels/codes, actual extensions, and safe rea
   assert.equal(sanitizeCustomerFilenamePart('../ Unsafe: Book?. '),'Unsafe Book')
   assert.throws(()=>customerArtifactFilename('Bride','fr',artifact('pass1_docx')),/Internal artifact/)
   assert.match(customerContentDisposition('Épouse - Final - FR.docx'),/filename\*=UTF-8''/)
+  assert.equal(customerBundleFilename('Bride: Hollow/King'),'Bride Hollow King - BookLingua Files.zip')
+})
+
+test('customer portal offers one authenticated ZIP for the complete package',()=>{
+  const page=readFileSync('app/download/[orderId]/page.tsx','utf8')
+  const route=readFileSync('app/api/download/[orderId]/all/route.ts','utf8')
+  assert.match(page,/Download all files as ZIP/)
+  assert.match(route,/verifyCustomerPortalToken/)
+  assert.match(route,/customerVisibleArtifacts/)
+  assert.match(route,/renderCustomerUploadGuideDocx/)
+  assert.match(route,/verifyStoredArtifact/)
 })
 
 test('customer tokens are scoped to the portal or one visible artifact',()=>{
