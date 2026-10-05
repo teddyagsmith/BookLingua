@@ -130,6 +130,9 @@ export default function BlogPostPage({ params }: BlogPostPageProps) {
         </Link>
         <div className="flex items-center gap-3 sm:gap-6">
           <ResourcesMenu />
+          <Link href="/pricing" className="text-gray-600 hover:text-brand-dark font-medium transition-colors hidden sm:block">
+            Pricing
+          </Link>
           <Link href="/examples" className="text-gray-600 hover:text-brand-dark font-medium transition-colors hidden sm:block">
             Examples
           </Link>

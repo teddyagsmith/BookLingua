@@ -628,7 +628,7 @@ function LaunchPackTab() {
             </div>
             <ul className="space-y-1.5">
               {[
-                'Use your authenticity angle: "Professionally translated with editorial review — not machine translation" in all outreach',
+                'Use your quality angle: "AI-assisted translation with editorial review and targeted professional translator review" in all outreach',
                 'Post your Translation Notes as social content — showing the editorial decisions builds instant credibility',
                 'Run a 48-hour launch price of €0.99 to spike the Amazon.es bestseller rank in the Horror > Vampires category',
                 'Ask your English-language ARC readers to also leave reviews on Amazon.es if they read Spanish',
@@ -769,6 +769,9 @@ export default function ExamplesPage() {
         </Link>
         <div className="flex items-center gap-3 sm:gap-6">
           <ResourcesMenu />
+          <Link href="/pricing" className="text-gray-600 hover:text-brand-dark font-medium transition-colors hidden sm:block">
+            Pricing
+          </Link>
           <Link href="/publishers" className="text-gray-600 hover:text-brand-dark font-medium transition-colors hidden sm:block">
             Publishers
           </Link>
