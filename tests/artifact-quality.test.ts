@@ -9,6 +9,7 @@ import { deriveEditorialTranslationNotes, validateTranslationNotes } from '../li
 import { parseSemanticDocx, parseSemanticTxt } from '../lib/semantic-parser'
 import { inferHeadingsFromContents } from '../lib/extract-segments'
 import { validateArtifact } from '../lib/artifact-validation-v2'
+import {inspectDeliveredDocx} from '../lib/delivery-contract'
 
 function document(nodes: Array<{ sourceText: string; translatedText: string }>,sourceFormat:'epub'|'docx'|'txt'='epub'): any {
   return { schemaVersion: '2.0', sourceHash: 'source', sourceFormat, parserConfidence: 1, nodes: nodes.map((node,index)=>({ id:`node-${index}`, chapterId:'chapter-1', type:index?'paragraph':'heading', headingLevel:index?null:1, sourceChapterNumber:null, order:index, sourceLocation:`OEBPS/book.xhtml:block:${index}`,...node })) }
@@ -94,6 +95,22 @@ test('review replacements retain a visible boundary between deleted and inserted
   assert.match(xml,/machen<\/w:t>.*?<w:t[^>]*> Tun/)
 })
 
+test('source-preserving DOCX Review retains original TOC nodes instead of synthesizing a second sequence',async()=>{
+  const pass1=document([
+    {sourceText:'Table of Contents',translatedText:'Inhaltsverzeichnis'},
+    {sourceText:'1. Greenlight',translatedText:'1. Grünes Licht'},
+    {sourceText:'Chapter 1',translatedText:'Kapitel 1'},
+    {sourceText:'Body text.',translatedText:'Haupttext.'},
+  ],'docx')
+  pass1.nodes[0].type='heading';pass1.nodes[0].headingLevel=1;pass1.nodes[0].chapterId='frontmatter'
+  pass1.nodes[1].type='paragraph';pass1.nodes[1].headingLevel=null
+  pass1.nodes[2].type='heading';pass1.nodes[2].headingLevel=1;pass1.nodes[2].chapterId='chapter-1'
+  const pass2=structuredClone(pass1);pass2.nodes[3].translatedText='Überarbeiteter Haupttext.'
+  const facts=inspectDeliveredDocx(await buildSemanticReviewDocx(pass1,pass2,'Titel'))
+  assert.equal((facts.acceptedText.match(/1\. Grünes Licht/g)||[]).length,1)
+  assert.match(facts.acceptedText,/Überarbeiteter Haupttext/)
+})
+
 test('review diff keeps bilingual title replacements coherent and suppresses typography-only noise',()=>{
   const title=wordLevelDiff('Bride of the Hollow King ?',"L'Épouse du Roi Vide ?")
   assert.equal(title.filter(token=>token.kind==='delete').map(token=>token.text).join(''),'Bride of the Hollow King ?')
@@ -152,6 +169,19 @@ test('source-preserving DOCX applies recovered semantic heading styles',async()=
   assert.match(xml,/w:pStyle w:val="Heading1"/)
 })
 
+test('source-preserving DOCX keeps spaces around a mid-sentence emphasis run and emits no empty w:t between runs',async()=>{
+  const source=Buffer.from(await Packer.toBuffer(new Document({sections:[{children:[new Paragraph({children:[
+    new TextRun('The '),new TextRun({text:'very important',italics:true}),new TextRun(' sentence.'),new TextRun(''),
+  ]})]}]})))
+  const parsed=await parseSemanticDocx(source,'run-boundary-source')
+  parsed.nodes[0].translatedText='Der sehr wichtige Satz.'
+  const zip:any=new AdmZip(await buildSemanticDocxPreservingSource(source,parsed)),xml=zip.getEntry('word/document.xml')!.getData().toString('utf8')
+  const texts=(Array.from(xml.matchAll(/<w:t[^>]*>([\s\S]*?)<\/w:t>/g)) as RegExpMatchArray[]).map(match=>match[1])
+  assert.equal(texts.join(''),'Der sehr wichtige Satz.')
+  assert.ok(texts.some(value=>/^\s|\s$/.test(value)),'a run carries each formatting boundary space')
+  assert.doesNotMatch(xml,/<w:t[^>]*><\/w:t>/)
+})
+
 test('translation notes are derived from real editorial changes and remain schema-valid', () => {
   const pass1=document([{sourceText:'Title',translatedText:'Titre'},{sourceText:'A sharp breath.',translatedText:'Un souffle vif.'}])
   const pass2=structuredClone(pass1);pass2.nodes[1].translatedText='Une inspiration brusque.'
@@ -159,6 +189,7 @@ test('translation notes are derived from real editorial changes and remain schem
   assert.deepEqual(validateTranslationNotes(notes),[])
   assert.equal(notes.sections[0].entries.length,2)
   assert.match(notes.sections[0].entries[1].reason,/editorial review/)
+  assert.deepEqual(validateTranslationNotes(notes,{requireSpecificReasons:true}),[])
 })
 
 test('preserved DOCX gains a real default Normal style when the source stylesheet leaves it dangling',async()=>{

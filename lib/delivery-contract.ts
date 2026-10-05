@@ -22,9 +22,27 @@ export interface DocxFacts {
   superscriptRuns: number
   hasDefaultStyle: boolean
   text: string
+  /** Text a reader sees after accepting the Review file's deletions. */
+  acceptedText: string
+  acceptedWordCount: number
+  emptyTextBetweenRuns: number
+  germanQuotes: { germanPairs: number; asciiMarks: number; guillemetMarks: number; mixedMarks: number; unbalancedGermanMarks: number }
 }
 
 const RUN = { italic: /<w:i\s*\/>/g, bold: /<w:b\s*\/>/g, superscript: /w:vertAlign w:val="superscript"/g }
+
+function decodeText(value:string):string{return value.replace(/&lt;/g,'<').replace(/&gt;/g,'>').replace(/&quot;/g,'"').replace(/&apos;/g,"'").replace(/&amp;/g,'&')}
+export function deliveredWordCount(value:string):number{return value.match(/[A-Za-zÀ-ÖØ-öø-ÿĀ-ž0-9]+(?:[’'\-][A-Za-zÀ-ÖØ-öø-ÿĀ-ž0-9]+)*/g)?.length||0}
+
+export function inspectGermanQuotes(value:string):DocxFacts['germanQuotes']{
+  const asciiMarks=(value.match(/"/g)||[]).length
+  const guillemetMarks=(value.match(/[«»]/g)||[]).length
+  let opens=0,closes=0
+  for(const mark of value.match(/[„“]/g)||[]){
+    if(mark==='„')opens++;else closes++
+  }
+  return{germanPairs:Math.min(opens,closes),asciiMarks,guillemetMarks,mixedMarks:(value.match(/”/g)||[]).length,unbalancedGermanMarks:Math.abs(opens-closes)}
+}
 
 /** Read a delivered DOCX the way a reader's word processor would: from its own bytes. */
 export function inspectDeliveredDocx(buffer: Buffer): DocxFacts {
@@ -37,6 +55,16 @@ export function inspectDeliveredDocx(buffer: Buffer): DocxFacts {
   for (const match of Array.from(document.matchAll(/<w:pStyle w:val="([^"]+)"/g)) as RegExpMatchArray[]) {
     byStyle[match[1]] = (byStyle[match[1]] || 0) + 1
   }
+  const paragraphMarkup=(Array.from(document.matchAll(/<w:p[ >][\s\S]*?<\/w:p>/g)) as RegExpMatchArray[]).map(match=>match[0])
+  const text=paragraphMarkup.map(paragraph => (Array.from(paragraph.matchAll(/<w:t[^>]*>([\s\S]*?)<\/w:t>/g)) as RegExpMatchArray[]).map(match=>decodeText(match[1])).join('')).join('\n')
+  let emptyTextBetweenRuns=0
+  const acceptedText=paragraphMarkup.map(paragraph=>{
+    const values=(Array.from(paragraph.matchAll(/<w:t[^>]*>([\s\S]*?)<\/w:t>/g)) as RegExpMatchArray[]).map(match=>decodeText(match[1]))
+    values.forEach((value,index)=>{if(!value&&values.slice(0,index).some(Boolean)&&values.slice(index+1).some(Boolean))emptyTextBetweenRuns++})
+    const runs=(Array.from(paragraph.matchAll(/<w:r\b[^>]*>[\s\S]*?<\/w:r>/g)) as RegExpMatchArray[]).map(match=>match[0])
+    const struck=(run:string)=>/<w:strike\b(?![^>]*\bw:val="(?:false|0|off)")[^>]*\/>/.test(run)
+    return runs.filter(run=>!struck(run)).flatMap(run=>(Array.from(run.matchAll(/<w:t[^>]*>([\s\S]*?)<\/w:t>/g)) as RegExpMatchArray[]).map(match=>decodeText(match[1]))).join('')
+  }).join('\n')
   return {
     paragraphs: (document.match(/<w:p[ >]/g) || []).length,
     styles: byStyle,
@@ -46,9 +74,8 @@ export function inspectDeliveredDocx(buffer: Buffer): DocxFacts {
     // Without a style flagged default, Pages renders every paragraph as the first style
     // it finds. LibreOffice guesses sanely, which is how this shipped unnoticed.
     hasDefaultStyle: /w:default="1"/.test(styles),
-    text: (Array.from(document.matchAll(/<w:p[ >][\s\S]*?<\/w:p>/g)) as RegExpMatchArray[]).map(paragraph =>
-      (Array.from(paragraph[0].matchAll(/<w:t[^>]*>([^<]*)<\/w:t>/g)) as RegExpMatchArray[]).map(match=>match[1]).join('')
-    ).join('\n'),
+    text, acceptedText, acceptedWordCount:deliveredWordCount(acceptedText),emptyTextBetweenRuns,
+    germanQuotes:inspectGermanQuotes(acceptedText),
   }
 }
 
@@ -58,6 +85,8 @@ export interface DeliveryExpectation {
   readerRegister: ReaderRegister
   /** Required paragraph counts per style. Structure must survive translation unchanged. */
   styles: Record<string, number>
+  /** Source-preserving formats may retain additional styled layout paragraphs. */
+  minimumStyles?: Record<string,number>
   /** Omitted when the writer adds layout paragraphs the node count cannot predict. */
   paragraphs?: number
   /** The delivered file can never hold fewer paragraphs than the document has nodes. */
@@ -68,7 +97,7 @@ export interface DeliveryExpectation {
 }
 
 const CORRUPTION = [
-  { code: 'SPACED_PUNCTUATION', pattern: / [.,;:!?]/g, describe: 'space before punctuation' },
+  { code: 'SPACED_PUNCTUATION', pattern: / [.,;:!?](?!\d)/g, describe: 'space before punctuation' },
   { code: 'DOUBLE_SPACE', pattern: /\S {2,}\S/g, describe: 'collapsed whitespace missing' },
   { code: 'ASCII_APOSTROPHE', pattern: /[A-Za-zÀ-ÿ]'[A-Za-zÀ-ÿ]/g, describe: 'straight apostrophe between letters' },
 ]
@@ -99,6 +128,7 @@ export function checkDeliveredDocx(facts: DocxFacts, expectation: DeliveryExpect
   if (!facts.hasDefaultStyle) {
     failures.push({ code: 'NO_DEFAULT_STYLE', detail: 'styles.xml declares no w:default="1" style, so Pages will render the whole document in one style' })
   }
+  if(facts.emptyTextBetweenRuns)failures.push({code:'EMPTY_TEXT_BETWEEN_RUNS',detail:`${facts.emptyTextBetweenRuns} empty w:t elements lie between text runs`})
   if (expectation.paragraphs !== undefined && facts.paragraphs !== expectation.paragraphs) {
     failures.push({ code: 'PARAGRAPH_COUNT', detail: `expected ${expectation.paragraphs} paragraphs, delivered ${facts.paragraphs}` })
   }
@@ -108,6 +138,10 @@ export function checkDeliveredDocx(facts: DocxFacts, expectation: DeliveryExpect
   for (const [style, expected] of Object.entries(expectation.styles)) {
     const actual = facts.styles[style] || 0
     if (actual !== expected) failures.push({ code: 'HEADING_COUNT', detail: `expected ${expected} ${style} paragraphs, delivered ${actual}` })
+  }
+  for(const [style,minimum] of Object.entries(expectation.minimumStyles||{})){
+    const actual=facts.styles[style]||0
+    if(actual<minimum)failures.push({code:'HEADING_COUNT',detail:`expected at least ${minimum} ${style} paragraphs, delivered ${actual}`})
   }
   const tolerance = expectation.emphasisTolerance ?? 0.05
   for (const [kind, expected] of Object.entries(expectation.emphasis) as Array<[keyof DeliveryExpectation['emphasis'], number]>) {
@@ -124,6 +158,11 @@ export function checkDeliveredDocx(facts: DocxFacts, expectation: DeliveryExpect
       failures.push({ code: check.code, detail: `${matches.length} instances of ${check.describe}, first at "${matches[0].trim()}"` })
     }
   }
+  if(expectation.language==='de'){
+    if(facts.germanQuotes.asciiMarks)failures.push({code:'GERMAN_ASCII_QUOTES',detail:`${facts.germanQuotes.asciiMarks} ASCII double-quote marks remain`})
+    if(facts.germanQuotes.guillemetMarks)failures.push({code:'GERMAN_GUILLEMETS',detail:`${facts.germanQuotes.guillemetMarks} guillemet marks remain in German text`})
+    if(facts.germanQuotes.mixedMarks)failures.push({code:'GERMAN_MIXED_QUOTES',detail:`${facts.germanQuotes.mixedMarks} mixed German quote marks remain`})
+  }
   if (languageHasReaderRegister(expectation.language)) {
     const violations = readerRegisterViolations(stripQuotedSpeech(facts.text,expectation.language), expectation.language, expectation.readerRegister)
     if (violations.length) {
@@ -135,6 +174,13 @@ export function checkDeliveredDocx(facts: DocxFacts, expectation: DeliveryExpect
     }
   }
   return failures
+}
+
+/** Review includes a short reader guide, so allow only that small fixed/relative delta. */
+export function checkFinalReviewWordParity(finalFacts:DocxFacts,reviewFacts:DocxFacts):ContractFailure[]{
+  const delta=reviewFacts.acceptedWordCount-finalFacts.acceptedWordCount
+  const tolerance=Math.max(80,Math.ceil(finalFacts.acceptedWordCount*0.002))
+  return Math.abs(delta)>tolerance?[{code:'FINAL_REVIEW_WORD_COUNT',detail:`Final has ${finalFacts.acceptedWordCount} accepted words; Review has ${reviewFacts.acceptedWordCount} (delta ${delta}, tolerance ${tolerance})`}]:[]
 }
 
 /**

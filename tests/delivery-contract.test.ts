@@ -2,7 +2,7 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import AdmZip from 'adm-zip'
 import {
-  checkCrossLanguageParity, checkDeliveredDocx, checkUploadedObject,
+  checkCrossLanguageParity, checkDeliveredDocx, checkFinalReviewWordParity, checkUploadedObject,
   describeFailures, inspectDeliveredDocx,
 } from '../lib/delivery-contract'
 
@@ -58,6 +58,30 @@ test('the whitespace and apostrophe corruptions that shipped are caught in the d
   assert.ok(spaced.some(failure => failure.code === 'SPACED_PUNCTUATION'))
   const straight = checkDeliveredDocx(inspectDeliveredDocx(docx({ text: "Vous n'avez rien fait" })), { ...expectation, language: 'fr' })
   assert.ok(straight.some(failure => failure.code === 'ASCII_APOSTROPHE'))
+})
+
+test('empty text elements between populated runs hard-fail',()=>{
+  const broken=docx({text:'links'})
+  const zip:any=new AdmZip(broken),xml=zip.getEntry('word/document.xml').getData().toString('utf8')
+  zip.updateFile('word/document.xml',Buffer.from(xml.replace('<w:t>links</w:t>','<w:t>links</w:t></w:r><w:r><w:t></w:t></w:r><w:r><w:t> rechts</w:t>')))
+  const failures=checkDeliveredDocx(inspectDeliveredDocx(zip.toBuffer()),{...expectation,paragraphs:9})
+  assert.ok(failures.some(failure=>failure.code==='EMPTY_TEXT_BETWEEN_RUNS'))
+})
+
+test('German delivery rejects ASCII, guillemet and mixed quote pairs',()=>{
+  for(const [text,code] of [['Er sagte "Hallo".','GERMAN_ASCII_QUOTES'],['Er sagte «Hallo».','GERMAN_GUILLEMETS'],['Er sagte “Hallo”.','GERMAN_MIXED_QUOTES']] as const){
+    const failures=checkDeliveredDocx(inspectDeliveredDocx(docx({text})),expectation)
+    assert.ok(failures.some(failure=>failure.code===code),`${code} for ${text}`)
+  }
+  assert.ok(!checkDeliveredDocx(inspectDeliveredDocx(docx({text:'Er sagte „Hallo“.'})),expectation).some(failure=>failure.code.startsWith('GERMAN_')))
+})
+
+test('Final and accepted Review word counts may differ only by the small review-guide tolerance',()=>{
+  const final=inspectDeliveredDocx(docx({text:Array.from({length:100},()=> 'Wort').join(' ')}))
+  const near={...final,acceptedWordCount:final.acceptedWordCount+40}
+  const far={...final,acceptedWordCount:final.acceptedWordCount+120}
+  assert.deepEqual(checkFinalReviewWordParity(final,near),[])
+  assert.equal(checkFinalReviewWordParity(final,far)[0].code,'FINAL_REVIEW_WORD_COUNT')
 })
 
 test('register drift fails the delivered German file', () => {

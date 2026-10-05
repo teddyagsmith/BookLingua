@@ -34,7 +34,7 @@ function decodeVisibleEntities(value: string): string {
   return output
 }
 
-export function validateTranslationNotes(notes: TranslationNotesV1): string[] {
+export function validateTranslationNotes(notes: TranslationNotesV1, options:{requireSpecificReasons?:boolean}={}): string[] {
   const errors: string[] = []
   if (notes.schemaVersion !== TRANSLATION_NOTES_SCHEMA_VERSION) errors.push('Unexpected translation-notes schema version')
   if (!notes.language.trim()) errors.push('Translation-notes language is missing')
@@ -42,6 +42,17 @@ export function validateTranslationNotes(notes: TranslationNotesV1): string[] {
   // An empty section list is truthful when no notable decisions were recorded.
   if (notes.sections.some(section => !section.id || !section.title || !section.entries.length)) errors.push('Translation-notes section is incomplete')
   if (notes.sections.some(section => section.entries.some(entry => !entry.source || !entry.target || !entry.reason))) errors.push('Translation-note entry is incomplete')
+  if(options.requireSpecificReasons){
+    const entries=notes.sections.flatMap(section=>section.entries)
+    const normalized=entries.map(entry=>entry.reason.normalize('NFKC').toLocaleLowerCase().replace(/\s+/g,' ').trim())
+    if(new Set(normalized).size!==normalized.length)errors.push('Translation-note reasons must be unique')
+    for(const entry of entries){
+      const evidence=[entry.source,entry.target].map(value=>value.normalize('NFKC').trim().slice(0,28)).filter(value=>value.length>=3)
+      if(entry.reason.trim().length<45||!evidence.some(value=>entry.reason.includes(value))){
+        errors.push(`Translation-note reason lacks specific evidence: ${entry.source.slice(0,60)}`)
+      }
+    }
+  }
   return errors
 }
 
@@ -84,18 +95,19 @@ export function deriveEditorialTranslationNotes(input: {
   authoritativeTitle?: { source: string; target: string }
   limit?: number
 }): TranslationNotesV1 {
+  const excerpt=(value:string,limit=72)=>{const clean=value.normalize('NFKC').replace(/\s+/g,' ').trim();return clean.length>limit?`${clean.slice(0,limit-1).trimEnd()}…`:clean}
   const limit = Math.max(1, Math.min(input.limit || 12, 20))
   const decisions: TranslationNoteEntry[] = []
   if (input.authoritativeTitle) decisions.push({
     source: input.authoritativeTitle.source,
     target: input.authoritativeTitle.target,
-    reason: 'Used consistently as the authoritative translated book title in the manuscript and customer files.',
+    reason: `The source title “${excerpt(input.authoritativeTitle.source)}” is rendered as “${excerpt(input.authoritativeTitle.target)}”; that exact title is used consistently in the manuscript and customer files.`,
   })
   for (let index = 0; index < input.pass1.nodes.length && decisions.length < limit; index++) {
     const first = input.pass1.nodes[index]; const second = input.pass2.nodes[index]
     if (!second || first.id !== second.id || !first.translatedText || !second.translatedText || first.translatedText === second.translatedText) continue
     const source = first.sourceText
-    const reason = /\b(Caelan|Shayla|Greymere|Blackthorn|Hollow Court|king|queen|court)\b/i.test(source)
+    const rationale = /\b(Caelan|Shayla|Greymere|Blackthorn|Hollow Court|king|queen|court)\b/i.test(source)
       ? 'The editorial review keeps character, place, rank, and worldbuilding terminology coherent while allowing the surrounding sentence to read naturally in the target language.'
       : /\b(kiss|touch|desire|want|body|breath|heart|love|consent|please)\b/i.test(source)
         ? 'The editorial review preserves romantic tension, emotional intensity, and consent cues without making the final wording clinical or more explicit than the source.'
@@ -106,7 +118,8 @@ export function deriveEditorialTranslationNotes(input: {
             : /[!?…]/.test(source)
               ? 'The editorial review preserves the source sentence’s emphasis, hesitation, and narrative rhythm in target-language punctuation and cadence.'
               : 'The editorial review chooses a natural target-language construction that preserves the complete source meaning and the narrator’s established voice.'
-    decisions.push({ source: first.sourceText, target: second.translatedText, reason })
+    const before=excerpt(first.translatedText,64),after=excerpt(second.translatedText,64),evidence=excerpt(source,56)
+    decisions.push({ source: first.sourceText, target: second.translatedText, reason: `In “${evidence}”, the edit changes “${before}” to “${after}”. ${rationale}` })
   }
   const existingSections = input.existing?.sections || []
   return {
@@ -115,7 +128,10 @@ export function deriveEditorialTranslationNotes(input: {
     approach: 'The translation preserves the author’s narrative voice and semantic structure. These notes highlight representative title, terminology, dialogue, tone, and editorial decisions evidenced in the completed two-pass translation.',
     sections: [
       ...(decisions.length ? [{ id: 'editorial-decisions', title: 'Representative Editorial Decisions', entries: decisions }] : []),
-      ...existingSections.map(section => ({ ...section, id: `approved-${section.id}`, title: `Approved Instructions — ${section.title}` })),
+      ...existingSections.map(section => ({ ...section, id: `approved-${section.id}`, title: `Approved Instructions — ${section.title}`,entries:section.entries.map(entry=>({
+        ...entry,
+        reason:`For “${excerpt(entry.source,56)}”, the approved instruction is evidenced by “${excerpt(entry.target,64)}”; the recorded author choice was ${excerpt(entry.reason,40)}.`,
+      })) })),
     ],
   }
 }

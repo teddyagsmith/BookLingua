@@ -35,3 +35,11 @@ test('brief fingerprint is stable across PostgreSQL JSONB key reordering', () =>
   const reordered: any = { items: brief.items.map(item => ({ targetInstruction:item.targetInstruction, authorDecision:item.authorDecision, sourceTerm:item.sourceTerm, id:item.id })), approvalSource:brief.approvalSource, schemaVersion:brief.schemaVersion, approvedAt:brief.approvedAt, sourceManifestFingerprint:brief.sourceManifestFingerprint, revision:brief.revision, language:brief.language }
   assert.equal(translationBriefFingerprint(reordered), translationBriefFingerprint(brief))
 })
+
+test('German briefs carry article-country and book-wide explanation guidance into both passes',()=>{
+  const brief=buildTranslationBrief({language:'de',sourceManifestFingerprint:'source',approvedAt:'2026-10-05T00:00:00.000Z',decisions:[{term:'DMV',decision:'footnote'}]})
+  const prompt=renderTranslationBriefPrompt(brief)
+  assert.match(prompt,/first source occurrence only/)
+  assert.match(prompt,/die Slowakei, die Schweiz, die Türkei, der Iran/)
+  assert.match(prompt,/in der Slowakei/)
+})

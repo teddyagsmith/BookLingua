@@ -12,8 +12,8 @@
  * prompt actually re-runs instead of silently returning the previous output. Bumping one
  * pass leaves the other pass's cached work intact.
  */
-export const TRANSLATION_PROMPT_VERSION = 'translation-v2-reader-register'
-export const EDITORIAL_PROMPT_VERSION = 'editorial-v3-reader-register'
+export const TRANSLATION_PROMPT_VERSION = 'translation-v3-book-wide-explanations'
+export const EDITORIAL_PROMPT_VERSION = 'editorial-v4-book-wide-explanations-country-articles'
 
 const TRANSLATION_CONTRACT =
   'Return only valid JSON matching the supplied schema. Preserve every node id and order exactly. Translate all textual node values; never omit or add nodes.'

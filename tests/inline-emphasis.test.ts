@@ -33,6 +33,16 @@ test('emphasis is mapped onto the translated words and merged where formatting m
   assert.equal(mapped.filter(r => r.italic).length, 1, 'adjacent italic runs are merged')
 })
 
+test('an italic phrase in mid-sentence retains spaces on both sides',()=>{
+  const runs=blockEmphasisRuns('The <em>very important</em> sentence.',STYLES)
+  const mapped=distributeEmphasis(runs,'Der sehr wichtige Satz.')!
+  assert.equal(mapped.map(run=>run.text).join(''),'Der sehr wichtige Satz.')
+  const italic=mapped.findIndex(run=>run.italic)
+  assert.ok(italic>0&&italic<mapped.length-1)
+  assert.match(mapped[italic].text,/^\s/)
+  assert.match(mapped[italic+1].text,/^\s/)
+})
+
 test('superscript footnote markers stay attached and do not consume nearby words', () => {
   const runs = blockEmphasisRuns('Genes load the gun<span class="CharOverride-14">1</span>. Lifestyle pulls it.', STYLES)
   const mapped = distributeEmphasis(runs, 'Gene laden die Waffe¹. Der Lebensstil drückt ab.')!

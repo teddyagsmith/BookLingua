@@ -5,6 +5,7 @@ import { PackageArtifact,PackageManifestV1 } from '../lib/package-manifest'
 import { CUSTOMER_ARTIFACT_TYPES,customerArtifactFilename,customerContentDisposition,customerDeliveryAllowed,customerVisibleArtifacts,resolveCustomerDeliveryOrigin,sanitizeCustomerFilenamePart } from '../lib/customer-delivery'
 import { buildCustomerArtifactDownloadUrl,buildCustomerPortalUrl,buildReviewArtifactDownloadUrl,buildReviewPortalUrl,verifyCustomerArtifactToken,verifyCustomerPortalToken,verifyReviewArtifactToken,verifyReviewPortalToken } from '../lib/download-token'
 import { renderCustomerPackageEmail } from '../lib/email-templates'
+import {normalizeLegacyLaunchPackForCustomer} from '../lib/customer-delivery-docx'
 
 function artifact(type:PackageArtifact['type'],filename=`${type}.docx`):PackageArtifact{return{id:`id-${type}`,buildId:'build',type,required:true,filename,storageBucket:'private',storagePath:`secret/${type}`,sha256:'a'.repeat(64),sizeBytes:10,validationStatus:'pass'}}
 function manifest():PackageManifestV1{const artifacts=[artifact('translation_brief','brief.json'),artifact('pass1_docx'),artifact('review_docx'),artifact('final_docx'),artifact('final_epub','final.epub'),artifact('translation_notes','notes.txt'),artifact('chapter_map_docx'),artifact('chapter_map_csv','map.csv'),artifact('upload_guide'),artifact('launch_pack','pack.json')];return{schemaVersion:'1.0',orderId:'order',language:'fr',buildId:'build',status:'pass',entitlements:{sourceFormat:'epub',launchPack:true,dualFormat:true},artifacts,errors:[],generatedAt:'2026-08-14T00:00:00Z'}}
@@ -84,4 +85,11 @@ test('preview resend is staging-only, exact-recipient, provider-idempotent and l
   assert.match(source,/internal-customer-preview-v2/);assert.match(source,/gilly@myromancereads\.com/);assert.match(source,/buildReviewPortalUrl/)
   assert.match(source,/bookTitle:cleanBookTitle\(order\.book_title\)/)
   assert.doesNotMatch(source,/from\('delivery_events'\)|begin_hardened_delivery/)
+})
+
+test('legacy inline category verification becomes a separate Launch Pack note',()=>{
+  const pack:any={categories:['Romance > Romantic Suspense (verify current KDP path)'],categoriesNote:'Existing note.'}
+  const normalized=normalizeLegacyLaunchPackForCustomer(pack)
+  assert.deepEqual(normalized.categories,['Romance > Romantic Suspense'])
+  assert.equal(normalized.categoriesNote,'Existing note. verify current KDP path')
 })

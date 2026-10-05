@@ -227,7 +227,11 @@ export async function buildSemanticReviewDocx(pass1: SemanticDocumentV2, pass2: 
     new Paragraph('Read this as a polished translation with editorial changes marked in place. Yellow strikethrough shows wording removed during editorial review; adjacent yellow text shows its replacement. Unmarked text was unchanged. Accept or reject marked revisions in Word as appropriate.'),
     ...(changeCount === 0 ? [new Paragraph('Editorial review completed: no wording changes were required, so this document intentionally contains no highlighted revisions.')] : []),
   ]
-  const firstNodes=artifactDocxNodes(pass1),secondNodes=artifactDocxNodes(pass2)
+  // A source-preserving DOCX already contains its author's TOC paragraphs. Replacing
+  // them with synthesized rows makes Review a different book from Final. EPUB/clean
+  // output still uses the synthesized artifact sequence where it is required.
+  const firstNodes=pass1.sourceFormat==='docx'?pass1.nodes:artifactDocxNodes(pass1)
+  const secondNodes=pass2.sourceFormat==='docx'?pass2.nodes:artifactDocxNodes(pass2)
   firstNodes.forEach((first, index) => {
     const second = secondNodes[index]
     if (!second || second.id !== first.id) throw new Error('Review semantic identity mismatch')
@@ -300,6 +304,11 @@ function replaceDocxParagraphText(inner: string, translated: string): string {
     // Word normally stores boundary whitespace inside one of the adjacent
     // text runs. Repartitioning translated words must restore that boundary.
     if(value && offset < words.length)value += ' '
+    // A source paragraph can contain formatting-only or whitespace-only text runs.
+    // Leaving an empty w:t between populated runs creates a real Word boundary that
+    // downstream readers handle inconsistently. Keep the surrounding w:r formatting
+    // container, but omit the empty text element entirely.
+    if(!value)return ''
     return `<w:t${attrs}${/^\s|\s$/.test(value)&&!attrs.includes('xml:space')?' xml:space="preserve"':''}>${escapeXml(value)}</w:t>`
   })
 }

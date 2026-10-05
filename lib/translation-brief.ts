@@ -10,6 +10,9 @@ export interface TranslationBriefItem {
   issueType?: string
   authorDecision: string
   targetInstruction: string
+  /** Optional exact target wording used by the book-wide explanatory-note gate. */
+  targetTerm?: string
+  explanatoryNote?: string
 }
 
 export interface TranslationBriefV1 {
@@ -40,7 +43,7 @@ function instructionFor(decision: Record<string, unknown>): string {
   if (choice === 'replace' || choice === 'adapt' || choice === 'convert') {
     return replacement ? `Use exactly: ${String(replacement)}` : 'Adapt consistently for the target locale.'
   }
-  if (choice === 'footnote' || choice === 'convert_with_note') return 'Translate or convert consistently and include the requested explanatory note.'
+  if (choice === 'footnote' || choice === 'convert_with_note') return 'Keep one short parenthetical explanation on the first source occurrence only; never repeat it or attach it to a sentence where the source term is absent.'
   if (choice === 'false_positive') return 'Ignore this scanner finding; apply normal literary translation.'
   return 'Translate naturally and use the same equivalent consistently.'
 }
@@ -67,6 +70,8 @@ export function buildTranslationBrief(input: {
       issueType: decision.type || decision.category ? String(decision.type || decision.category) : undefined,
       authorDecision: String(decision.decision || 'translate'),
       targetInstruction: instructionFor(decision),
+      targetTerm: decision.targetTerm ? String(decision.targetTerm) : undefined,
+      explanatoryNote: decision.explanatoryNote || decision.explanation ? String(decision.explanatoryNote || decision.explanation) : undefined,
     })).filter(item => item.sourceTerm.length > 0),
   }
 }
@@ -75,10 +80,16 @@ export function renderTranslationBriefPrompt(brief: TranslationBriefV1): string 
   const instructions = brief.items.length
     ? brief.items.map(item => `- "${item.sourceTerm}": ${item.targetInstruction}`).join('\n')
     : '- No special author terminology decisions were required.'
+  const explanatoryPolicy = brief.items.some(item => item.authorDecision === 'footnote' || item.authorDecision === 'convert_with_note')
+    ? '\nBook-wide explanatory-note state: explain each author-selected term exactly once, at its first source occurrence only, in one short parenthesis. Never explain an unselected term, repeat an explanation, or add the note to a sentence whose source lacks the exact term. The deterministic final gate checks the whole book.'
+    : ''
+  const languageGuidance = brief.language === 'de'
+    ? '\nGerman grammar: article-taking country names retain their article and inflection in context: die Slowakei, die Schweiz, die Türkei, der Iran (for example in der Slowakei, aus der Schweiz, in die Türkei, im Iran).'
+    : ''
   return `TRANSLATION BRIEF v${brief.schemaVersion} (${brief.language})
 Brief fingerprint: ${brief.sourceManifestFingerprint}
 Follow these author-approved decisions in this pass without exception:
-${instructions}`
+${instructions}${explanatoryPolicy}${languageGuidance}`
 }
 
 export async function loadTranslationBrief(

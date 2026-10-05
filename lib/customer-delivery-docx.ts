@@ -36,9 +36,21 @@ export function extractAuthoritativeTranslatedTitle(bytes:Buffer,bookTitle:strin
   return null
 }
 
+/** Move legacy inline category verification prose into the schema's note field. */
+export function normalizeLegacyLaunchPackForCustomer(pack:LaunchPackV1):LaunchPackV1{
+  const notes:string[]=[]
+  const categories=pack.categories.map(category=>category.replace(/\s*\((verify[^)]*)\)\s*$/i,(_match,note:string)=>{
+    notes.push(note.trim())
+    return ''
+  }).trim())
+  if(!notes.length)return pack
+  return{...pack,categories,categoriesNote:[pack.categoriesNote,...notes].filter(Boolean).join(' ')}
+}
+
 export async function renderCustomerLaunchPackDocx(bytes:Buffer,bookTitle:string,translatedTitle?:string,authorName?:string):Promise<Buffer>{
   let launchPack:LaunchPackV1
   try{launchPack=JSON.parse(bytes.toString('utf8')) as LaunchPackV1}catch{throw new Error('Launch Pack structured data is malformed')}
+  launchPack=normalizeLegacyLaunchPackForCustomer(launchPack)
   const errors=validateLaunchPack({pack:launchPack,expectedLocale:launchPack.locale,purchased:true})
   if(errors.length)throw new Error(errors.join('; '))
   const title=translatedTitle?.trim()||bookTitle

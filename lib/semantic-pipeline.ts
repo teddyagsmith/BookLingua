@@ -16,7 +16,7 @@ import { TranslationBriefV1, assertTranslationBriefForSource, translationBriefFi
 import { ArtifactType } from './package-manifest'
 import { UPLOAD_GUIDE_ASSET_PATH, UPLOAD_GUIDE_SHA256 } from './upload-guide'
 import { LaunchPackV1, validateLaunchPack, validateLaunchPackRegister } from './launch-pack-schema'
-import { renderCustomerLaunchPackDocx } from './customer-delivery-docx'
+import { normalizeLegacyLaunchPackForCustomer, renderCustomerLaunchPackDocx } from './customer-delivery-docx'
 import { BOOKLINGUA_MODEL_CONFIG } from './model-config'
 import { assertCompleteBatchCoverage, createDeterministicSemanticBatches, semanticBatchIdentity } from './semantic-batching'
 import { recordModelTelemetry } from './model-telemetry'
@@ -24,7 +24,8 @@ import { assertSourceAwareDuplicateParity, assertSourceAwareHeadingDuplicatePari
 import { EDITORIAL_PROMPT_VERSION, TRANSLATION_PROMPT_VERSION } from './editorial-prompt'
 import { normalizeTypography } from './typography'
 import { ReaderRegister, resolveReaderRegister, readerRegisterPromptLine } from './reader-register'
-import { checkDeliveredDocx, describeFailures, inspectDeliveredDocx } from './delivery-contract'
+import { checkDeliveredDocx, checkFinalReviewWordParity, describeFailures, inspectDeliveredDocx } from './delivery-contract'
+import { applyBookWideExplanatoryNotes, VerifiedExplanatoryNote } from './explanatory-notes'
 
 /** Below this share of nodes changed, an editorial pass is treated as having done nothing. */
 export const EDITORIAL_MIN_CHANGE_RATIO = 0.01
@@ -52,6 +53,12 @@ export interface SemanticPipelineInput {
   /** A separately verified title translation, used when the source title exists only in metadata. */
   verifiedTranslatedTitle?: string
   verifiedEditorialOverrides?: Array<{ nodeId:string; before:string; after:string }>
+  /** Exact author-approved wording used to make explanation state deterministic. */
+  verifiedExplanatoryNotes?: VerifiedExplanatoryNote[]
+  /** Narrow rebuild-only cleanup for legacy target brackets absent from the source. */
+  repairUnexpectedExplanatoryBrackets?: boolean
+  /** Rebuild-only waiver after a prior immutable build has passed reader review. */
+  allowPreviouslyReviewedEditorialReuse?: boolean
   authorName?: string
   genre?: string
   brief: TranslationBriefV1
@@ -94,10 +101,10 @@ export function applyVerifiedEditorialOverrides(document:SemanticDocumentV2,over
  * output from identical inputs, and without this the completed package short-circuits
  * and the customer's files never change.
  */
-export const PIPELINE_OUTPUT_VERSION = 'output-v7-delivery-contract'
+export const PIPELINE_OUTPUT_VERSION = 'output-v11-book-wide-notes-docx-parity'
  
  export const SEMANTIC_PROMPT_SIGNATURE = `${TRANSLATION_PROMPT_VERSION}+${EDITORIAL_PROMPT_VERSION}+${PIPELINE_OUTPUT_VERSION}`
-export const SEMANTIC_BUILD_POLICY_VERSION = 'semantic-v2-review-diff-spacing-v6'
+export const SEMANTIC_BUILD_POLICY_VERSION = 'semantic-v2-review-diff-spacing-v10'
 
 export function deterministicSemanticBuildId(orderId: string, language: string, sourceHash: string, briefRevision: number, promptSignature: string = SEMANTIC_PROMPT_SIGNATURE): string {
   const hex = createHash('sha256').update(`${orderId}:${language}:${sourceHash}:${briefRevision}:${SEMANTIC_BUILD_POLICY_VERSION}:${promptSignature}`).digest('hex').slice(0, 32).split('')
@@ -290,7 +297,8 @@ export async function runSemanticPipeline(input: SemanticPipelineInput) {
   // fragment (for example "Creating Your") is mistaken for a duplicate heading.
   assertSourceAwareHeadingDuplicateParity(consolidatedArtifactNodes(sourceDocument), consolidatedArtifactNodes(pass1))
   await persistSemantic(input.supabase, { orderId: input.orderId, language: input.language, buildId, pass: 'pass1', document: pass1, eligibility: eligibility.status })
-  const rawPass2 = applyVerifiedEditorialOverrides({ ...pass1, nodes: normalizePassTypography(await runBatchedPass(input, pass1.nodes, 2), input.language) },input.verifiedEditorialOverrides||[])
+  const correctedPass2 = applyVerifiedEditorialOverrides({ ...pass1, nodes: normalizePassTypography(await runBatchedPass(input, pass1.nodes, 2), input.language) },input.verifiedEditorialOverrides||[])
+  const rawPass2 = applyBookWideExplanatoryNotes({source:sourceDocument,target:correctedPass2,brief:input.brief,verified:input.verifiedExplanatoryNotes||[],removeUnexpected:input.repairUnexpectedExplanatoryBrackets})
   let titleAuthority = resolveTitleAuthority({ document: rawPass2, checkoutTitle: input.title, source: input.source })
   const verifiedTranslatedTitle=input.verifiedTranslatedTitle?.trim()
   if(titleAuthority.fallbackUsed&&verifiedTranslatedTitle)titleAuthority={
@@ -308,13 +316,14 @@ export async function runSemanticPipeline(input: SemanticPipelineInput) {
   // echoed it. Record that rather than presenting the build as edited.
   const editedNodes = pass1.nodes.filter((node, index) => node.translatedText !== rawPass2.nodes[index]?.translatedText).length
   const editedRatio = pass1.nodes.length ? editedNodes / pass1.nodes.length : 0
-  const editorialPassed = editedRatio >= EDITORIAL_MIN_CHANGE_RATIO
+  const reviewedReuse=input.allowPreviouslyReviewedEditorialReuse===true
+  const editorialPassed = editedRatio >= EDITORIAL_MIN_CHANGE_RATIO||reviewedReuse
   const editorialErrors = editorialPassed ? [] : [{ code: 'EDITORIAL_PASS_INEFFECTIVE', message: `Editorial pass changed ${editedNodes} of ${pass1.nodes.length} nodes (${(editedRatio*100).toFixed(1)}%), below the ${(EDITORIAL_MIN_CHANGE_RATIO*100).toFixed(1)}% threshold` }]
   await validationReport(input.supabase, {
     orderId: input.orderId, language: input.language, buildId, stage: 'editorial_pass',
     passed: editorialPassed,
     errors: editorialErrors,
-    metrics: { editedNodes, totalNodes: pass1.nodes.length, editedRatio },
+    metrics: { editedNodes, totalNodes: pass1.nodes.length, editedRatio, previouslyReviewedReuse:reviewedReuse },
   })
   if (!editorialPassed) throw new Error(editorialErrors[0].message)
   await validationReport(input.supabase, { orderId: input.orderId, language: input.language, buildId, stage: 'title_authority', passed: true, metrics: { titleAuthority } })
@@ -334,7 +343,8 @@ export async function runSemanticPipeline(input: SemanticPipelineInput) {
 
   await storeValidated(input, buildId, 'translation_brief', 'translation-brief.json', Buffer.from(JSON.stringify(input.brief, null, 2)))
   await storeValidated(input, buildId, 'pass1_docx', `${input.title} - ${input.language} - Pass 1.docx`, await buildSemanticDocx(pass1, titleAuthority.effectiveValue, 'pass1'), 'docx', true)
-  await storeValidated(input, buildId, 'review_docx', `${input.title} - ${input.language} - Review.docx`, await buildSemanticReviewDocx(pass1, pass2, titleAuthority.effectiveValue), 'docx', true)
+  const reviewDocx=await buildSemanticReviewDocx(pass1, pass2, titleAuthority.effectiveValue)
+  await storeValidated(input, buildId, 'review_docx', `${input.title} - ${input.language} - Review.docx`, reviewDocx, 'docx', true)
   const bookAuthor=resolveBookAuthor(pass2,input.authorName)
   if (input.sourceFormat === 'epub' || input.dualFormat) await storeValidated(input, buildId, 'final_epub', `${input.title} - ${input.language} - Final.epub`, input.sourceFormat === 'epub' ? buildSemanticEpub(await normalizeEpubImages(input.source), pass2, titleAuthority, input.language,bookAuthor,input.orderId) : buildSemanticEpubFromDocument(pass2, titleAuthority.effectiveValue,input.language,bookAuthor||'Unknown',input.orderId), 'epub', true,bookAuthor)
   // The delivery contract reads the bytes the customer will open, not the pipeline's own
@@ -348,20 +358,22 @@ export async function runSemanticPipeline(input: SemanticPipelineInput) {
     const style = `Heading${level}`
     headingStyles[style] = (headingStyles[style] || 0) + 1
   }
-  const deliveryFailures = checkDeliveredDocx(inspectDeliveredDocx(finalDocx), {
+  const finalFacts=inspectDeliveredDocx(finalDocx),reviewFacts=inspectDeliveredDocx(reviewDocx)
+  const deliveryFailures = [...checkDeliveredDocx(finalFacts, {
     language: input.language,
     genre: input.genre,
     readerRegister,
-    styles: headingStyles,
+    styles: input.sourceFormat==='docx'?{}:headingStyles,
+    minimumStyles:input.sourceFormat==='docx'?headingStyles:undefined,
     minimumParagraphs: deliveredNodes.length,
     emphasis: sourceEmphasisCounts(input.source, input.sourceFormat,new Set(deliveredNodes.map(node=>node.sourceLocation))),
-  })
+  }),...checkFinalReviewWordParity(finalFacts,reviewFacts)]
   const blockingDeliveryFailures=deliveryFailures.filter(failure=>failure.severity!=='warning')
   await validationReport(input.supabase, {
     orderId: input.orderId, language: input.language, buildId, stage: 'delivery_contract',
     passed: blockingDeliveryFailures.length === 0,
     errors: deliveryFailures.length ? deliveryFailures.map(failure => ({ code: failure.code, message: failure.detail })) : undefined,
-    metrics: { readerRegister, headingStyles, nodes: deliveredNodes.length },
+    metrics: { readerRegister, headingStyles, nodes: deliveredNodes.length, finalWordCount:finalFacts.acceptedWordCount, reviewWordCount:reviewFacts.acceptedWordCount, wordCountDelta:reviewFacts.acceptedWordCount-finalFacts.acceptedWordCount, emptyTextBetweenRuns:finalFacts.emptyTextBetweenRuns, germanQuotes:finalFacts.germanQuotes },
   })
   if (blockingDeliveryFailures.length) throw new Error(`Delivery contract failed for ${input.language}: ${describeFailures(blockingDeliveryFailures)}`)
   await storeValidated(input, buildId, 'final_docx', `${input.title} - ${input.language} - Final.docx`, finalDocx, 'docx', true)
@@ -373,6 +385,8 @@ export async function runSemanticPipeline(input: SemanticPipelineInput) {
   await storeValidated(input, buildId, 'chapter_map_csv', 'chapter-map.csv', Buffer.from(renderChapterMapCsv(map)))
   await storeValidated(input, buildId, 'chapter_map_docx', 'chapter-map.docx', await renderChapterMapDocx(map, { bookTitle: input.title, language: input.language }), 'docx')
   const notes = deriveEditorialTranslationNotes({ language: input.language, pass1, pass2, existing: input.notes, authoritativeTitle: titleAuthority.translatedValue ? { source: titleAuthority.sourceValue, target: titleAuthority.translatedValue } : undefined })
+  const derivedNoteErrors=validateTranslationNotes(notes,{requireSpecificReasons:true})
+  if(derivedNoteErrors.length)throw new Error(derivedNoteErrors.join('; '))
   await storeValidated(input, buildId, 'translation_notes', 'translation-notes.txt', Buffer.from(renderTranslationNotes(notes)))
   const guidePath = path.join(process.cwd(), 'public', UPLOAD_GUIDE_ASSET_PATH.replace(/^\//, ''))
   const guide = await readFile(guidePath)
@@ -380,12 +394,13 @@ export async function runSemanticPipeline(input: SemanticPipelineInput) {
   await storeValidated(input, buildId, 'upload_guide', 'BookLingua Author Upload Guide.docx', guide)
   if (input.launchPack) {
     let pack: LaunchPackV1
-    try { pack = JSON.parse(input.launchPack.toString('utf8')) } catch { throw new Error('Launch Pack is not valid JSON') }
+    try { pack = normalizeLegacyLaunchPackForCustomer(JSON.parse(input.launchPack.toString('utf8'))) } catch { throw new Error('Launch Pack is not valid JSON') }
+    const canonicalLaunchPack=Buffer.from(JSON.stringify(pack))
     const launchErrors = validateLaunchPack({ pack, expectedLocale: input.language, purchased: true })
     launchErrors.push(...validateLaunchPackRegister(pack,input.brief.items.find(item=>item.issueType==='reader_register')?.authorDecision))
     if (launchErrors.length) throw new Error(`Launch Pack validation failed: ${launchErrors.join('; ')}`)
-    await renderCustomerLaunchPackDocx(input.launchPack,input.title,titleAuthority.translatedValue)
-    await storeValidated(input, buildId, 'launch_pack', 'launch-pack.json', input.launchPack)
+    await renderCustomerLaunchPackDocx(canonicalLaunchPack,input.title,titleAuthority.translatedValue)
+    await storeValidated(input, buildId, 'launch_pack', 'launch-pack.json', canonicalLaunchPack)
   }
   return { buildId, eligibility, pass1, pass2, manifest: await resolvePackageGate(input.supabase, { orderId: input.orderId, language: input.language, buildId }) }
 }
