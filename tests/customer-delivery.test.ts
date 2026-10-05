@@ -5,6 +5,7 @@ import { PackageArtifact,PackageManifestV1 } from '../lib/package-manifest'
 import { CUSTOMER_ARTIFACT_TYPES,customerArtifactFilename,customerBundleFilename,customerContentDisposition,customerDeliveryAllowed,customerVisibleArtifacts,resolveCustomerDeliveryOrigin,sanitizeCustomerFilenamePart } from '../lib/customer-delivery'
 import { buildCustomerArtifactDownloadUrl,buildCustomerPortalUrl,verifyCustomerArtifactToken,verifyCustomerPortalToken } from '../lib/download-token'
 import { renderCustomerPackageEmail } from '../lib/email-templates'
+import { normalizeLegacyLaunchPackForCustomer } from '../lib/customer-delivery-docx'
 
 function artifact(type:PackageArtifact['type'],filename=`${type}.docx`):PackageArtifact{return{id:`id-${type}`,buildId:'build',type,required:true,filename,storageBucket:'private',storagePath:`secret/${type}`,sha256:'a'.repeat(64),sizeBytes:10,validationStatus:'pass'}}
 function manifest():PackageManifestV1{const artifacts=[artifact('translation_brief','brief.json'),artifact('pass1_docx'),artifact('review_docx'),artifact('final_docx'),artifact('final_epub','final.epub'),artifact('translation_notes','notes.txt'),artifact('chapter_map_docx'),artifact('chapter_map_csv','map.csv'),artifact('upload_guide'),artifact('launch_pack','pack.json')];return{schemaVersion:'1.0',orderId:'order',language:'fr',buildId:'build',status:'pass',entitlements:{sourceFormat:'epub',launchPack:true,dualFormat:true},artifacts,errors:[],generatedAt:'2026-08-14T00:00:00Z'}}
@@ -39,6 +40,18 @@ test('customer portal offers one authenticated ZIP for the complete package',()=
   assert.match(route,/renderCustomerUploadGuideDocx/)
   assert.match(route,/verifyStoredArtifact/)
 })
+
+test('legacy Launch Pack category verification notes are preserved outside category paths',()=>{
+  const pack=manifestLaunchPack() as any
+  pack.categories=['Books > Romance > Suspense (verify exact node name in the current KDP category list before selecting)']
+  const normalized=normalizeLegacyLaunchPackForCustomer(pack)
+  assert.deepEqual(normalized.categories,['Books > Romance > Suspense'])
+  assert.match(normalized.categoriesNote||'',/verify exact node name/i)
+})
+
+function manifestLaunchPack(){
+  return {categories:[],categoriesNote:undefined}
+}
 
 test('customer tokens are scoped to the portal or one visible artifact',()=>{
   const old=process.env.STRIPE_WEBHOOK_SECRET;process.env.STRIPE_WEBHOOK_SECRET='test-secret'
