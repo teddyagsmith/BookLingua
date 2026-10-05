@@ -68,6 +68,16 @@ test('empty text elements between populated runs hard-fail',()=>{
   assert.ok(failures.some(failure=>failure.code==='EMPTY_TEXT_BETWEEN_RUNS'))
 })
 
+test('structural empty text is counted but allowed when a drawing carries the run',()=>{
+  const structural=docx({text:'links'})
+  const zip:any=new AdmZip(structural),xml=zip.getEntry('word/document.xml').getData().toString('utf8')
+  zip.updateFile('word/document.xml',Buffer.from(xml.replace('<w:t>links</w:t>','<w:t></w:t><w:drawing/>')))
+  const facts=inspectDeliveredDocx(zip.toBuffer())
+  assert.equal(facts.emptyTextTotal,1)
+  assert.equal(facts.prohibitedEmptyTextRuns,0)
+  assert.ok(!checkDeliveredDocx(facts,{...expectation,paragraphs:9}).some(failure=>failure.code==='EMPTY_TEXT_BETWEEN_RUNS'))
+})
+
 test('German delivery rejects ASCII, guillemet and mixed quote pairs',()=>{
   for(const [text,code] of [['Er sagte "Hallo".','GERMAN_ASCII_QUOTES'],['Er sagte «Hallo».','GERMAN_GUILLEMETS'],['Er sagte “Hallo”.','GERMAN_MIXED_QUOTES']] as const){
     const failures=checkDeliveredDocx(inspectDeliveredDocx(docx({text})),expectation)

@@ -1,5 +1,6 @@
 import { SupabaseClient } from '@supabase/supabase-js'
 import { createHash } from 'crypto'
+import { GERMAN_HIGHSCHOOL_GUIDANCE } from './german-terminology'
 
 export const TRANSLATION_BRIEF_SCHEMA_VERSION = '1.0'
 
@@ -84,7 +85,7 @@ export function renderTranslationBriefPrompt(brief: TranslationBriefV1): string 
     ? '\nBook-wide explanatory-note state: explain each author-selected term exactly once, at its first source occurrence only, in one short parenthesis. Never explain an unselected term, repeat an explanation, or add the note to a sentence whose source lacks the exact term. The deterministic final gate checks the whole book.'
     : ''
   const languageGuidance = brief.language === 'de'
-    ? '\nGerman grammar: article-taking country names retain their article and inflection in context: die Slowakei, die Schweiz, die Türkei, der Iran (for example in der Slowakei, aus der Schweiz, in die Türkei, im Iran).'
+    ? `\nGerman grammar: article-taking country names retain their article and inflection in context: die Slowakei, die Schweiz, die Türkei, der Iran (for example in der Slowakei, aus der Schweiz, in die Türkei, im Iran).\nStable German terminology: ${GERMAN_HIGHSCHOOL_GUIDANCE}`
     : ''
   return `TRANSLATION BRIEF v${brief.schemaVersion} (${brief.language})
 Brief fingerprint: ${brief.sourceManifestFingerprint}

@@ -25,6 +25,11 @@ export interface DocxFacts {
   /** Text a reader sees after accepting the Review file's deletions. */
   acceptedText: string
   acceptedWordCount: number
+  /** Every empty w:t in document.xml, including justified structural containers. */
+  emptyTextTotal: number
+  /** Empty w:t nodes that can affect a visible text boundary or have no structural role. */
+  prohibitedEmptyTextRuns: number
+  /** Backwards-compatible alias for prohibited empty text boundaries. */
   emptyTextBetweenRuns: number
   germanQuotes: { germanPairs: number; asciiMarks: number; guillemetMarks: number; mixedMarks: number; unbalancedGermanMarks: number }
 }
@@ -57,10 +62,12 @@ export function inspectDeliveredDocx(buffer: Buffer): DocxFacts {
   }
   const paragraphMarkup=(Array.from(document.matchAll(/<w:p[ >][\s\S]*?<\/w:p>/g)) as RegExpMatchArray[]).map(match=>match[0])
   const text=paragraphMarkup.map(paragraph => (Array.from(paragraph.matchAll(/<w:t[^>]*>([\s\S]*?)<\/w:t>/g)) as RegExpMatchArray[]).map(match=>decodeText(match[1])).join('')).join('\n')
-  let emptyTextBetweenRuns=0
+  let emptyTextTotal=0,prohibitedEmptyTextRuns=0
   const acceptedText=paragraphMarkup.map(paragraph=>{
     const values=(Array.from(paragraph.matchAll(/<w:t[^>]*>([\s\S]*?)<\/w:t>/g)) as RegExpMatchArray[]).map(match=>decodeText(match[1]))
-    values.forEach((value,index)=>{if(!value&&values.slice(0,index).some(Boolean)&&values.slice(index+1).some(Boolean))emptyTextBetweenRuns++})
+    const hasVisibleText=values.some(Boolean)
+    const structuralOnly=!hasVisibleText&&/<(?:w:drawing|w:object|w:fldChar|w:instrText|w:br|w:bookmarkStart|w:sectPr|w:pageBreakBefore)\b/.test(paragraph)
+    values.forEach(value=>{if(!value){emptyTextTotal++;if(hasVisibleText||!structuralOnly)prohibitedEmptyTextRuns++}})
     const runs=(Array.from(paragraph.matchAll(/<w:r\b[^>]*>[\s\S]*?<\/w:r>/g)) as RegExpMatchArray[]).map(match=>match[0])
     const struck=(run:string)=>/<w:strike\b(?![^>]*\bw:val="(?:false|0|off)")[^>]*\/>/.test(run)
     return runs.filter(run=>!struck(run)).flatMap(run=>(Array.from(run.matchAll(/<w:t[^>]*>([\s\S]*?)<\/w:t>/g)) as RegExpMatchArray[]).map(match=>decodeText(match[1]))).join('')
@@ -74,7 +81,7 @@ export function inspectDeliveredDocx(buffer: Buffer): DocxFacts {
     // Without a style flagged default, Pages renders every paragraph as the first style
     // it finds. LibreOffice guesses sanely, which is how this shipped unnoticed.
     hasDefaultStyle: /w:default="1"/.test(styles),
-    text, acceptedText, acceptedWordCount:deliveredWordCount(acceptedText),emptyTextBetweenRuns,
+    text,acceptedText,acceptedWordCount:deliveredWordCount(acceptedText),emptyTextTotal,prohibitedEmptyTextRuns,emptyTextBetweenRuns:prohibitedEmptyTextRuns,
     germanQuotes:inspectGermanQuotes(acceptedText),
   }
 }
@@ -128,7 +135,7 @@ export function checkDeliveredDocx(facts: DocxFacts, expectation: DeliveryExpect
   if (!facts.hasDefaultStyle) {
     failures.push({ code: 'NO_DEFAULT_STYLE', detail: 'styles.xml declares no w:default="1" style, so Pages will render the whole document in one style' })
   }
-  if(facts.emptyTextBetweenRuns)failures.push({code:'EMPTY_TEXT_BETWEEN_RUNS',detail:`${facts.emptyTextBetweenRuns} empty w:t elements lie between text runs`})
+  if(facts.prohibitedEmptyTextRuns)failures.push({code:'EMPTY_TEXT_BETWEEN_RUNS',detail:`${facts.prohibitedEmptyTextRuns} prohibited empty w:t elements affect text boundaries or lack a structural role`})
   if (expectation.paragraphs !== undefined && facts.paragraphs !== expectation.paragraphs) {
     failures.push({ code: 'PARAGRAPH_COUNT', detail: `expected ${expectation.paragraphs} paragraphs, delivered ${facts.paragraphs}` })
   }

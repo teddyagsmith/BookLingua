@@ -279,6 +279,7 @@ test('verified editorial overrides are exact and node-bound',()=>{
   const document:any={schemaVersion:'2.0',sourceHash:'x',sourceFormat:'epub',parserConfidence:1,nodes:[{id:'n1',order:0,type:'paragraph',headingLevel:null,chapterId:null,sourceChapterNumber:null,sourceLocation:'x',sourceText:'source',translatedText:'avant mauvaise phrase après'}]}
   const corrected=applyVerifiedEditorialOverrides(document,[{nodeId:'n1',before:'mauvaise phrase',after:'phrase corrigée'}])
   assert.equal(corrected.nodes[0].translatedText,'avant phrase corrigée après')
+  assert.equal(applyVerifiedEditorialOverrides(corrected,[{nodeId:'n1',before:'mauvaise phrase',after:'phrase corrigée'}]).nodes[0].translatedText,'avant phrase corrigée après')
   assert.throws(()=>applyVerifiedEditorialOverrides(document,[{nodeId:'n2',before:'mauvaise phrase',after:'phrase corrigée'}]),/node missing/)
 })
 

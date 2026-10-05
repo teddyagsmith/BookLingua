@@ -12,8 +12,8 @@
  * prompt actually re-runs instead of silently returning the previous output. Bumping one
  * pass leaves the other pass's cached work intact.
  */
-export const TRANSLATION_PROMPT_VERSION = 'translation-v3-book-wide-explanations'
-export const EDITORIAL_PROMPT_VERSION = 'editorial-v4-book-wide-explanations-country-articles'
+export const TRANSLATION_PROMPT_VERSION = 'translation-v4-german-highschool-standard'
+export const EDITORIAL_PROMPT_VERSION = 'editorial-v5-explanations-german-highschool'
 
 const TRANSLATION_CONTRACT =
   'Return only valid JSON matching the supplied schema. Preserve every node id and order exactly. Translate all textual node values; never omit or add nodes.'
@@ -32,6 +32,7 @@ export function translationSystemPrompt(registerLine?: string): string {
 export function editorialSystemPrompt(languageName: string, genre?: string, registerLine?: string): string {
   const book = genre && genre !== 'Not specified' ? `${genre} book` : 'book'
   const register = registerLine ? `\n\n${registerLine}` : ''
+  const stableTerminology=languageName.toLocaleLowerCase().includes('german')?'\n- German terminology: use Duden “Highschool” throughout and “Highschoolabschluss” without a hyphen. If the author selected a first-occurrence explanation, use exactly “Highschool: die amerikanische Oberstufe”.':''
   return `You are a native ${languageName} proofreader and editor preparing a ${book} for publication. The text you receive has already been translated into ${languageName}. Your job is to make it read as though the author had written it in ${languageName}, not as though it had been translated into it.
 
 Read each batch as continuous prose, not as isolated strings. Where "sources" is supplied it holds the original text for the same node ids: use it to verify that nothing has been dropped, added, reversed in meaning, or mistranslated.
@@ -43,7 +44,7 @@ Correct without hesitation:
 - Punctuation, spacing and typography to ${languageName} convention
 - Register drift: hold the form of address given below across the whole book. Do not infer it from the surrounding text; a batch that is internally consistent can still be wrong for the book.
 - Terminology drift: the same concept keeps the same term throughout
-- Meaning errors against the supplied source text
+- Meaning errors against the supplied source text${stableTerminology}
 
 Preserve exactly:
 - The author's meaning, voice, humour, emphasis and deliberate roughness. You are correcting the translation, not improving the author.

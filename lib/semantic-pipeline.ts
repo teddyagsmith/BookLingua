@@ -26,6 +26,7 @@ import { normalizeTypography } from './typography'
 import { ReaderRegister, resolveReaderRegister, readerRegisterPromptLine } from './reader-register'
 import { checkDeliveredDocx, checkFinalReviewWordParity, describeFailures, inspectDeliveredDocx } from './delivery-contract'
 import { applyBookWideExplanatoryNotes, VerifiedExplanatoryNote } from './explanatory-notes'
+import { normalizeGermanTerminology } from './german-terminology'
 
 /** Below this share of nodes changed, an editorial pass is treated as having done nothing. */
 export const EDITORIAL_MIN_CHANGE_RATIO = 0.01
@@ -59,6 +60,8 @@ export interface SemanticPipelineInput {
   repairUnexpectedExplanatoryBrackets?: boolean
   /** Rebuild-only waiver after a prior immutable build has passed reader review. */
   allowPreviouslyReviewedEditorialReuse?: boolean
+  /** Notes-only rebuilds may reuse previously validated Final DOCX bytes verbatim. */
+  reusedFinalDocx?: { buffer: Buffer; expectedSha256: string }
   authorName?: string
   genre?: string
   brief: TranslationBriefV1
@@ -81,8 +84,10 @@ export function applyVerifiedEditorialOverrides(document:SemanticDocumentV2,over
   const nodes=document.nodes.map(node=>{
     const override=pending.get(node.id);if(!override)return node
     pending.delete(node.id)
-    const text=node.translatedText||'',occurrences=text.split(override.before).length-1
-    if(!override.before||!override.after||occurrences!==1)throw new Error(`Verified editorial override does not match exactly once at ${node.id}`)
+    const text=node.translatedText||'',occurrences=text.split(override.before).length-1,applied=text.split(override.after).length-1
+    if(!override.before||!override.after)throw new Error(`Verified editorial override is incomplete at ${node.id}`)
+    if(occurrences===0&&applied===1)return node
+    if(occurrences!==1||applied!==0)throw new Error(`Verified editorial override does not match exactly once at ${node.id}`)
     return{...node,translatedText:text.replace(override.before,override.after)}
   })
   if(pending.size)throw new Error(`Verified editorial override node missing: ${Array.from(pending.keys()).join(', ')}`)
@@ -101,7 +106,7 @@ export function applyVerifiedEditorialOverrides(document:SemanticDocumentV2,over
  * output from identical inputs, and without this the completed package short-circuits
  * and the customer's files never change.
  */
-export const PIPELINE_OUTPUT_VERSION = 'output-v11-book-wide-notes-docx-parity'
+export const PIPELINE_OUTPUT_VERSION = 'output-v12-explanations-notes-empty-runs'
  
  export const SEMANTIC_PROMPT_SIGNATURE = `${TRANSLATION_PROMPT_VERSION}+${EDITORIAL_PROMPT_VERSION}+${PIPELINE_OUTPUT_VERSION}`
 export const SEMANTIC_BUILD_POLICY_VERSION = 'semantic-v2-review-diff-spacing-v10'
@@ -216,7 +221,9 @@ function sourceEmphasisCounts(source: Buffer, sourceFormat: 'epub'|'docx'|'txt',
  *  documents, the review diff and every artifact agree. */
 function normalizePassTypography(nodes: SemanticDocumentV2['nodes'], language: string): SemanticDocumentV2['nodes'] {
   return nodes.map(node => node.translatedText
-    ? { ...node, translatedText: normalizeTypography(node.translatedText, language) }
+    ? { ...node, translatedText: language.toLocaleLowerCase().startsWith('de')
+      ? normalizeGermanTerminology(normalizeTypography(node.translatedText, language))
+      : normalizeTypography(node.translatedText, language) }
     : node)
 }
 
@@ -349,7 +356,10 @@ export async function runSemanticPipeline(input: SemanticPipelineInput) {
   if (input.sourceFormat === 'epub' || input.dualFormat) await storeValidated(input, buildId, 'final_epub', `${input.title} - ${input.language} - Final.epub`, input.sourceFormat === 'epub' ? buildSemanticEpub(await normalizeEpubImages(input.source), pass2, titleAuthority, input.language,bookAuthor,input.orderId) : buildSemanticEpubFromDocument(pass2, titleAuthority.effectiveValue,input.language,bookAuthor||'Unknown',input.orderId), 'epub', true,bookAuthor)
   // The delivery contract reads the bytes the customer will open, not the pipeline's own
   // record of what it built. Everything asserted here has shipped broken at least once.
-  const finalDocx = await buildFinalSemanticDocx(input.source, pass2, titleAuthority.effectiveValue)
+  const finalDocx = input.reusedFinalDocx?.buffer || await buildFinalSemanticDocx(input.source, pass2, titleAuthority.effectiveValue)
+  if(input.reusedFinalDocx&&createHash('sha256').update(finalDocx).digest('hex')!==input.reusedFinalDocx.expectedSha256){
+    throw new Error('Reused Final DOCX hash does not match the approved immutable artifact')
+  }
   const deliveredNodes = artifactDocxNodes(pass2)
   const headingStyles: Record<string, number> = {}
   for (const node of deliveredNodes) {
@@ -373,7 +383,7 @@ export async function runSemanticPipeline(input: SemanticPipelineInput) {
     orderId: input.orderId, language: input.language, buildId, stage: 'delivery_contract',
     passed: blockingDeliveryFailures.length === 0,
     errors: deliveryFailures.length ? deliveryFailures.map(failure => ({ code: failure.code, message: failure.detail })) : undefined,
-    metrics: { readerRegister, headingStyles, nodes: deliveredNodes.length, finalWordCount:finalFacts.acceptedWordCount, reviewWordCount:reviewFacts.acceptedWordCount, wordCountDelta:reviewFacts.acceptedWordCount-finalFacts.acceptedWordCount, emptyTextBetweenRuns:finalFacts.emptyTextBetweenRuns, germanQuotes:finalFacts.germanQuotes },
+    metrics: { readerRegister, headingStyles, nodes: deliveredNodes.length, finalWordCount:finalFacts.acceptedWordCount, reviewWordCount:reviewFacts.acceptedWordCount, wordCountDelta:reviewFacts.acceptedWordCount-finalFacts.acceptedWordCount, emptyTextTotal:finalFacts.emptyTextTotal, prohibitedEmptyTextRuns:finalFacts.prohibitedEmptyTextRuns, germanQuotes:finalFacts.germanQuotes },
   })
   if (blockingDeliveryFailures.length) throw new Error(`Delivery contract failed for ${input.language}: ${describeFailures(blockingDeliveryFailures)}`)
   await storeValidated(input, buildId, 'final_docx', `${input.title} - ${input.language} - Final.docx`, finalDocx, 'docx', true)
@@ -384,7 +394,7 @@ export async function runSemanticPipeline(input: SemanticPipelineInput) {
   if (map.some(row => row.status !== 'mapped')) throw new Error('Chapter map is incomplete')
   await storeValidated(input, buildId, 'chapter_map_csv', 'chapter-map.csv', Buffer.from(renderChapterMapCsv(map)))
   await storeValidated(input, buildId, 'chapter_map_docx', 'chapter-map.docx', await renderChapterMapDocx(map, { bookTitle: input.title, language: input.language }), 'docx')
-  const notes = deriveEditorialTranslationNotes({ language: input.language, pass1, pass2, existing: input.notes, authoritativeTitle: titleAuthority.translatedValue ? { source: titleAuthority.sourceValue, target: titleAuthority.translatedValue } : undefined })
+  const notes = deriveEditorialTranslationNotes({ language: input.language, genre:input.genre, pass1, pass2, existing: input.notes, authoritativeTitle: titleAuthority.translatedValue ? { source: titleAuthority.sourceValue, target: titleAuthority.translatedValue } : undefined })
   const derivedNoteErrors=validateTranslationNotes(notes,{requireSpecificReasons:true})
   if(derivedNoteErrors.length)throw new Error(derivedNoteErrors.join('; '))
   await storeValidated(input, buildId, 'translation_notes', 'translation-notes.txt', Buffer.from(renderTranslationNotes(notes)))

@@ -10,6 +10,7 @@ import { parseSemanticDocx, parseSemanticTxt } from '../lib/semantic-parser'
 import { inferHeadingsFromContents } from '../lib/extract-segments'
 import { validateArtifact } from '../lib/artifact-validation-v2'
 import {inspectDeliveredDocx} from '../lib/delivery-contract'
+import {normalizeGermanTerminology} from '../lib/german-terminology'
 
 function document(nodes: Array<{ sourceText: string; translatedText: string }>,sourceFormat:'epub'|'docx'|'txt'='epub'): any {
   return { schemaVersion: '2.0', sourceHash: 'source', sourceFormat, parserConfidence: 1, nodes: nodes.map((node,index)=>({ id:`node-${index}`, chapterId:'chapter-1', type:index?'paragraph':'heading', headingLevel:index?null:1, sourceChapterNumber:null, order:index, sourceLocation:`OEBPS/book.xhtml:block:${index}`,...node })) }
@@ -49,6 +50,19 @@ test('internal upload labels are stripped from title fallback',()=>{
   const authority=resolveTitleAuthority({document:doc,checkoutTitle:'Updated eBook Reclaim Your Longevity',source:epub('Reclaim Your Longevity')})
   assert.equal(authority.sourceKind,'semantic_title_node')
   assert.equal(authority.translatedValue,'Recupera tu longevidad')
+})
+
+test('manuscript title authority strips upload language labels instead of publishing them',()=>{
+  assert.equal(cleanBookTitle('GERMAN Never Look Back'),'Never Look Back')
+  const doc=document([{sourceText:'GERMAN Never Look Back',translatedText:'Never Look Back'}],'docx')
+  const authority=resolveTitleAuthority({document:doc,checkoutTitle:'GERMAN Never Look Back',source:epub('GERMAN Never Look Back')})
+  assert.equal(authority.sourceValue,'Never Look Back')
+  assert.equal(authority.translatedValue,'Never Look Back')
+})
+
+test('German Highschool terminology follows the stable Duden house standard',()=>{
+  assert.equal(normalizeGermanTerminology('High School, High-School und Highschool-Abschluss'),'Highschool, Highschool und Highschoolabschluss')
+  assert.equal(normalizeGermanTerminology('Highschool-Foto'),'Highschool-Foto')
 })
 
 test('safe title matching accepts subtitle, punctuation and apostrophe variation without fuzzy heading guesses',()=>{
@@ -180,6 +194,9 @@ test('source-preserving DOCX keeps spaces around a mid-sentence emphasis run and
   assert.equal(texts.join(''),'Der sehr wichtige Satz.')
   assert.ok(texts.some(value=>/^\s|\s$/.test(value)),'a run carries each formatting boundary space')
   assert.doesNotMatch(xml,/<w:t[^>]*><\/w:t>/)
+  const facts=inspectDeliveredDocx(zip.toBuffer())
+  assert.equal(facts.emptyTextTotal,0)
+  assert.equal(facts.prohibitedEmptyTextRuns,0)
 })
 
 test('translation notes are derived from real editorial changes and remain schema-valid', () => {
@@ -188,7 +205,26 @@ test('translation notes are derived from real editorial changes and remain schem
   const notes=deriveEditorialTranslationNotes({language:'French',pass1,pass2,authoritativeTitle:{source:'Title',target:'Titre'}})
   assert.deepEqual(validateTranslationNotes(notes),[])
   assert.equal(notes.sections[0].entries.length,2)
-  assert.match(notes.sections[0].entries[1].reason,/editorial review/)
+  assert.match(notes.sections[0].entries[1].reason,/becomes/)
+  assert.deepEqual(validateTranslationNotes(notes,{requireSpecificReasons:true}),[])
+})
+
+test('translation notes expose exact changed spans, route thriller reasons, and rejoin drop caps',()=>{
+  const pass1=document([
+    {sourceText:'I',translatedText:'W'},
+    {sourceText:'f you enjoyed Ashes of Betrayal.',translatedText:'enn Ihnen Ashes of Betrayal gefallen hat.'},
+    {sourceText:'“About you?” Huxley asked, the burr soft around the edges.',translatedText:'„Über Sie?“, fragte Huxley, der Tonfall weich an den Rändern.'},
+  ])
+  pass1.nodes[0].type='heading';pass1.nodes[1].type='paragraph';pass1.nodes[2].type='paragraph'
+  const pass2=structuredClone(pass1)
+  pass2.nodes[1].translatedText='enn Ihnen Asche des Verrats gefallen hat.'
+  pass2.nodes[2].translatedText='„Über Sie?“, fragte Huxley, der Ton plötzlich weicher.'
+  const notes=deriveEditorialTranslationNotes({language:'de',genre:'thriller',pass1,pass2,authoritativeTitle:{source:'Ashes of Betrayal',target:'Asche des Verrats'}})
+  const entries=notes.sections[0].entries
+  assert.ok(entries.some(entry=>entry.source==='weich an den Rändern'&&entry.target==='plötzlich weicher'))
+  assert.ok(entries.some(entry=>entry.reason.includes('thriller’s')))
+  assert.ok(entries.every(entry=>!/romantic|consent/i.test(entry.reason)))
+  assert.ok(entries.every(entry=>!/^f you|^enn Ihnen/.test(entry.source)))
   assert.deepEqual(validateTranslationNotes(notes,{requireSpecificReasons:true}),[])
 })
 

@@ -14,18 +14,22 @@ import {translationBriefFingerprint,TranslationBriefV1} from '../lib/translation
 import {auditBookWideExplanatoryNotes,VerifiedExplanatoryNote} from '../lib/explanatory-notes'
 import {inspectDeliveredDocx} from '../lib/delivery-contract'
 import {normalizeTypography} from '../lib/typography'
+import {normalizeGermanTerminology} from '../lib/german-terminology'
+import {renderCustomerTranslationNotesDocx} from '../lib/customer-delivery-docx'
+import {explanatorySpans} from '../lib/explanatory-notes'
 
 const LANGUAGE='de'
 const JOBS=[
   {
     orderId:'f8129c37-d566-4b87-98a4-d981d8c949de',title:'Never Look Back',verifiedTitle:'Never Look Back',launchPack:true,
     explanations:[
-      {sourceTerm:'high school',targetTerm:'Highschool-Foto',canonicalNote:'Foto einer US-amerikanischen weiterführenden Schule'},
+      {sourceTerm:'high school',targetTerm:'Highschool-Foto',canonicalNote:'Highschool: die amerikanische Oberstufe'},
       {sourceTerm:'DMV',targetTerm:'DMV',canonicalNote:'US-amerikanische Kraftfahrzeugbehörde'},
     ] satisfies VerifiedExplanatoryNote[],
     overrides:[
       {nodeId:'node-000127',before:'Es waren die zwanzig Prozent nicht-legal, die mir Sorgen bereiteten.',after:'Die übrigen zwanzig Prozent machten mir Sorgen.'},
     ],
+    preserveFinalSha256:null,
   },
   {
     orderId:'6543360d-c0f9-43ba-9437-eb15256c8190',title:'Ashes of Betrayal',verifiedTitle:'Asche des Verrats',launchPack:false,
@@ -36,6 +40,7 @@ const JOBS=[
       {nodeId:'node-000796',before:'der vertraute, bodenständige Tonfall weich an den Rändern',after:'der vertraute, bodenständige Ton plötzlich weicher'},
       {nodeId:'node-001145',before:'Ash bewegte sich aus dem Muskelgedächtnis heraus durch das verdunkelte Haus, die Pistole tief.',after:'Ash bewegte sich wie automatisch durch das dunkle Haus, die Waffe gesenkt.'},
     ],
+    preserveFinalSha256:'4d4d922d3a72936c95b60b2b2b0e4f39f6854430ff718e217c95d3a0d9ddd88e',
   },
 ] as const
 
@@ -54,7 +59,7 @@ async function seedPassCaches(orderId:string,brief:TranslationBriefV1,sourceDocu
   if(!stored.pass1||!stored.pass2)throw new Error('Current Pass 1/Pass 2 pair is incomplete')
   if(stored.pass1.nodes.length!==sourceDocument.nodes.length||stored.pass2.nodes.length!==sourceDocument.nodes.length)throw new Error('Current semantic node count changed')
   const briefFingerprint=translationBriefFingerprint(brief)
-  const normalizedPass1={...stored.pass1,nodes:stored.pass1.nodes.map((node:any)=>node.translatedText?{...node,translatedText:normalizeTypography(node.translatedText,LANGUAGE)}:node)}
+  const normalizedPass1={...stored.pass1,nodes:stored.pass1.nodes.map((node:any)=>node.translatedText?{...node,translatedText:normalizeGermanTerminology(normalizeTypography(node.translatedText,LANGUAGE))}:node)}
   const passInputs=[
     {pass:1 as const,authoritative:sourceDocument.nodes,output:stored.pass1.nodes,model:BOOKLINGUA_MODEL_CONFIG.translation,prompt:TRANSLATION_PROMPT_VERSION},
     {pass:2 as const,authoritative:normalizedPass1.nodes,output:stored.pass2.nodes,model:BOOKLINGUA_MODEL_CONFIG.editorial,prompt:EDITORIAL_PROMPT_VERSION},
@@ -99,8 +104,27 @@ function reasonsFromNotes(buffer:Buffer){
   return{count:reasons.length,unique:new Set(reasons.map(reason=>reason.normalize('NFKC').toLocaleLowerCase())).size,specific:reasons.filter(reason=>reason.length>=45&&/[“”"]/.test(reason)).length}
 }
 
+function notesAudit(buffer:Buffer,genre:string){
+  const text=buffer.toString('utf8'),lines=text.split('\n'),entries=[] as Array<{before:string;after:string;reason:string}>
+  for(let index=0;index<lines.length;index++){
+    const arrow=lines[index].indexOf(' → ')
+    if(arrow<0||!lines[index+1]?.startsWith('Reason: '))continue
+    entries.push({before:lines[index].slice(0,arrow),after:lines[index].slice(arrow+3),reason:lines[index+1].slice(8)})
+  }
+  return{
+    entryCount:entries.length,uniqueReasons:new Set(entries.map(item=>item.reason.normalize('NFKC').toLocaleLowerCase())).size,
+    identicalBeforeAfter:entries.filter(item=>item.before===item.after),
+    genreInappropriateReasons:/thriller|mystery|crime|suspense/i.test(genre)?entries.filter(item=>/romance|romantic|consent/i.test(item.reason)):[],
+    dropCapFragments:entries.filter(item=>/^f you\b|^enn Ihnen\b/i.test(item.before)||/^f you\b|^enn Ihnen\b/i.test(item.after)),
+    entries,
+  }
+}
+
 async function main(){
   const evidence:any[]=[]
+  const carryForward:any[]=[]
+  const outputDir=path.join(process.cwd(),'working','held-german-notes-remediation-2026-10-05')
+  await mkdir(outputDir,{recursive:true})
   for(const job of JOBS){
     const orderResult=await db.from('orders').select('*').eq('id',job.orderId).single()
     if(orderResult.error||!orderResult.data)throw new Error(`${job.title}: order unavailable`)
@@ -108,7 +132,7 @@ async function main(){
     if(order.book_title!==job.title||!['delivery_pending','ready_for_review'].includes(order.status)||order.completed_at!==null||JSON.stringify(order.languages)!==JSON.stringify([LANGUAGE]))throw new Error(`${job.title}: held-order preflight failed`)
     const upsells=Array.isArray(order.upsells)?order.upsells:JSON.parse(order.upsells||'[]')
     if(upsells.includes('launch-pack')!==job.launchPack)throw new Error(`${job.title}: Launch Pack entitlement changed`)
-    const priorReview=await db.from('reader_panel_requests').select('state,build_id').eq('order_id',job.orderId).eq('language',LANGUAGE).in('state',['reader_review_pass','reader_review_pass_with_notes']).order('reviewed_at',{ascending:false}).limit(1).single()
+    const priorReview=await db.from('reader_panel_requests').select('*').eq('order_id',job.orderId).eq('language',LANGUAGE).in('state',['reader_review_pass','reader_review_pass_with_notes']).order('reviewed_at',{ascending:false}).limit(1).single()
     if(priorReview.error||!priorReview.data)throw new Error(`${job.title}: prior immutable build lacks reader-panel approval`)
     const previousPackage=await db.from('package_manifests').select('build_id').eq('order_id',job.orderId).eq('language',LANGUAGE).eq('build_id',priorReview.data.build_id).eq('status','pass').single()
     if(previousPackage.error||!previousPackage.data)throw new Error(`${job.title}: reader-reviewed package is not a passed immutable package`)
@@ -140,25 +164,35 @@ async function main(){
     if(briefRow.error||!briefRow.data?.brief)throw new Error(`${job.title}: translation brief unavailable`)
     const brief=briefRow.data.brief as TranslationBriefV1
     const seededCaches=await seedPassCaches(job.orderId,brief,sourceDocument,previous.id)
-    let launchPack:Buffer|undefined
+    const previousFinalArtifact=await db.from('artifacts').select('storage_bucket,storage_path,sha256').eq('order_id',job.orderId).eq('language',LANGUAGE).eq('build_id',previous.id).eq('artifact_type','final_docx').single()
+    if(previousFinalArtifact.error||!previousFinalArtifact.data)throw new Error(`${job.title}: previous Final artifact unavailable`)
+    const previousFinalBuffer=await downloadArtifact(previousFinalArtifact.data),previousFinalFacts=inspectDeliveredDocx(previousFinalBuffer)
+    let launchPack:Buffer|undefined,reusedFinalDocx:{buffer:Buffer;expectedSha256:string}|undefined
     if(job.launchPack){
       const artifact=await db.from('artifacts').select('storage_bucket,storage_path').eq('order_id',job.orderId).eq('language',LANGUAGE).eq('build_id',previous.id).eq('artifact_type','launch_pack').single()
       if(artifact.error||!artifact.data)throw new Error(`${job.title}: purchased Launch Pack unavailable`)
       launchPack=await downloadArtifact(artifact.data)
     }
-    const outputConfig={verifiedTitle:job.verifiedTitle,overrides:job.overrides,explanations:job.explanations,repairUnexpectedExplanatoryBrackets:job.title==='Never Look Back',allowPreviouslyReviewedEditorialReuse:true}
+    if(job.preserveFinalSha256){
+      if(previousFinalArtifact.data.sha256!==job.preserveFinalSha256)throw new Error(`${job.title}: approved Final artifact hash changed before notes-only rebuild`)
+      reusedFinalDocx={buffer:previousFinalBuffer,expectedSha256:job.preserveFinalSha256}
+    }
+    const outputConfig={verifiedTitle:job.verifiedTitle,overrides:job.overrides,explanations:job.explanations,repairUnexpectedExplanatoryAdditions:job.title==='Never Look Back',allowPreviouslyReviewedEditorialReuse:true,preserveFinalSha256:job.preserveFinalSha256}
     const configHash=createHash('sha256').update(JSON.stringify(outputConfig)).digest('hex').slice(0,16)
     const buildId=deterministicSemanticBuildId(job.orderId,LANGUAGE,sourceHash,brief.revision,`${SEMANTIC_PROMPT_SIGNATURE}+held-german-${configHash}`)
     const notes=job.explanations.length?{schemaVersion:'1.0' as const,language:'de',approach:'Author-selected explanations are kept short and appear once, at the first source occurrence only.',sections:[{id:'author-explanations',title:'Author-approved explanations',entries:job.explanations.map(item=>({source:item.sourceTerm,target:`${item.targetTerm} (${item.canonicalNote})`,reason:'author-selected explanatory note'}))}]}:{schemaVersion:'1.0' as const,language:'de',approach:'The German editorial pass preserves the thriller voice, evidence chain, dialogue register, and source structure.',sections:[]}
-    const result=await runSemanticPipeline({supabase:db,orderId:job.orderId,language:LANGUAGE,sourceFormat:'docx',source,title:order.book_title,verifiedTranslatedTitle:job.verifiedTitle,authorName:order.author_name,genre:order.genre,brief,notes,buildId,verifiedEditorialOverrides:[...job.overrides],verifiedExplanatoryNotes:[...job.explanations],repairUnexpectedExplanatoryBrackets:job.title==='Never Look Back',allowPreviouslyReviewedEditorialReuse:true,allowReviewedStructure:order.semantic_structure_approved===true,launchPack,dualFormat:false,maxBatchConcurrency:3,translate:async(_batch,context)=>{throw new Error(`Unexpected model call: ${job.title} pass ${context.pass} batch ${context.batchIndex}`)}})
+    const result=await runSemanticPipeline({supabase:db,orderId:job.orderId,language:LANGUAGE,sourceFormat:'docx',source,title:order.book_title,verifiedTranslatedTitle:job.verifiedTitle,authorName:order.author_name,genre:order.genre,brief,notes,buildId,verifiedEditorialOverrides:[...job.overrides],verifiedExplanatoryNotes:[...job.explanations],repairUnexpectedExplanatoryBrackets:job.title==='Never Look Back',allowPreviouslyReviewedEditorialReuse:true,reusedFinalDocx,allowReviewedStructure:order.semantic_structure_approved===true,launchPack,dualFormat:false,maxBatchConcurrency:3,translate:async(_batch,context)=>{throw new Error(`Unexpected model call: ${job.title} pass ${context.pass} batch ${context.batchIndex}`)}})
     if(result.manifest.status!=='pass')throw new Error(`${job.title}: package manifest did not pass`)
     const artifacts=await db.from('artifacts').select('*').eq('order_id',job.orderId).eq('language',LANGUAGE).eq('build_id',buildId)
     if(artifacts.error)throw new Error(`${job.title}: new artifacts unavailable`)
     const byType=new Map((artifacts.data||[]).map(artifact=>[artifact.artifact_type,artifact]))
     const finalBuffer=await downloadArtifact(byType.get('final_docx')),reviewBuffer=await downloadArtifact(byType.get('review_docx')),noteBuffer=await downloadArtifact(byType.get('translation_notes'))
     const finalFacts=inspectDeliveredDocx(finalBuffer),reviewFacts=inspectDeliveredDocx(reviewBuffer)
+    const customerNotes=await renderCustomerTranslationNotesDocx(noteBuffer,job.title,'German')
+    const customerNotesFilename=`${job.title} - Notes - DE.docx`
+    await writeFile(path.join(outputDir,customerNotesFilename),customerNotes)
     const explanationAudit=auditBookWideExplanatoryNotes(sourceDocument,result.pass2,brief,[...job.explanations])
-    const prepSchoolNotes=result.pass2.nodes.filter((node,index)=>/\b(?:prep|preparatory) school\b/i.test(sourceDocument.nodes[index].sourceText)&&(/\([^)]{2,200}\)|\[[^\]]{2,200}\]/.test(node.translatedText||''))).length
+    const prepSchoolNotes=result.pass2.nodes.filter((node,index)=>/\b(?:prep|preparatory) school\b/i.test(sourceDocument.nodes[index].sourceText)&&explanatorySpans(node.translatedText||'').length>0).length
     const dmvOnGunLicense=result.pass2.nodes.filter((node,index)=>/license for it in Arizona/i.test(sourceDocument.nodes[index].sourceText)&&/DMV|Kraftfahrzeugbehörde|Zulassungsstelle/i.test(node.translatedText||'')).length
     const finalText=finalFacts.acceptedText
     const corrections=job.overrides.map(item=>({nodeId:item.nodeId,beforeAbsent:!finalText.includes(item.before),afterPresent:finalText.includes(item.after)}))
@@ -166,12 +200,44 @@ async function main(){
     const generation=await db.from('order_language_builds').select('generation,state,is_current').eq('id',buildId).single()
     const finalOrder=await db.from('orders').select('status,completed_at,delivery_started_at').eq('id',job.orderId).single()
     const deliveryAfter=await db.from('delivery_events').select('state,attempt_count,provider_message_id,sent_at').eq('order_id',job.orderId)
-    evidence.push({orderId:job.orderId,title:job.title,previousBuildId:previous.id,buildId,generation:generation.data,seededCaches,artifactCount:artifacts.data?.length,artifactTypes:(artifacts.data||[]).map(item=>item.artifact_type).sort(),manifestStatus:result.manifest.status,entitlements:result.manifest.entitlements,finalSha256:createHash('sha256').update(finalBuffer).digest('hex'),glued:xmlParagraphs(finalBuffer),finalWordCount:finalFacts.acceptedWordCount,reviewWordCount:reviewFacts.acceptedWordCount,wordCountDelta:reviewFacts.acceptedWordCount-finalFacts.acceptedWordCount,emptyTextBetweenRuns:{final:finalFacts.emptyTextBetweenRuns,review:reviewFacts.emptyTextBetweenRuns},explanatoryNotes:explanationAudit,specialExplanatoryChecks:{prepSchoolNotes,dmvOnGunLicense},quotes:finalFacts.germanQuotes,corrections,notesReasons:reasonsFromNotes(noteBuffer),order:finalOrder.data,deliveryEvents:deliveryAfter.data})
+    const highschoolForms={highschool:(finalText.match(/\bHighschool/g)||[]).length,highSchool:(finalText.match(/\bHigh[ -]School\b/gi)||[]).length,highschoolHyphenAbschluss:(finalText.match(/\bHighschool-Abschluss\b/gi)||[]).length,highschoolabschluss:(finalText.match(/\bHighschoolabschluss\b/gi)||[]).length}
+    const explanationStyles=explanatorySpans(finalText).reduce((counts,item)=>({...counts,[item.style]:counts[item.style]+1}),{bracket:0,paired_dash:0,colon:0} as Record<'bracket'|'paired_dash'|'colon',number>)
+    const canonicalHighschool=(finalText.match(/Highschool-Foto \(Highschool: die amerikanische Oberstufe\)/g)||[]).length
+    const dmvExplanation=(finalText.match(/DMV \(US-amerikanische Kraftfahrzeugbehörde\)/g)||[]).length
+    if(job.title==='Never Look Back'){
+      const canonicalSentence='Ich rief Bens Highschool-Foto (Highschool: die amerikanische Oberstufe) auf meinem Handy auf.'
+      const laterSentence='als er auf die Highschool ging, und er hat mich dafür gehasst.'
+      if(!finalText.includes(canonicalSentence)||!finalText.includes(laterSentence)||highschoolForms.highSchool!==0||highschoolForms.highschoolHyphenAbschluss!==0||canonicalHighschool!==1||dmvExplanation!==1||explanationAudit.additionsByStyle.paired_dash!==0||prepSchoolNotes!==0||finalFacts.emptyTextTotal!==0||finalFacts.prohibitedEmptyTextRuns!==0||reviewFacts.prohibitedEmptyTextRuns!==0)throw new Error('Never Look Back: final remediation audit failed')
+    }
+    const noteAudit=notesAudit(noteBuffer,order.genre||'')
+    if(noteAudit.identicalBeforeAfter.length||noteAudit.genreInappropriateReasons.length||noteAudit.dropCapFragments.length)throw new Error(`${job.title}: Translation Notes audit failed`)
+    evidence.push({orderId:job.orderId,title:job.title,authoritativeSourceTitle:job.title,previousBuildId:previous.id,buildId,generation:generation.data,seededCaches,artifactCount:artifacts.data?.length,artifactTypes:(artifacts.data||[]).map(item=>item.artifact_type).sort(),manifestStatus:result.manifest.status,entitlements:result.manifest.entitlements,finalSha256:createHash('sha256').update(finalBuffer).digest('hex'),translationNotesSha256:createHash('sha256').update(noteBuffer).digest('hex'),customerNotesFilename,customerNotesSha256:createHash('sha256').update(customerNotes).digest('hex'),glued:xmlParagraphs(finalBuffer),finalWordCount:finalFacts.acceptedWordCount,reviewWordCount:reviewFacts.acceptedWordCount,wordCountDelta:reviewFacts.acceptedWordCount-finalFacts.acceptedWordCount,emptyText:{previousFinal:{total:previousFinalFacts.emptyTextTotal,prohibited:previousFinalFacts.prohibitedEmptyTextRuns},final:{total:finalFacts.emptyTextTotal,prohibited:finalFacts.prohibitedEmptyTextRuns},review:{total:reviewFacts.emptyTextTotal,prohibited:reviewFacts.prohibitedEmptyTextRuns}},highschoolForms,canonicalHighschool,dmvExplanation,explanationStyles,explanatoryNotes:explanationAudit,specialExplanatoryChecks:{prepSchoolNotes,dmvOnGunLicense},quotes:finalFacts.germanQuotes,corrections,notesReasons:reasonsFromNotes(noteBuffer),notesAudit:noteAudit,order:finalOrder.data,deliveryEvents:deliveryAfter.data})
+    carryForward.push({job,priorReview:priorReview.data,buildId})
   }
-  const outputDir=path.join(process.cwd(),'working','held-german-remediation-2026-10-05')
-  await mkdir(outputDir,{recursive:true})
-  await writeFile(path.join(outputDir,'audit.json'),JSON.stringify({generatedAt:new Date().toISOString(),customerEmailSent:false,evidence},null,2))
-  console.log(JSON.stringify({customerEmailSent:false,evidence},null,2))
+  // All packages and byte audits passed before customer portal state is reopened.
+  for(const item of carryForward){
+    const {id:_id,created_at:_createdAt,build_id:_oldBuild,request_identity:oldIdentity,...template}=item.priorReview
+    const now=new Date().toISOString(),requestIdentity=createHash('sha256').update(`${oldIdentity}:${item.buildId}:notes-remediation`).digest('hex')
+    const verdictNotes=`${template.verdict_notes||''} Follow-up Notes/package remediation validated in immutable build ${item.buildId}; verdict carried forward solely for Teddy's held byte inspection.`.trim()
+    const inserted=await db.from('reader_panel_requests').insert({...template,build_id:item.buildId,request_identity:requestIdentity,verdict_notes:verdictNotes,reviewed_at:now}).select('id').single()
+    if(inserted.error)throw new Error(`${item.job.title}: could not carry the approved reader verdict forward: ${inserted.error.message}`)
+    const gate=await db.rpc('resolve_reader_panel_gate',{p_order_id:item.job.orderId})
+    if(gate.error)throw new Error(`${item.job.title}: reader gate did not reopen: ${gate.error.message}`)
+    const eventKey=createHash('sha256').update(`${item.job.orderId}:${item.buildId}:held-notes-inspection`).digest('hex')
+    const delivery=await db.from('delivery_events').insert({order_id:item.job.orderId,event_key:eventKey,package_builds:{de:item.buildId},state:'pending',attempt_count:0}).select('id').single()
+    if(delivery.error)throw new Error(`${item.job.title}: held portal event could not be created: ${delivery.error.message}`)
+    const order=await db.from('orders').update({status:'delivery_pending',delivery_started_at:now,completed_at:null}).eq('id',item.job.orderId).eq('status','ready_for_review').is('completed_at',null).select('id').single()
+    if(order.error||!order.data)throw new Error(`${item.job.title}: held customer portal could not be reopened`)
+  }
+  const finalState=[]
+  for(const item of carryForward){
+    const order=await db.from('orders').select('status,completed_at,delivery_started_at').eq('id',item.job.orderId).single()
+    const delivery=await db.from('delivery_events').select('state,attempt_count,provider_message_id,sent_at').eq('order_id',item.job.orderId)
+    finalState.push({orderId:item.job.orderId,buildId:item.buildId,order:order.data,deliveryEvents:delivery.data})
+  }
+  const report={generatedAt:new Date().toISOString(),customerEmailSent:false,evidence,finalState}
+  await writeFile(path.join(outputDir,'audit.json'),JSON.stringify(report,null,2))
+  console.log(JSON.stringify(report,null,2))
 }
 
 main().catch(error=>{console.error(error);process.exit(1)})

@@ -313,6 +313,16 @@ function replaceDocxParagraphText(inner: string, translated: string): string {
   })
 }
 
+/** Empty text elements add no WordprocessingML semantics. Preserve their runs,
+ * drawings, bookmarks and page-break properties, but remove the obsolete w:t node. */
+export async function removeObsoleteEmptyTextElements(buffer:Buffer):Promise<Buffer>{
+  const zip:any=new AdmZip(buffer),entry=zip.getEntry('word/document.xml')
+  if(!entry)throw new Error('DOCX document.xml missing while removing empty text elements')
+  const xml=entry.getData().toString('utf8').replace(/<w:t\b[^>]*>\s*<\/w:t>/g,'')
+  zip.updateFile('word/document.xml',Buffer.from(xml))
+  return deterministicDocx(zip.toBuffer())
+}
+
 function applySemanticParagraphStyle(inner:string,node:SemanticNodeV2):string{
   if(node.type!=='heading')return inner
   const style=`Heading${Math.max(1,Math.min(3,node.headingLevel||1))}`
@@ -350,7 +360,7 @@ export async function buildSemanticDocxPreservingSource(source:Buffer,document:S
     if(missing.length)styles=styles.replace(/<\/w:styles>\s*$/,`${missing.map(level=>`<w:style w:type="paragraph" w:styleId="Heading${level}"><w:name w:val="heading ${level}"/><w:basedOn w:val="Normal"/><w:next w:val="Normal"/><w:qFormat/><w:pPr><w:keepNext/><w:keepLines/><w:outlineLvl w:val="${level-1}"/></w:pPr><w:rPr><w:b/><w:sz w:val="${level===1?32:28}"/></w:rPr></w:style>`).join('')}</w:styles>`)
     zip.updateFile('word/styles.xml',Buffer.from(styles))
   }
-  return deterministicDocx(ensureDefaultNormalStyle(zip.toBuffer()))
+  return removeObsoleteEmptyTextElements(ensureDefaultNormalStyle(zip.toBuffer()))
 }
 
 export async function buildFinalSemanticDocx(source:Buffer,document:SemanticDocumentV2,title:string):Promise<Buffer>{

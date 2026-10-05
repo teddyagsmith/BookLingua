@@ -23,7 +23,10 @@ function normalize(value:string):string{
 }
 
 export function cleanBookTitle(value:string):string{
-  return decodeXml(value).replace(/^\s*(?:updated\s+)?(?:e-?book|ebook|final|revised|latest)(?:\s+(?:file|version|edition))?\s*[-_:–—]*\s*/i,'').trim()||decodeXml(value)
+  return decodeXml(value)
+    .replace(/^\s*(?:updated\s+)?(?:e-?book|ebook|final|revised|latest)(?:\s+(?:file|version|edition))?\s*[-_:–—]*\s*/i,'')
+    .replace(/^\s*(?:german|deutsch|french|français|spanish|español|italian|italiano|portuguese|português|polish|polski)\s*[-_:–—]*\s*/i,'')
+    .trim()||decodeXml(value)
 }
 
 function subtitleBase(value:string):string|null{
@@ -59,13 +62,16 @@ export function extractSourceMetadataTitle(source:Buffer,format:SemanticDocument
 
 export function resolveTitleAuthority(input:{document:SemanticDocumentV2;checkoutTitle:string;source:Buffer}):TitleAuthority{
   const checkoutTitle=cleanBookTitle(input.checkoutTitle)
-  const semantic=input.document.nodes.find(node=>node.type==='heading'&&Boolean(node.translatedText?.trim())&&isVerifiedSemanticTitle(node.sourceText,checkoutTitle))
+  const metadata=extractSourceMetadataTitle(input.source,input.document.sourceFormat)
+  const manuscriptTitle=cleanBookTitle(metadata?.value||checkoutTitle)
+  const semantic=input.document.nodes.find(node=>node.type==='heading'&&Boolean(node.translatedText?.trim())&&(
+    isVerifiedSemanticTitle(cleanBookTitle(node.sourceText),manuscriptTitle)||isVerifiedSemanticTitle(cleanBookTitle(node.sourceText),checkoutTitle)
+  ))
   if(semantic?.translatedText)return{
-    sourceKind:'semantic_title_node',sourceValue:semantic.sourceText,translatedValue:semantic.translatedText.trim(),effectiveValue:semantic.translatedText.trim(),
+    sourceKind:'semantic_title_node',sourceValue:cleanBookTitle(semantic.sourceText),translatedValue:semantic.translatedText.trim(),effectiveValue:semantic.translatedText.trim(),
     confidence:'verified',fallbackUsed:false,semanticNodeId:semantic.id,
   }
-  const metadata=extractSourceMetadataTitle(input.source,input.document.sourceFormat)
-  const sourceValue=cleanBookTitle(metadata?.value||checkoutTitle)
+  const sourceValue=manuscriptTitle
   return{
     sourceKind:metadata?.kind||'checkout_metadata',sourceValue,effectiveValue:sourceValue,confidence:'preserved',fallbackUsed:true,
     warning:{code:'TITLE_TRANSLATION_UNAVAILABLE',message:'No verified translated title authority was available; the original title was preserved for review.'},
