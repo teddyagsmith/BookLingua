@@ -10,7 +10,7 @@ import { buildChapterMap, renderChapterMapCsv, renderChapterMapDocx } from './ch
 import { validateArtifact } from './artifact-validation-v2'
 import { storeImmutableArtifact } from './artifact-store'
 import { resolvePackageGate } from './package-gate'
-import { deriveEditorialTranslationNotes, renderTranslationNotes, TranslationNotesV1, validateTranslationNotes } from './translation-notes'
+import { deriveEditorialQaChangelog, deriveEditorialTranslationNotes, renderTranslationNotes, TranslationNotesV1, validateCustomerTranslationNotes, validateTranslationNotes } from './translation-notes'
 import { applyTitleAuthority, resolveTitleAuthority } from './authoritative-title'
 import { TranslationBriefV1, assertTranslationBriefForSource, translationBriefFingerprint } from './translation-brief'
 import { ArtifactType } from './package-manifest'
@@ -66,6 +66,8 @@ export interface SemanticPipelineInput {
   genre?: string
   brief: TranslationBriefV1
   notes: TranslationNotesV1
+  /** A held remediation may supply the complete customer selection explicitly. */
+  customerNotesAreAuthoritative?: boolean
   translate: SemanticTranslator
   allowReviewedStructure?: boolean
   buildId?: string
@@ -106,7 +108,7 @@ export function applyVerifiedEditorialOverrides(document:SemanticDocumentV2,over
  * output from identical inputs, and without this the completed package short-circuits
  * and the customer's files never change.
  */
-export const PIPELINE_OUTPUT_VERSION = 'output-v12-explanations-notes-empty-runs'
+export const PIPELINE_OUTPUT_VERSION = 'output-v13-source-linked-customer-notes'
  
  export const SEMANTIC_PROMPT_SIGNATURE = `${TRANSLATION_PROMPT_VERSION}+${EDITORIAL_PROMPT_VERSION}+${PIPELINE_OUTPUT_VERSION}`
 export const SEMANTIC_BUILD_POLICY_VERSION = 'semantic-v2-review-diff-spacing-v10'
@@ -394,10 +396,18 @@ export async function runSemanticPipeline(input: SemanticPipelineInput) {
   if (map.some(row => row.status !== 'mapped')) throw new Error('Chapter map is incomplete')
   await storeValidated(input, buildId, 'chapter_map_csv', 'chapter-map.csv', Buffer.from(renderChapterMapCsv(map)))
   await storeValidated(input, buildId, 'chapter_map_docx', 'chapter-map.docx', await renderChapterMapDocx(map, { bookTitle: input.title, language: input.language }), 'docx')
-  const notes = deriveEditorialTranslationNotes({ language: input.language, genre:input.genre, pass1, pass2, existing: input.notes, authoritativeTitle: titleAuthority.translatedValue ? { source: titleAuthority.sourceValue, target: titleAuthority.translatedValue } : undefined })
+  const notes = input.customerNotesAreAuthoritative ? input.notes : deriveEditorialTranslationNotes({ language: input.language, genre:input.genre, pass1, pass2, existing: input.notes, authoritativeTitle: titleAuthority.translatedValue ? { source: titleAuthority.sourceValue, target: titleAuthority.translatedValue } : undefined })
   const derivedNoteErrors=validateTranslationNotes(notes,{requireSpecificReasons:true})
   if(derivedNoteErrors.length)throw new Error(derivedNoteErrors.join('; '))
+  const customerNoteErrors=validateCustomerTranslationNotes(notes,{
+    sourceTexts:sourceDocument.nodes.map(node=>node.sourceText),
+    finalText:finalFacts.acceptedText,
+    approvedSourceTerms:input.brief.items.filter(item=>item.authorDecision==='footnote'||item.authorDecision==='convert_with_note').map(item=>item.sourceTerm),
+    authoritativeSourceTitle:titleAuthority.sourceValue,
+  })
+  if(customerNoteErrors.length)throw new Error(customerNoteErrors.join('; '))
   await storeValidated(input, buildId, 'translation_notes', 'translation-notes.txt', Buffer.from(renderTranslationNotes(notes)))
+  await storeValidated(input, buildId, 'qa_changelog', 'qa-changelog.md', Buffer.from(deriveEditorialQaChangelog({language:input.language,pass1,pass2})))
   const guidePath = path.join(process.cwd(), 'public', UPLOAD_GUIDE_ASSET_PATH.replace(/^\//, ''))
   const guide = await readFile(guidePath)
   if (createHash('sha256').update(guide).digest('hex') !== UPLOAD_GUIDE_SHA256) throw new Error('Pinned upload guide hash mismatch')

@@ -8,6 +8,7 @@ export type ArtifactType =
   | 'final_epub'
   | 'final_docx'
   | 'translation_notes'
+  | 'qa_changelog'
   | 'chapter_map_docx'
   | 'chapter_map_csv'
   | 'upload_guide'

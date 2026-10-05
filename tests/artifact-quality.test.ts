@@ -5,7 +5,7 @@ import { Document, HeadingLevel, Packer, Paragraph, TextRun } from 'docx'
 import { applyTitleAuthority, cleanBookTitle, resolveTitleAuthority } from '../lib/authoritative-title'
 import { assessSourceFormatting } from '../lib/formatting-policy'
 import { buildFinalSemanticDocx, buildSemanticDocx, buildSemanticDocxPreservingSource, buildSemanticEpub, buildSemanticReviewDocx, wordLevelDiff } from '../lib/semantic-artifacts'
-import { deriveEditorialTranslationNotes, validateTranslationNotes } from '../lib/translation-notes'
+import { deriveEditorialQaChangelog, deriveEditorialTranslationNotes, validateCustomerTranslationNotes, validateTranslationNotes } from '../lib/translation-notes'
 import { parseSemanticDocx, parseSemanticTxt } from '../lib/semantic-parser'
 import { inferHeadingsFromContents } from '../lib/extract-segments'
 import { validateArtifact } from '../lib/artifact-validation-v2'
@@ -205,11 +205,13 @@ test('translation notes are derived from real editorial changes and remain schem
   const notes=deriveEditorialTranslationNotes({language:'French',pass1,pass2,authoritativeTitle:{source:'Title',target:'Titre'}})
   assert.deepEqual(validateTranslationNotes(notes),[])
   assert.equal(notes.sections[0].entries.length,2)
-  assert.match(notes.sections[0].entries[1].reason,/becomes/)
+  assert.equal(notes.sections[0].entries[1].source,'A sharp breath.')
+  assert.equal(notes.sections[0].entries[1].target,'Une inspiration brusque.')
   assert.deepEqual(validateTranslationNotes(notes,{requireSpecificReasons:true}),[])
+  assert.deepEqual(validateCustomerTranslationNotes(notes,{sourceTexts:pass1.nodes.map((node:any)=>node.sourceText),finalText:pass2.nodes.map((node:any)=>node.translatedText).join('\n'),authoritativeSourceTitle:'Title'}),[])
 })
 
-test('translation notes expose exact changed spans, route thriller reasons, and rejoin drop caps',()=>{
+test('translation notes expose author English to delivered final, route thriller reasons, and rejoin drop caps',()=>{
   const pass1=document([
     {sourceText:'I',translatedText:'W'},
     {sourceText:'f you enjoyed Ashes of Betrayal.',translatedText:'enn Ihnen Ashes of Betrayal gefallen hat.'},
@@ -221,11 +223,51 @@ test('translation notes expose exact changed spans, route thriller reasons, and 
   pass2.nodes[2].translatedText='„Über Sie?“, fragte Huxley, der Ton plötzlich weicher.'
   const notes=deriveEditorialTranslationNotes({language:'de',genre:'thriller',pass1,pass2,authoritativeTitle:{source:'Ashes of Betrayal',target:'Asche des Verrats'}})
   const entries=notes.sections[0].entries
-  assert.ok(entries.some(entry=>entry.source==='weich an den Rändern'&&entry.target==='plötzlich weicher'))
+  assert.ok(entries.some(entry=>entry.source.includes('Huxley asked, the burr soft around the edges.')&&entry.target.includes('der Ton plötzlich weicher.')))
   assert.ok(entries.some(entry=>entry.reason.includes('thriller’s')))
   assert.ok(entries.every(entry=>!/romantic|consent/i.test(entry.reason)))
   assert.ok(entries.every(entry=>!/^f you|^enn Ihnen/.test(entry.source)))
   assert.deepEqual(validateTranslationNotes(notes,{requireSpecificReasons:true}),[])
+})
+
+test('customer Notes fail closed on German draft sources, missing final wording, and truncated reasons',()=>{
+  const notes:any={schemaVersion:'1.0',language:'de',approach:'Source to final.',sections:[{id:'x',title:'X',entries:[{
+    source:'weich an den Rändern',target:'plötzlich weicher',reason:'The quoted phrase “weich an den Rändern…” was changed for natural style.',
+  }]}]}
+  assert.match(validateTranslationNotes(notes,{requireSpecificReasons:true}).join('; '),/truncated/)
+  const errors=validateCustomerTranslationNotes(notes,{sourceTexts:['the familiar down-home burr soft around the edges'],finalText:'der vertraute, bodenständige Ton deutlich weicher'})
+  assert.ok(errors.some(error=>/not English/.test(error)))
+  assert.ok(errors.some(error=>/not linked/.test(error)))
+  assert.ok(errors.some(error=>/not an exact delivered substring/.test(error)))
+})
+
+test('required German held-order customer Notes selections are source-linked and exact-final-linked',()=>{
+  const ashes:any={schemaVersion:'1.0',language:'de',approach:'English to German.',sections:[{id:'decisions',title:'Decisions',entries:[
+    {source:'Enjoy your holiday in sunny Slovakia',target:'Genießen Sie Ihren Urlaub in der sonnigen Slowakei',reason:'German uses the feminine country construction while preserving the dry announcement.'},
+    {source:"Give him a pattern, and he'll see intention even when it isn't there.",target:'Gibt man ihm ein Muster, sieht er Absicht, selbst wo keine ist.',reason:'Generic English you becomes impersonal German man so the statement remains general.'},
+    {source:'the familiar down-home burr soft around the edges',target:'der vertraute, bodenständige Ton plötzlich weicher',reason:'The idiom is adapted naturally in German rather than translated literally.'},
+    {source:'on muscle memory, pistol low',target:'wie automatisch durch das dunkle Haus, die Waffe gesenkt',reason:'The compact action beat preserves automatic movement and the lowered weapon position.'},
+  ]}]}
+  const ashesSource=ashes.sections[0].entries.map((entry:any)=>entry.source)
+  const ashesFinal=ashes.sections[0].entries.map((entry:any)=>entry.target).join('\n')
+  assert.deepEqual(validateCustomerTranslationNotes(ashes,{sourceTexts:ashesSource,finalText:ashesFinal}),[])
+  const never:any={schemaVersion:'1.0',language:'de',approach:'English to German.',sections:[{id:'decisions',title:'Decisions',entries:[
+    {source:'Never Look Back',target:'Never Look Back',reason:'The English series title is retained unchanged in German to preserve established branding.'},
+    {source:'It was the twenty-percent not legit I was worried about.',target:'Die übrigen zwanzig Prozent machten mir Sorgen.',reason:'The colloquial percentage construction becomes natural German while keeping the blunt concern.'},
+    {source:'high school',target:'Highschool-Foto (Highschool: die amerikanische Oberstufe)',reason:'The author-approved note explains the US school term at its first delivered occurrence.'},
+    {source:'DMV',target:'DMV (US-amerikanische Kraftfahrzeugbehörde)',reason:'The author-approved note retains the agency abbreviation and explains its function in German.'},
+  ]}]}
+  assert.deepEqual(validateTranslationNotes(never,{requireSpecificReasons:true}),[])
+  assert.deepEqual(validateCustomerTranslationNotes(never,{sourceTexts:['Never Look Back','It was the twenty-percent not legit I was worried about.','high school','DMV'],finalText:never.sections[0].entries.map((entry:any)=>entry.target).join('\n'),approvedSourceTerms:['high school','DMV'],authoritativeSourceTitle:'Never Look Back'}),[])
+})
+
+test('German draft remediation history is rendered only as an internal QA changelog',()=>{
+  const pass1=document([{sourceText:'A source phrase.',translatedText:'Ein deutscher Entwurf.'}])
+  const pass2=structuredClone(pass1);pass2.nodes[0].translatedText='Eine deutsche Endfassung.'
+  const changelog=deriveEditorialQaChangelog({language:'de',pass1,pass2})
+  assert.match(changelog,/Internal only/)
+  assert.match(changelog,/Pass 1 draft: Ein deutscher Entwurf\./)
+  assert.match(changelog,/Delivered final: Eine deutsche Endfassung\./)
 })
 
 test('preserved DOCX gains a real default Normal style when the source stylesheet leaves it dangling',async()=>{

@@ -680,7 +680,7 @@ export async function GET(
 
     // Hardened packages serve the exact immutable bytes that passed validation.
     // If no artifact table/row exists, legacy orders continue through the dynamic builder below.
-    const allowedArtifactTypes = new Set(['translation_brief','pass1_docx','review_docx','final_epub','final_docx','translation_notes','chapter_map_docx','chapter_map_csv','upload_guide','launch_pack'])
+    const allowedArtifactTypes = new Set(['translation_brief','pass1_docx','review_docx','final_epub','final_docx','translation_notes','qa_changelog','chapter_map_docx','chapter_map_csv','upload_guide','launch_pack'])
     if (requestedArtifact && !allowedArtifactTypes.has(requestedArtifact)) return NextResponse.json({ error: 'Unsupported artifact type' }, { status: 400 })
     const artifactType = (requestedArtifact || (type === 'pass1' ? 'pass1_docx'
       : type === 'review' ? 'review_docx'

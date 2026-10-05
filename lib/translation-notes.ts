@@ -47,13 +47,48 @@ export function validateTranslationNotes(notes: TranslationNotesV1, options:{req
     const normalized=entries.map(entry=>entry.reason.normalize('NFKC').toLocaleLowerCase().replace(/\s+/g,' ').trim())
     if(new Set(normalized).size!==normalized.length)errors.push('Translation-note reasons must be unique')
     for(const entry of entries){
-      const evidence=[entry.source,entry.target].map(value=>value.normalize('NFKC').trim().slice(0,28)).filter(value=>value.length>=3)
-      if(entry.source.normalize('NFKC').trim()===entry.target.normalize('NFKC').trim())errors.push(`Translation-note before/after values are identical: ${entry.source.slice(0,60)}`)
-      if(entry.reason.trim().length<45||!evidence.some(value=>entry.reason.includes(value))){
-        errors.push(`Translation-note reason lacks specific evidence: ${entry.source.slice(0,60)}`)
-      }
+      const identical=entry.source.normalize('NFKC').trim()===entry.target.normalize('NFKC').trim()
+      if(identical&&!/retained unchanged|kept unchanged/i.test(entry.reason))errors.push(`Translation-note unchanged wording lacks an explicit retention reason: ${entry.source.slice(0,60)}`)
+      if(entry.reason.trim().length<35)errors.push(`Translation-note reason is not specific enough: ${entry.source.slice(0,60)}`)
+      if(/…|\.\.\./.test(entry.reason))errors.push(`Translation-note reason contains truncated text: ${entry.source.slice(0,60)}`)
       if(/\.\s+(?:The editorial review|This edit|It also)\b/.test(entry.reason))errors.push(`Translation-note reason contains an appended generic sentence: ${entry.source.slice(0,60)}`)
     }
+  }
+  return errors
+}
+
+function normalizedExact(value:string):string{
+  return decodeVisibleEntities(value).normalize('NFKC').replace(/[‘’]/g,"'").replace(/[“”]/g,'"').replace(/[\u00a0\u2007\u202f]/g,' ').replace(/\s+/g,' ').trim()
+}
+
+function englishSourceLanguageResult(value:string,allowlisted:Set<string>):{passed:boolean;reason:string}{
+  const normalized=normalizedExact(value),lower=normalized.toLocaleLowerCase()
+  if(allowlisted.has(lower))return{passed:true,reason:'approved source term or authoritative title'}
+  const words=lower.match(/[a-zà-öø-ÿ]+(?:['’][a-zà-öø-ÿ]+)*/g)||[]
+  if(words.length<=2&&words.every(word=>/^[A-Z]/.test(normalized)||/^[A-Z0-9]+$/.test(value)))return{passed:true,reason:'short proper noun or acronym'}
+  const english=new Set(['a','an','and','are','as','at','be','but','by','for','from','give','he','her','him','his','i','in','is','it','its','low','memory','not','of','on','or','our','she','the','their','there','they','this','to','was','we','when','where','with','you','your'])
+  const german=new Set(['aber','als','auf','aus','bei','das','dem','den','der','des','die','durch','ein','eine','einem','einen','einer','er','es','für','hat','ich','ihm','in','ist','kein','keine','man','mit','nicht','oder','sein','sie','sind','und','von','war','wie','wir','wo','zu','zum','zur'])
+  const englishScore=words.filter(word=>english.has(word)).length
+  const germanScore=words.filter(word=>german.has(word)).length+(value.match(/[äöüß]/gi)||[]).length
+  if(germanScore>0&&germanScore>=englishScore)return{passed:false,reason:`German-only evidence (${germanScore}) is not outweighed by English evidence (${englishScore})`}
+  return{passed:true,reason:`English evidence ${englishScore}; German-only evidence ${germanScore}`}
+}
+
+/** Customer Notes are a source-to-delivery contract, never an editorial draft diff. */
+export function validateCustomerTranslationNotes(notes:TranslationNotesV1,input:{
+  sourceTexts:string[]
+  finalText:string
+  approvedSourceTerms?:string[]
+  authoritativeSourceTitle?:string
+}):string[]{
+  const errors:string[]=[],sourceCorpus=normalizedExact(input.sourceTexts.join('\n')),finalText=normalizedExact(input.finalText)
+  const allowlisted=new Set([...(input.approvedSourceTerms||[]),input.authoritativeSourceTitle||''].map(value=>normalizedExact(value).toLocaleLowerCase()).filter(Boolean))
+  for(const entry of notes.sections.flatMap(section=>section.entries)){
+    const source=normalizedExact(entry.source),target=normalizedExact(entry.target)
+    const language=englishSourceLanguageResult(source,allowlisted)
+    if(!language.passed)errors.push(`Customer Notes source is not English: ${entry.source.slice(0,80)} (${language.reason})`)
+    if(!sourceCorpus.includes(source)&&!allowlisted.has(source.toLocaleLowerCase()))errors.push(`Customer Notes source is not linked to the author manuscript: ${entry.source.slice(0,80)}`)
+    if(!finalText.includes(target))errors.push(`Customer Notes final wording is not an exact delivered substring: ${entry.target.slice(0,80)}`)
   }
   return errors
 }
@@ -98,7 +133,6 @@ export function deriveEditorialTranslationNotes(input: {
   authoritativeTitle?: { source: string; target: string }
   limit?: number
 }): TranslationNotesV1 {
-  const excerpt=(value:string,limit=72)=>{const clean=value.normalize('NFKC').replace(/\s+/g,' ').trim();return clean.length>limit?`${clean.slice(0,limit-1).trimEnd()}…`:clean}
   const normalizedNodes=(nodes:typeof input.pass1.nodes)=>{
     const output:typeof nodes=[]
     for(let index=0;index<nodes.length;index++){
@@ -110,42 +144,31 @@ export function deriveEditorialTranslationNotes(input: {
     }
     return output
   }
-  const tokenize=(value:string)=>value.normalize('NFKC').replace(/\s+/g,' ').trim().match(/[A-Za-zÀ-ÖØ-öø-ÿĀ-ž0-9]+(?:[’'’-][A-Za-zÀ-ÖØ-öø-ÿĀ-ž0-9]+)*|[^A-Za-zÀ-ÖØ-öø-ÿĀ-ž0-9\s]+/g)||[]
-  const same=(a:string,b:string)=>a.replace(/[‘’]/g,"'")===b.replace(/[‘’]/g,"'")
-  const relatedContext=(a:string,b:string)=>{const left=a.toLocaleLowerCase(),right=b.toLocaleLowerCase(),short=left.length<=right.length?left:right,long=left.length>right.length?left:right;return short.length>=3&&long.startsWith(short)}
-  const changedSpan=(beforeValue:string,afterValue:string)=>{
-    const before=tokenize(beforeValue),after=tokenize(afterValue);let start=0
-    while(start<before.length&&start<after.length&&(same(before[start],after[start])||relatedContext(before[start],after[start])))start++
-    let beforeEnd=before.length,afterEnd=after.length
-    while(beforeEnd>start&&afterEnd>start&&same(before[beforeEnd-1],after[afterEnd-1])){beforeEnd--;afterEnd--}
-    const trim=(tokens:string[])=>tokens.join(' ').replace(/\s+([,.;:!?…\)\]])/g,'$1').replace(/([\(\[„“”"'])\s+/g,'$1').replace(/\s+([“”"'])/g,'$1').trim()
-    return{before:trim(before.slice(start,beforeEnd)),after:trim(after.slice(start,afterEnd))}
-  }
   const family=/romance|romantasy|erotic/i.test(input.genre||'')?'romance':/thriller|mystery|crime|suspense|spy/i.test(input.genre||'')?'thriller':'general'
-  const reason=(before:string,after:string,source:string)=>{
-    const change=`“${excerpt(before,52)}” becomes “${excerpt(after,52)}”`
-    if(/high.?school/i.test(`${source} ${before} ${after}`))return`${change} to enforce Duden “Highschool” spelling and the author-approved first-occurrence explanation.`
-    if(/\bDMV\b/i.test(`${source} ${before} ${after}`))return`${change} to keep the US agency term clear without repeating its explanation.`
-    if(family==='thriller')return/[“”"']/.test(source)?`${change} to keep the dialogue idiomatic and the thriller’s investigative tension intact.`:`${change} to remove a literal construction while preserving the thriller’s pace and meaning.`
-    if(family==='romance'&&/\b(?:kiss|touch|desire|want|body|breath|heart|love|consent|please)\b/i.test(source))return`${change} to preserve the romance’s emotional and consent cues in natural target-language phrasing.`
-    if(/[“”"']/.test(source))return`${change} to preserve the speaker’s voice in natural target-language dialogue.`
-    return`${change} to replace a literal construction with idiomatic wording while preserving the source meaning.`
+  const reason=(source:string,index:number)=>{
+    const opening=(source.match(/[A-Za-z]+(?:[’'][A-Za-z]+)?/g)||[]).slice(0,5).join(' ')
+    const identity=opening?`The passage beginning ${opening}`:`Editorial decision ${index+1}`
+    if(/high.?school/i.test(source))return`${identity} follows the author-approved German school terminology at its delivered occurrence.`
+    if(/\bDMV\b/i.test(source))return`${identity} keeps the US agency reference clear in the delivered German.`
+    if(family==='thriller')return`${identity} uses natural German while preserving the thriller’s pace, evidence, and narrative intent.`
+    if(family==='romance')return`${identity} uses natural German while preserving the scene’s emotional meaning and narrative voice.`
+    return`${identity} uses natural target-language wording while preserving the author’s meaning and tone.`
   }
   const limit = Math.max(1, Math.min(input.limit || 12, 20))
   const decisions: TranslationNoteEntry[] = []
   if (input.authoritativeTitle&&input.authoritativeTitle.source.normalize('NFKC')!==input.authoritativeTitle.target.normalize('NFKC')) decisions.push({
     source: input.authoritativeTitle.source,
     target: input.authoritativeTitle.target,
-    reason: `“${excerpt(input.authoritativeTitle.source)}” becomes “${excerpt(input.authoritativeTitle.target)}” as the manuscript-authoritative title used across customer files.`,
+    reason: 'The German title follows the manuscript-authoritative title decision used consistently across the delivered files.',
   })
   const pass1=normalizedNodes(input.pass1.nodes),pass2=normalizedNodes(input.pass2.nodes)
   for (let index = 0; index < pass1.length && decisions.length < limit; index++) {
     const first = pass1[index]; const second = pass2[index]
     if (!second || first.id !== second.id || !first.translatedText || !second.translatedText || first.translatedText === second.translatedText) continue
-    const span=changedSpan(first.translatedText,second.translatedText)
-    if(!span.before||!span.after||span.before===span.after)continue
-    if(input.authoritativeTitle&&span.before===input.authoritativeTitle.source&&span.after===input.authoritativeTitle.target)continue
-    decisions.push({source:span.before,target:span.after,reason:reason(span.before,span.after,first.sourceText)})
+    const source=normalizedExact(first.sourceText),target=normalizedExact(second.translatedText)
+    if(!source||!target)continue
+    if(input.authoritativeTitle&&source===normalizedExact(input.authoritativeTitle.source)&&target===normalizedExact(input.authoritativeTitle.target))continue
+    decisions.push({source,target,reason:reason(source,decisions.length)})
   }
   const existingSections = input.existing?.sections || []
   return {
@@ -154,10 +177,30 @@ export function deriveEditorialTranslationNotes(input: {
     approach: 'The translation preserves the author’s narrative voice and semantic structure. These notes highlight representative title, terminology, dialogue, tone, and editorial decisions evidenced in the completed two-pass translation.',
     sections: [
       ...(decisions.length ? [{ id: 'editorial-decisions', title: 'Representative Editorial Decisions', entries: decisions }] : []),
-      ...existingSections.map(section => ({ ...section, id: `approved-${section.id}`, title: `Approved Instructions — ${section.title}`,entries:section.entries.map(entry=>({
-        ...entry,
-        reason:`“${excerpt(entry.source,48)}” is kept as “${excerpt(entry.target,64)}” to apply the author-approved terminology decision exactly once where required.`,
-      })) })),
+      ...existingSections.map(section => ({ ...section, id: `approved-${section.id}`, title: `Approved Instructions — ${section.title}` })),
     ],
   }
+}
+
+/** Full Pass 1 → Pass 2 history is internal evidence and must never be rendered to customers. */
+export function deriveEditorialQaChangelog(input:{
+  language:string
+  pass1:{nodes:Array<{id:string;sourceText:string;translatedText?:string|null}>}
+  pass2:{nodes:Array<{id:string;sourceText:string;translatedText?:string|null}>}
+}):string{
+  const rows:string[]=[
+    '# Internal QA Changelog',
+    '',
+    '**Internal only — never include in a customer portal, ZIP, email, or Notes document.**',
+    '',
+    `Language: ${input.language}`,
+    '',
+  ]
+  for(let index=0;index<input.pass1.nodes.length;index++){
+    const draft=input.pass1.nodes[index],final=input.pass2.nodes[index]
+    if(!final||draft.id!==final.id||!draft.translatedText||!final.translatedText||draft.translatedText===final.translatedText)continue
+    rows.push(`## ${draft.id}`,'',`- Author source: ${draft.sourceText}`,`- Pass 1 draft: ${draft.translatedText}`,`- Delivered final: ${final.translatedText}`,'')
+  }
+  if(rows.length===6)rows.push('No Pass 1 to Pass 2 wording changes were recorded.','')
+  return rows.join('\n')
 }

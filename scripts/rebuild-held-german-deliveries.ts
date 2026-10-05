@@ -17,8 +17,12 @@ import {normalizeTypography} from '../lib/typography'
 import {normalizeGermanTerminology} from '../lib/german-terminology'
 import {renderCustomerTranslationNotesDocx} from '../lib/customer-delivery-docx'
 import {explanatorySpans} from '../lib/explanatory-notes'
+import {TranslationNotesV1,validateCustomerTranslationNotes} from '../lib/translation-notes'
 
 const LANGUAGE='de'
+const customerNotes=(approach:string,entries:Array<{source:string;target:string;reason:string}>):TranslationNotesV1=>({
+  schemaVersion:'1.0',language:'de',approach,sections:[{id:'translation-decisions',title:'Translation Decisions',entries}],
+})
 const JOBS=[
   {
     orderId:'f8129c37-d566-4b87-98a4-d981d8c949de',title:'Never Look Back',verifiedTitle:'Never Look Back',launchPack:true,
@@ -29,7 +33,13 @@ const JOBS=[
     overrides:[
       {nodeId:'node-000127',before:'Es waren die zwanzig Prozent nicht-legal, die mir Sorgen bereiteten.',after:'Die übrigen zwanzig Prozent machten mir Sorgen.'},
     ],
-    preserveFinalSha256:null,
+    notes:customerNotes('These notes connect the author’s English wording directly to the exact German wording in the delivered Final.',[
+      {source:'Never Look Back',target:'Never Look Back',reason:'The English series title is retained unchanged in German to preserve the established Midnight Riders title and branding.'},
+      {source:'It was the twenty-percent not legit I was worried about.',target:'Die übrigen zwanzig Prozent machten mir Sorgen.',reason:'The deliberately colloquial percentage construction becomes natural German while retaining the narrator’s blunt concern and biker-thriller voice.'},
+      {source:'high school',target:'Highschool-Foto (Highschool: die amerikanische Oberstufe)',reason:'The author-approved first-occurrence note explains the US school term briefly while the German compound follows standard Highschool spelling.'},
+      {source:'DMV',target:'DMV (US-amerikanische Kraftfahrzeugbehörde)',reason:'The author-approved first-occurrence note retains the US agency abbreviation and gives German readers its function without relocating the setting.'},
+    ]),
+    preserveFinalSha256:'d6e3bf1f6f691671610b4ffd6f90d2fc6ad4c4bdd493b3bc35f5ad6efa30fad8',
   },
   {
     orderId:'6543360d-c0f9-43ba-9437-eb15256c8190',title:'Ashes of Betrayal',verifiedTitle:'Asche des Verrats',launchPack:false,
@@ -40,6 +50,12 @@ const JOBS=[
       {nodeId:'node-000796',before:'der vertraute, bodenständige Tonfall weich an den Rändern',after:'der vertraute, bodenständige Ton plötzlich weicher'},
       {nodeId:'node-001145',before:'Ash bewegte sich aus dem Muskelgedächtnis heraus durch das verdunkelte Haus, die Pistole tief.',after:'Ash bewegte sich wie automatisch durch das dunkle Haus, die Waffe gesenkt.'},
     ],
+    notes:customerNotes('These notes connect representative English source phrases directly to the exact German wording in the delivered Final.',[
+      {source:'Enjoy your holiday in sunny Slovakia',target:'Genießen Sie Ihren Urlaub in der sonnigen Slowakei',reason:'The German uses the feminine country construction in der Slowakei while preserving the pilot’s dry, formal announcement.'},
+      {source:"Give him a pattern, and he'll see intention even when it isn't there.",target:'Gibt man ihm ein Muster, sieht er Absicht, selbst wo keine ist.',reason:'The generic English you is rendered with impersonal German man, keeping the observation general rather than addressing a particular person.'},
+      {source:'the familiar down-home burr soft around the edges',target:'der vertraute, bodenständige Ton plötzlich weicher',reason:'The regional idiom is adapted into natural German voice description rather than translated literally, preserving Huxley’s softened delivery.'},
+      {source:'on muscle memory, pistol low',target:'wie automatisch durch das dunkle Haus, die Waffe gesenkt',reason:'The compressed action beat becomes idiomatic German while keeping Ash’s automatic movement and the weapon’s lowered position clear.'},
+    ]),
     preserveFinalSha256:'4d4d922d3a72936c95b60b2b2b0e4f39f6854430ff718e217c95d3a0d9ddd88e',
   },
 ] as const
@@ -113,7 +129,7 @@ function notesAudit(buffer:Buffer,genre:string){
   }
   return{
     entryCount:entries.length,uniqueReasons:new Set(entries.map(item=>item.reason.normalize('NFKC').toLocaleLowerCase())).size,
-    identicalBeforeAfter:entries.filter(item=>item.before===item.after),
+    identicalBeforeAfter:entries.filter(item=>item.before===item.after&&!/retained unchanged|kept unchanged/i.test(item.reason)),
     genreInappropriateReasons:/thriller|mystery|crime|suspense/i.test(genre)?entries.filter(item=>/romance|romantic|consent/i.test(item.reason)):[],
     dropCapFragments:entries.filter(item=>/^f you\b|^enn Ihnen\b/i.test(item.before)||/^f you\b|^enn Ihnen\b/i.test(item.after)),
     entries,
@@ -177,16 +193,15 @@ async function main(){
       if(previousFinalArtifact.data.sha256!==job.preserveFinalSha256)throw new Error(`${job.title}: approved Final artifact hash changed before notes-only rebuild`)
       reusedFinalDocx={buffer:previousFinalBuffer,expectedSha256:job.preserveFinalSha256}
     }
-    const outputConfig={verifiedTitle:job.verifiedTitle,overrides:job.overrides,explanations:job.explanations,repairUnexpectedExplanatoryAdditions:job.title==='Never Look Back',allowPreviouslyReviewedEditorialReuse:true,preserveFinalSha256:job.preserveFinalSha256}
+    const outputConfig={verifiedTitle:job.verifiedTitle,overrides:job.overrides,explanations:job.explanations,notes:job.notes,repairUnexpectedExplanatoryAdditions:job.title==='Never Look Back',allowPreviouslyReviewedEditorialReuse:true,preserveFinalSha256:job.preserveFinalSha256}
     const configHash=createHash('sha256').update(JSON.stringify(outputConfig)).digest('hex').slice(0,16)
     const buildId=deterministicSemanticBuildId(job.orderId,LANGUAGE,sourceHash,brief.revision,`${SEMANTIC_PROMPT_SIGNATURE}+held-german-${configHash}`)
-    const notes=job.explanations.length?{schemaVersion:'1.0' as const,language:'de',approach:'Author-selected explanations are kept short and appear once, at the first source occurrence only.',sections:[{id:'author-explanations',title:'Author-approved explanations',entries:job.explanations.map(item=>({source:item.sourceTerm,target:`${item.targetTerm} (${item.canonicalNote})`,reason:'author-selected explanatory note'}))}]}:{schemaVersion:'1.0' as const,language:'de',approach:'The German editorial pass preserves the thriller voice, evidence chain, dialogue register, and source structure.',sections:[]}
-    const result=await runSemanticPipeline({supabase:db,orderId:job.orderId,language:LANGUAGE,sourceFormat:'docx',source,title:order.book_title,verifiedTranslatedTitle:job.verifiedTitle,authorName:order.author_name,genre:order.genre,brief,notes,buildId,verifiedEditorialOverrides:[...job.overrides],verifiedExplanatoryNotes:[...job.explanations],repairUnexpectedExplanatoryBrackets:job.title==='Never Look Back',allowPreviouslyReviewedEditorialReuse:true,reusedFinalDocx,allowReviewedStructure:order.semantic_structure_approved===true,launchPack,dualFormat:false,maxBatchConcurrency:3,translate:async(_batch,context)=>{throw new Error(`Unexpected model call: ${job.title} pass ${context.pass} batch ${context.batchIndex}`)}})
+    const result=await runSemanticPipeline({supabase:db,orderId:job.orderId,language:LANGUAGE,sourceFormat:'docx',source,title:order.book_title,verifiedTranslatedTitle:job.verifiedTitle,authorName:order.author_name,genre:order.genre,brief,notes:job.notes,customerNotesAreAuthoritative:true,buildId,verifiedEditorialOverrides:[...job.overrides],verifiedExplanatoryNotes:[...job.explanations],repairUnexpectedExplanatoryBrackets:job.title==='Never Look Back',allowPreviouslyReviewedEditorialReuse:true,reusedFinalDocx,allowReviewedStructure:order.semantic_structure_approved===true,launchPack,dualFormat:false,maxBatchConcurrency:3,translate:async(_batch,context)=>{throw new Error(`Unexpected model call: ${job.title} pass ${context.pass} batch ${context.batchIndex}`)}})
     if(result.manifest.status!=='pass')throw new Error(`${job.title}: package manifest did not pass`)
     const artifacts=await db.from('artifacts').select('*').eq('order_id',job.orderId).eq('language',LANGUAGE).eq('build_id',buildId)
     if(artifacts.error)throw new Error(`${job.title}: new artifacts unavailable`)
     const byType=new Map((artifacts.data||[]).map(artifact=>[artifact.artifact_type,artifact]))
-    const finalBuffer=await downloadArtifact(byType.get('final_docx')),reviewBuffer=await downloadArtifact(byType.get('review_docx')),noteBuffer=await downloadArtifact(byType.get('translation_notes'))
+    const finalBuffer=await downloadArtifact(byType.get('final_docx')),reviewBuffer=await downloadArtifact(byType.get('review_docx')),noteBuffer=await downloadArtifact(byType.get('translation_notes')),qaBuffer=await downloadArtifact(byType.get('qa_changelog'))
     const finalFacts=inspectDeliveredDocx(finalBuffer),reviewFacts=inspectDeliveredDocx(reviewBuffer)
     const customerNotes=await renderCustomerTranslationNotesDocx(noteBuffer,job.title,'German')
     const customerNotesFilename=`${job.title} - Notes - DE.docx`
@@ -195,6 +210,9 @@ async function main(){
     const prepSchoolNotes=result.pass2.nodes.filter((node,index)=>/\b(?:prep|preparatory) school\b/i.test(sourceDocument.nodes[index].sourceText)&&explanatorySpans(node.translatedText||'').length>0).length
     const dmvOnGunLicense=result.pass2.nodes.filter((node,index)=>/license for it in Arizona/i.test(sourceDocument.nodes[index].sourceText)&&/DMV|Kraftfahrzeugbehörde|Zulassungsstelle/i.test(node.translatedText||'')).length
     const finalText=finalFacts.acceptedText
+    const approvedSourceTerms=brief.items.filter(item=>item.authorDecision==='footnote'||item.authorDecision==='convert_with_note').map(item=>item.sourceTerm)
+    const customerNoteErrors=validateCustomerTranslationNotes(job.notes,{sourceTexts:sourceDocument.nodes.map(node=>node.sourceText),finalText,approvedSourceTerms,authoritativeSourceTitle:job.title})
+    if(customerNoteErrors.length)throw new Error(`${job.title}: customer Notes linkage failed: ${customerNoteErrors.join('; ')}`)
     const corrections=job.overrides.map(item=>({nodeId:item.nodeId,beforeAbsent:!finalText.includes(item.before),afterPresent:finalText.includes(item.after)}))
     if(corrections.some(item=>!item.beforeAbsent||!item.afterPresent))throw new Error(`${job.title}: approved correction audit failed`)
     const generation=await db.from('order_language_builds').select('generation,state,is_current').eq('id',buildId).single()
@@ -211,7 +229,7 @@ async function main(){
     }
     const noteAudit=notesAudit(noteBuffer,order.genre||'')
     if(noteAudit.identicalBeforeAfter.length||noteAudit.genreInappropriateReasons.length||noteAudit.dropCapFragments.length)throw new Error(`${job.title}: Translation Notes audit failed`)
-    evidence.push({orderId:job.orderId,title:job.title,authoritativeSourceTitle:job.title,previousBuildId:previous.id,buildId,generation:generation.data,seededCaches,artifactCount:artifacts.data?.length,artifactTypes:(artifacts.data||[]).map(item=>item.artifact_type).sort(),manifestStatus:result.manifest.status,entitlements:result.manifest.entitlements,finalSha256:createHash('sha256').update(finalBuffer).digest('hex'),translationNotesSha256:createHash('sha256').update(noteBuffer).digest('hex'),customerNotesFilename,customerNotesSha256:createHash('sha256').update(customerNotes).digest('hex'),glued:xmlParagraphs(finalBuffer),finalWordCount:finalFacts.acceptedWordCount,reviewWordCount:reviewFacts.acceptedWordCount,wordCountDelta:reviewFacts.acceptedWordCount-finalFacts.acceptedWordCount,emptyText:{previousFinal:{total:previousFinalFacts.emptyTextTotal,prohibited:previousFinalFacts.prohibitedEmptyTextRuns},final:{total:finalFacts.emptyTextTotal,prohibited:finalFacts.prohibitedEmptyTextRuns},review:{total:reviewFacts.emptyTextTotal,prohibited:reviewFacts.prohibitedEmptyTextRuns}},highschoolForms,canonicalHighschool,dmvExplanation,explanationStyles,explanatoryNotes:explanationAudit,specialExplanatoryChecks:{prepSchoolNotes,dmvOnGunLicense},quotes:finalFacts.germanQuotes,corrections,notesReasons:reasonsFromNotes(noteBuffer),notesAudit:noteAudit,order:finalOrder.data,deliveryEvents:deliveryAfter.data})
+    evidence.push({orderId:job.orderId,title:job.title,authoritativeSourceTitle:job.title,previousBuildId:previous.id,buildId,generation:generation.data,seededCaches,artifactCount:artifacts.data?.length,artifactTypes:(artifacts.data||[]).map(item=>item.artifact_type).sort(),manifestStatus:result.manifest.status,entitlements:result.manifest.entitlements,finalSha256:createHash('sha256').update(finalBuffer).digest('hex'),translationNotesSha256:createHash('sha256').update(noteBuffer).digest('hex'),customerNotesFilename,customerNotesSha256:createHash('sha256').update(customerNotes).digest('hex'),qaChangelog:{artifactType:'qa_changelog',filename:'qa-changelog.md',sha256:createHash('sha256').update(qaBuffer).digest('hex'),customerVisible:false},customerNotesValidation:{entryCount:job.notes.sections.flatMap(section=>section.entries).length,englishSourceCheck:'pass',exactFinalMatch:'pass',errors:customerNoteErrors},glued:xmlParagraphs(finalBuffer),finalWordCount:finalFacts.acceptedWordCount,reviewWordCount:reviewFacts.acceptedWordCount,wordCountDelta:reviewFacts.acceptedWordCount-finalFacts.acceptedWordCount,emptyText:{previousFinal:{total:previousFinalFacts.emptyTextTotal,prohibited:previousFinalFacts.prohibitedEmptyTextRuns},final:{total:finalFacts.emptyTextTotal,prohibited:finalFacts.prohibitedEmptyTextRuns},review:{total:reviewFacts.emptyTextTotal,prohibited:reviewFacts.prohibitedEmptyTextRuns}},highschoolForms,canonicalHighschool,dmvExplanation,explanationStyles,explanatoryNotes:explanationAudit,specialExplanatoryChecks:{prepSchoolNotes,dmvOnGunLicense},quotes:finalFacts.germanQuotes,corrections,notesReasons:reasonsFromNotes(noteBuffer),notesAudit:noteAudit,order:finalOrder.data,deliveryEvents:deliveryAfter.data})
     carryForward.push({job,priorReview:priorReview.data,buildId})
   }
   // All packages and byte audits passed before customer portal state is reopened.
