@@ -34,6 +34,10 @@ export function sanitizeCustomerFilenamePart(value:string):string{
   return (cleaned||'BookLingua Translation').slice(0,120).trim()
 }
 
+export function customerBundleFilename(bookTitle:string):string{
+  return `${sanitizeCustomerFilenamePart(bookTitle)} - BookLingua Files.zip`
+}
+
 function artifactExtension(artifact:PackageArtifact):string{
   if(artifact.type==='translation_notes'||artifact.type==='launch_pack')return 'docx'
   const match=artifact.filename.match(/\.([A-Za-z0-9]+)$/)
