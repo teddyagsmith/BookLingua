@@ -1,8 +1,9 @@
 'use client'
 
 import { useSearchParams } from 'next/navigation'
-import { Suspense } from 'react'
+import { Suspense, useEffect } from 'react'
 import SiteFooter from '@/components/SiteFooter'
+import { trackEvent, trackMetaEvent } from '@/lib/analytics'
 
 function SuccessContent() {
   const searchParams = useSearchParams()
@@ -11,6 +12,23 @@ function SuccessContent() {
   const isFreeOrder = sessionId === 'FREE'
 
   const displayId = isFreeOrder ? orderId : sessionId?.slice(-12)
+
+  useEffect(() => {
+    if (!sessionId) return
+    const params = new URLSearchParams({ session_id: sessionId })
+    if (orderId) params.set('order_id', orderId)
+    fetch(`/api/purchase-event?${params}`)
+      .then(response => response.ok ? response.json() : null)
+      .then(purchase => {
+        if (!purchase?.eventId) return
+        const storageKey = `booklingua_${purchase.eventId}`
+        try { if (window.localStorage.getItem(storageKey)) return } catch {}
+        trackEvent('purchase', { transaction_id: purchase.eventId, value: purchase.value, currency: purchase.currency })
+        trackMetaEvent('Purchase', { value: purchase.value, currency: purchase.currency, content_name: 'Book translation' }, purchase.eventId)
+        try { window.localStorage.setItem(storageKey, new Date().toISOString()) } catch {}
+      })
+      .catch(() => {})
+  }, [sessionId, orderId])
 
   return (
     <div className="flex-1 bg-gradient-to-br from-amber-50 via-rose-50 to-violet-50 flex items-center justify-center p-8">

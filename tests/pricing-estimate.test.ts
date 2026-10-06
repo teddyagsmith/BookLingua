@@ -17,3 +17,13 @@ test('estimate requests reject invalid email, price inputs, and languages', () =
   assert.equal(parseEstimateRequest({ email: 'a@b.com', wordCount: 1000, languages: ['unknown'] }), null)
   assert.equal(parseEstimateRequest({ email: 'a@b.com', wordCount: 1000, languages: ['de', 'de'] }), null)
 })
+
+test('estimate requests retain persisted first-touch attribution', () => {
+  const request = parseEstimateRequest({
+    email: 'reader@example.com', wordCount: 50_000, languages: ['de'],
+    utm: { utm_source: 'meta', utm_medium: 'paid_social', utm_campaign: 'booklingua_author_test', utm_content: 'static_estimate' },
+  })
+  assert.equal(request?.utm.utm_source, 'meta')
+  assert.equal(request?.utm.utm_campaign, 'booklingua_author_test')
+  assert.equal(request?.utm.utm_content, 'static_estimate')
+})

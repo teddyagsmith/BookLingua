@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { sanitizeAttribution } from '@/lib/marketing-attribution'
 import Stripe from 'stripe'
 import { Resend } from 'resend'
 import { getSupabaseAdmin } from '@/lib/supabase'
@@ -66,6 +67,12 @@ export async function POST(request: NextRequest) {
       sessionId,
       uploadToken,
       book_setting,
+      attribution_source,
+      attribution_medium,
+      attribution_campaign,
+      attribution_term,
+      attribution_content,
+      attribution_fbclid,
     } = session.metadata!
     if (HARDENED_V1_ENABLED && !verifyUploadIdentity(sessionId, uploadToken)) {
       return NextResponse.json({ error: 'Invalid upload identity' }, { status: 400 })
@@ -74,6 +81,14 @@ export async function POST(request: NextRequest) {
     const customerEmail = session.customer_email!
     const languages = JSON.parse(selectedLanguages)
     const upsells = JSON.parse(selectedUpsells || '[]')
+    const marketingAttribution = sanitizeAttribution({
+      utm_source: attribution_source,
+      utm_medium: attribution_medium,
+      utm_campaign: attribution_campaign,
+      utm_term: attribution_term,
+      utm_content: attribution_content,
+      fbclid: attribution_fbclid,
+    })
 
     // 1. Create order in Supabase
     let order: any = existingOrder
@@ -92,6 +107,7 @@ export async function POST(request: NextRequest) {
         upsells,
         special_instructions: specialInstructions || null,
         amount_paid: session.amount_total! / 100,
+        marketing_attribution: marketingAttribution,
         status: 'pending',
         ...newOrderPipelineFields(),
       }).select().single()

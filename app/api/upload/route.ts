@@ -17,6 +17,7 @@ import { downloadOriginalBinary, HARDENED_SOURCE_BUCKET, SOURCE_UPLOAD_BUCKET, s
 import { issueUploadIdentity, verifyUploadIdentity } from '@/lib/upload-identity'
 import { HARDENED_V1_ENABLED } from '@/lib/pipeline-capabilities'
 import { assertSupportedSourcePackage } from '@/lib/source-upload-validation'
+import { MarketingAttribution, sanitizeAttribution } from '@/lib/marketing-attribution'
 
 // ---------------------------------------------------------------------------
 // EPUB text extraction
@@ -160,12 +161,14 @@ export async function POST(request: NextRequest) {
   try {
     const directUpload = request.headers.get('content-type')?.includes('application/json')
     let sessionId: string, uploadToken: string, fileName: string, declaredSize: number, binary: Buffer
+    let attribution: MarketingAttribution = sanitizeAttribution(null)
     let binaryAlreadyStored = false
     if (directUpload) {
       const body = await request.json()
       if (!verifyUploadIdentity(body.uploadId, body.uploadToken)) return NextResponse.json({ error: 'Invalid upload identity' }, { status: 403 })
       sessionId = body.uploadId; uploadToken = body.uploadToken
       fileName = typeof body.fileName === 'string' ? body.fileName : ''; declaredSize = Number(body.fileSize)
+      attribution = sanitizeAttribution(body.attribution)
       const extension = fileName.split('.').pop()?.toLowerCase() || ''
       binary = await downloadOriginalBinary(getSupabaseAdmin(), sourceStoragePath(sessionId, extension), null, HARDENED_SOURCE_BUCKET)
       binaryAlreadyStored = true
@@ -249,6 +252,7 @@ export async function POST(request: NextRequest) {
       source_sha256: sourceManifest.sourceHash,
       source_size_bytes: binary.length,
       source_manifest: sourceManifest,
+      marketing_attribution: attribution,
       created_at: new Date().toISOString(),
     } : {
       session_id: sessionId,
@@ -256,6 +260,7 @@ export async function POST(request: NextRequest) {
       file_format: `.${fileExtension}`,
       content: textContent,
       word_count: wordCount,
+      marketing_attribution: attribution,
       created_at: new Date().toISOString(),
     }
     const { error: contentError } = await getSupabaseAdmin()

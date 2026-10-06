@@ -11,6 +11,7 @@ import { newOrderPipelineFields } from '@/lib/customer-package-version'
 import { bundleDiscountPercent } from '@/lib/bundle-pricing'
 import { CORE_LANGUAGE_CODES } from '@/lib/languages'
 import { WORD_TIERS, pricingTierForWordCount, PricingTierKey } from '@/lib/pricing'
+import { sanitizeAttribution } from '@/lib/marketing-attribution'
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
   apiVersion: '2023-10-16',
@@ -203,6 +204,7 @@ export async function POST(request: NextRequest) {
       uploadToken,
       bookSetting,
       affiliateCode,
+      attribution,
     } = body
     if (HARDENED_V1_ENABLED && !verifyUploadIdentity(sessionId, uploadToken)) {
       return NextResponse.json({ error: 'Invalid or expired upload session' }, { status: 403 })
@@ -211,7 +213,7 @@ export async function POST(request: NextRequest) {
     let authoritativeUpload: any = null
     if (HARDENED_V1_ENABLED) {
       const { data, error } = await getSupabaseAdmin().from('temp_uploads')
-        .select('session_id, file_format, word_count, source_storage_path, source_storage_bucket, source_sha256, source_size_bytes, source_manifest, glossary_saved_at')
+        .select('session_id, file_format, word_count, source_storage_path, source_storage_bucket, source_sha256, source_size_bytes, source_manifest, glossary_saved_at, marketing_attribution')
         .eq('session_id', sessionId).maybeSingle()
       try { if (error) throw error; assertHardenedUploadReady(data, sessionId) }
       catch {
@@ -222,6 +224,9 @@ export async function POST(request: NextRequest) {
 
     const authoritativeWordCount = authoritativeUpload ? Number(authoritativeUpload.word_count) : Number(wordCount)
     const authoritativeFileFormat = authoritativeUpload ? String(authoritativeUpload.file_format) : String(fileFormat)
+    const clientAttribution = sanitizeAttribution(attribution)
+    const storedAttribution = sanitizeAttribution(authoritativeUpload?.marketing_attribution)
+    const marketingAttribution = storedAttribution.captured_at ? storedAttribution : clientAttribution
     if (!Array.isArray(selectedLanguages) || selectedLanguages.length === 0
       || selectedLanguages.some(language => typeof language !== 'string' || !/^[a-z]{2}(?:-[a-z]{2,5})?$/i.test(language))
       || selectedLanguages.some(language => !CORE_LANGUAGE_CODES.has(language))
@@ -282,6 +287,7 @@ export async function POST(request: NextRequest) {
         upsells: selectedUpsells || [],
         special_instructions: specialInstructions || null,
         amount_paid: 0,
+        marketing_attribution: marketingAttribution,
         status: 'pending',
         ...newOrderPipelineFields(),
       }
@@ -410,6 +416,12 @@ export async function POST(request: NextRequest) {
         specialInstructions: (specialInstructions || '').slice(0, 490), // Stripe 500 char limit
         book_setting: (bookSetting || '').slice(0, 490),
         affiliateCode: (affiliateCode || '').toUpperCase(),
+        attribution_source: marketingAttribution.utm_source || '',
+        attribution_medium: marketingAttribution.utm_medium || '',
+        attribution_campaign: marketingAttribution.utm_campaign || '',
+        attribution_term: marketingAttribution.utm_term || '',
+        attribution_content: marketingAttribution.utm_content || '',
+        attribution_fbclid: marketingAttribution.fbclid || '',
       },
     })
 

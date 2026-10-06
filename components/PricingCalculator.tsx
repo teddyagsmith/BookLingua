@@ -1,7 +1,8 @@
 'use client'
 
 import { FormEvent, useEffect, useMemo, useRef, useState } from 'react'
-import { trackEvent } from '@/lib/analytics'
+import { trackEvent, trackMetaCustomEvent, trackMetaEvent } from '@/lib/analytics'
+import { captureFirstTouchAttribution } from '@/lib/marketing-attribution'
 import { bundleDiscountPercent } from '@/lib/bundle-pricing'
 import { CORE_LANGUAGES } from '@/lib/languages'
 import { calculateTranslationPrice, pricingTierForWordCount, PricingTierKey } from '@/lib/pricing'
@@ -55,12 +56,14 @@ export default function PricingCalculator({ onStart }: Props) {
   }, [])
 
   useEffect(() => {
+    captureFirstTouchAttribution()
     const node = calculatorRef.current
     if (!node) return
     const observer = new IntersectionObserver(entries => {
       if (!viewed.current && entries.some(entry => entry.isIntersecting)) {
         viewed.current = true
         trackEvent('pricing_calculator_viewed')
+        trackMetaEvent('ViewContent', { content_name: 'Pricing calculator', content_category: 'Book translation' })
       }
     }, { threshold: 0.25 })
     observer.observe(node)
@@ -75,6 +78,7 @@ export default function PricingCalculator({ onStart }: Props) {
       discount_percent: result.discountPercent,
       total: result.total,
     })
+    trackMetaCustomEvent('QuoteDisplayed', { word_count: validWordCount!, language_count: result.languageCount, value: result.total, currency: 'USD' })
   }, [estimateStatus, result?.tier.key, result?.languageCount])
 
   useEffect(() => {
@@ -92,6 +96,7 @@ export default function PricingCalculator({ onStart }: Props) {
       const selecting = !current.includes(code)
       const next = selecting ? [...current, code] : current.filter(item => item !== code)
       trackEvent('pricing_language_selected', { language: code, selected: selecting, language_count: next.length })
+      trackMetaCustomEvent('LanguageSelected', { language: code, selected: selecting, language_count: next.length })
       if (selecting && next.length === 2) trackEvent('pricing_multiple_languages_selected', { language_count: next.length })
       return next
     })
@@ -103,8 +108,7 @@ export default function PricingCalculator({ onStart }: Props) {
     setEstimateStatus('sending')
     setEstimateError('')
     try {
-      const params = new URLSearchParams(window.location.search)
-      const utm = Object.fromEntries(['utm_source', 'utm_medium', 'utm_campaign', 'utm_term', 'utm_content'].map(key => [key, params.get(key)]))
+      const attribution = captureFirstTouchAttribution()
       const response = await fetch('/api/pricing-estimate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -114,17 +118,16 @@ export default function PricingCalculator({ onStart }: Props) {
           languages: selectedLanguages,
           marketingConsent,
           source: 'pricing_calculator',
-          pageUrl: window.location.href,
-          referrer: document.referrer || null,
-          utm,
+          pageUrl: attribution.landing_page || window.location.href,
+          referrer: attribution.referrer,
+          utm: attribution,
         }),
       })
       const body = await response.json().catch(() => ({}))
       if (!response.ok) throw new Error(body.error || 'We could not send your estimate. Please try again.')
       setEstimateStatus('sent')
       trackEvent('pricing_estimate_emailed', { word_count: validWordCount, language_count: result.languageCount, total: result.total, marketing_consent: marketingConsent })
-      const fbq = (window as Window & { fbq?: (...args: unknown[]) => void }).fbq
-      fbq?.('track', 'Lead', { content_name: 'Pricing estimate', value: result.total, currency: 'USD' })
+      trackMetaEvent('Lead', { content_name: 'Pricing estimate', value: result.total, currency: 'USD' })
     } catch (error) {
       setEstimateStatus('error')
       setEstimateError(error instanceof Error ? error.message : 'We could not send your estimate. Please try again.')
@@ -152,7 +155,7 @@ export default function PricingCalculator({ onStart }: Props) {
               value={wordCountInput}
               aria-invalid={Boolean(validationMessage)}
               aria-describedby={validationMessage ? 'pricing-word-error' : tier && estimateStatus === 'sent' ? 'pricing-word-band' : undefined}
-              onBlur={() => { setTouched(true); if (validWordCount) trackEvent('pricing_word_count_entered', { word_count: validWordCount }) }}
+              onBlur={() => { setTouched(true); if (validWordCount) { trackEvent('pricing_word_count_entered', { word_count: validWordCount }); trackMetaCustomEvent('WordCountEntered', { word_count: validWordCount }) } }}
               onChange={event => { setWordCountInput(event.target.value); setEstimateStatus('idle') }}
               onKeyDown={event => { if (event.key === '-' || event.key === '+' || event.key === 'e' || event.key === 'E') event.preventDefault() }}
               className="mt-2 w-full rounded-xl border-2 border-gray-200 px-4 py-3 text-lg text-gray-900 outline-none transition focus:border-brand focus:ring-4 focus:ring-violet-100"

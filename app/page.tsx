@@ -7,7 +7,8 @@ import { getSupabase } from '@/lib/supabase'
 import { bundleDiscountPercent } from '@/lib/bundle-pricing'
 import ResourcesMenu from '@/components/ResourcesMenu'
 import SiteFooter from '@/components/SiteFooter'
-import { trackEvent } from '@/lib/analytics'
+import { trackEvent, trackMetaCustomEvent, trackMetaEvent } from '@/lib/analytics'
+import { captureFirstTouchAttribution, MarketingAttribution, sanitizeAttribution } from '@/lib/marketing-attribution'
 import { CORE_LANGUAGES } from '@/lib/languages'
 import { WORD_TIERS, PricingTierKey, pricingTierForWordCount } from '@/lib/pricing'
 
@@ -249,6 +250,7 @@ export default function Home() {
   const [affiliateCode, setAffiliateCode] = useState('')
   const [priceCorrection, setPriceCorrection] = useState('')
   const calculatorEstimateRef = useRef<{ wordCount: number; languages: string[]; tier: PricingTierKey; discountPercent: number; total: number } | null>(null)
+  const attributionRef = useRef<MarketingAttribution>(sanitizeAttribution(null))
 
   const determineTier = (words: number): PricingTierKey | null => pricingTierForWordCount(words)?.key || null
 
@@ -392,6 +394,7 @@ export default function Home() {
   // Capture affiliate ref from URL
   useEffect(() => {
     const applyLocation = () => {
+      attributionRef.current = captureFirstTouchAttribution()
       const params = new URLSearchParams(window.location.search)
       const ref = params.get('ref')
       if (ref) setAffiliateCode(ref)
@@ -468,7 +471,7 @@ export default function Home() {
         if (stored.error) throw new Error(stored.error.message)
         const res = await fetch('/api/upload', {
           method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ uploadId: init.uploadId, uploadToken: init.uploadToken, fileName: file.name, fileSize: file.size }),
+          body: JSON.stringify({ uploadId: init.uploadId, uploadToken: init.uploadToken, fileName: file.name, fileSize: file.size, attribution: attributionRef.current }),
         })
         if (!res.ok) throw new Error('Upload failed')
         const result = await res.json()
@@ -633,11 +636,15 @@ export default function Home() {
           uploadToken: uploadTokenRef.current,
           bookSetting,
           affiliateCode,
+          attribution: attributionRef.current,
         }),
       })
 
       const { url, error } = await response.json()
       if (error) throw new Error(error)
+      const checkoutValue = Number(calculateFinalTotal())
+      trackEvent('checkout_initiated', { value: checkoutValue, currency: 'USD', language_count: selectedLanguages.length })
+      trackMetaEvent('InitiateCheckout', { value: checkoutValue, currency: 'USD', num_items: selectedLanguages.length, content_name: 'Book translation' })
       window.location.href = url
     } catch (error) {
       console.error('Checkout error:', error)
@@ -646,6 +653,12 @@ export default function Home() {
 
     setIsProcessing(false)
   }
+
+  useEffect(() => {
+    if (currentView !== 'upload') return
+    trackEvent('checkout_step_viewed', { step: checkoutStep })
+    trackMetaCustomEvent('CheckoutStepViewed', { step: checkoutStep })
+  }, [checkoutStep, currentView])
 
   // Serif font style
   const serifFont = { fontFamily: "'EB Garamond', Georgia, serif" }
