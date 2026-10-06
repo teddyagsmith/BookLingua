@@ -1,6 +1,8 @@
 import Image from 'next/image'
+import Link from 'next/link'
 import type { ReactNode } from 'react'
 import { BOOKLINGUA_FACEBOOK_URL } from '@/lib/social-links'
+import CookieSettingsButton from './CookieSettingsButton'
 
 export default function SiteFooter({ note }: { note?: ReactNode }) {
   return (
@@ -29,6 +31,14 @@ export default function SiteFooter({ note }: { note?: ReactNode }) {
             Follow BookLingua on Facebook
           </a>
         </p>
+        <nav aria-label="Footer" className="mb-3 flex flex-wrap justify-center gap-x-5 gap-y-2 text-sm">
+          <Link href="/manuscript-security" className="hover:text-white transition-colors">Manuscript security</Link>
+          <Link href="/privacy" className="hover:text-white transition-colors">Privacy</Link>
+          <Link href="/terms" className="hover:text-white transition-colors">Terms</Link>
+          <Link href="/cookies" className="hover:text-white transition-colors">Cookies</Link>
+          <CookieSettingsButton />
+          <Link href="/affiliates" className="hover:text-white transition-colors">Affiliate Programme</Link>
+        </nav>
         <p>© 2026 BookLingua. All rights reserved.</p>
         {note && <div className="mt-2 text-xs text-gray-600">{note}</div>}
       </div>

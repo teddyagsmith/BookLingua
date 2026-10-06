@@ -2,6 +2,7 @@ import './globals.css'
 import { Metadata } from 'next'
 import { Analytics } from '@vercel/analytics/next'
 import Script from 'next/script'
+import CookieConsent from '@/components/CookieConsent'
 
 export const metadata: Metadata = {
   title: 'AI Book Translation Service — Translate & Publish in 6 Languages',
@@ -39,24 +40,10 @@ export default function RootLayout({
     <html lang="en">
       <head>
         <Script
-          src="https://www.revshare.so/tracking.js"
+          src="https://analytics.ahrefs.com/analytics.js"
           strategy="afterInteractive"
-          data-program-id="6a5a0eae6e5359ccacaa24b1"
-          data-domain=".booklingua.io"
-          data-cookie-duration="30"
+          data-key="Q6qxU43SYraWgkC2LWz2DQ"
         />
-        <Script
-          src="https://www.googletagmanager.com/gtag/js?id=G-WCQNKFL9ZH"
-          strategy="afterInteractive"
-        />
-        <Script id="google-analytics" strategy="afterInteractive">
-          {`
-            window.dataLayer = window.dataLayer || [];
-            function gtag(){dataLayer.push(arguments);}
-            gtag('js', new Date());
-            gtag('config', 'G-WCQNKFL9ZH');
-          `}
-        </Script>
         <Script id="meta-pixel" strategy="afterInteractive">
           {`
             !function(f,b,e,v,n,t,s)
@@ -74,7 +61,7 @@ export default function RootLayout({
       </head>
       <body>
         <noscript><img height="1" width="1" style={{ display: 'none' }} src="https://www.facebook.com/tr?id=1067674185897808&ev=PageView&noscript=1" alt="" /></noscript>
-        {children}<Analytics />
+        {children}<CookieConsent /><Analytics />
       </body>
     </html>
   )
