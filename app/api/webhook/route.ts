@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { sanitizeAttribution } from '@/lib/marketing-attribution'
 import Stripe from 'stripe'
 import { Resend } from 'resend'
+import { FACEBOOK_FOLLOW_EMAIL_HTML } from '@/lib/social-links'
 import { getSupabaseAdmin } from '@/lib/supabase'
 import { inngest } from '@/lib/inngest'
 import { linkSourceUploadToOrder } from '@/lib/link-source-upload'
@@ -191,6 +192,7 @@ export async function POST(request: NextRequest) {
           <p>We'll email you when your translations are ready!</p>
           
           <p>Best,<br>The BookLingua Team</p>
+          ${FACEBOOK_FOLLOW_EMAIL_HTML}
         </div>
       `,
       }, HARDENED_V1_ENABLED ? { idempotencyKey: `confirmation/${order.id}` } : undefined)

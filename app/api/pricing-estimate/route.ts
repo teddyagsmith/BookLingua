@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { Resend } from 'resend'
 import { getSupabaseAdmin } from '@/lib/supabase'
 import { escapeHtml, estimateDetails, parseEstimateRequest } from '@/lib/pricing-estimate'
+import { FACEBOOK_FOLLOW_EMAIL_HTML } from '@/lib/social-links'
 
 let resend: Resend | null = null
 const getResend = () => resend ||= new Resend(process.env.RESEND_API_KEY!)
@@ -62,6 +63,7 @@ export async function POST(req: NextRequest) {
         </div>
         <p style="font-size:13px;color:#6b7280">This estimate is based on the word count entered and will be confirmed after your manuscript is uploaded.</p>
         <p><a href="${escapeHtml(startUrl)}" style="display:inline-block;background:#6d28d9;color:white;padding:13px 22px;border-radius:10px;text-decoration:none;font-weight:bold">Start your translation →</a></p>
+        ${request.marketingConsent ? FACEBOOK_FOLLOW_EMAIL_HTML : ''}
         <p style="font-size:12px;color:#6b7280">You received this transactional email because you requested a pricing estimate. ${request.marketingConsent ? 'You also opted in to BookLingua marketing emails.' : 'You did not opt in to marketing emails.'}</p>
       </div>`,
     })

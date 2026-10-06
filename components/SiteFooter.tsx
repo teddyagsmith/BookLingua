@@ -1,5 +1,6 @@
 import Image from 'next/image'
 import type { ReactNode } from 'react'
+import { BOOKLINGUA_FACEBOOK_URL } from '@/lib/social-links'
 
 export default function SiteFooter({ note }: { note?: ReactNode }) {
   return (
@@ -16,6 +17,16 @@ export default function SiteFooter({ note }: { note?: ReactNode }) {
           Questions? Email us at{' '}
           <a href="mailto:hello@booklingua.io" className="text-amber-400 hover:text-amber-300 transition-colors">
             hello@booklingua.io
+          </a>
+        </p>
+        <p className="mb-2">
+          <a
+            href={BOOKLINGUA_FACEBOOK_URL}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-amber-400 hover:text-amber-300 transition-colors"
+          >
+            Follow BookLingua on Facebook
           </a>
         </p>
         <p>© 2026 BookLingua. All rights reserved.</p>

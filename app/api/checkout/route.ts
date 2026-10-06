@@ -12,6 +12,7 @@ import { bundleDiscountPercent } from '@/lib/bundle-pricing'
 import { CORE_LANGUAGE_CODES } from '@/lib/languages'
 import { WORD_TIERS, pricingTierForWordCount, PricingTierKey } from '@/lib/pricing'
 import { sanitizeAttribution } from '@/lib/marketing-attribution'
+import { FACEBOOK_FOLLOW_EMAIL_HTML } from '@/lib/social-links'
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
   apiVersion: '2023-10-16',
@@ -65,6 +66,7 @@ async function sendOrderConfirmationAndNotifyAdmin(order: any, sessionMetadata: 
         </ol>
         <p>We'll email you when your translations are ready!</p>
         <p>Best,<br>The BookLingua Team</p>
+        ${FACEBOOK_FOLLOW_EMAIL_HTML}
       </div>
     `,
   })
