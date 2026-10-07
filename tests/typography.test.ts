@@ -34,6 +34,10 @@ test('German normalisation repairs an English closing quote split across nodes',
   assert.equal(normalizeQuotes('Ende der Rede.”', 'de'), 'Ende der Rede.“')
 })
 
+test('visible numeric quote entities are decoded before German normalisation', () => {
+  assert.equal(normalizeTypography('&#x201C;Hallo&#x201D;', 'de'), '„Hallo“')
+})
+
 test('normalisation leaves languages without a configured convention untouched', () => {
   assert.equal(normalizeQuotes('He said "hi".', 'ja'), 'He said "hi".')
 })

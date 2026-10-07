@@ -70,7 +70,10 @@ export function normalizeTypography(text: string, language: string): string {
   // normalisation and `&quot;...&quot;` bypasses quote pairing.
   let decoded = text
   for (let i = 0; i < 3; i++) {
-    const next = decoded.replace(/&amp;/g, '&').replace(/&apos;/g, "'").replace(/&quot;/g, '"')
+    const next = decoded
+      .replace(/&#x([0-9a-f]+);/gi, (_match, hex) => String.fromCodePoint(parseInt(hex, 16)))
+      .replace(/&#(\d+);/g, (_match, decimal) => String.fromCodePoint(Number(decimal)))
+      .replace(/&amp;/g, '&').replace(/&apos;/g, "'").replace(/&quot;/g, '"')
     if (next === decoded) break
     decoded = next
   }
