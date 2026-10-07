@@ -403,6 +403,10 @@ function setEpubDocumentLanguage(xml:string,language:string):string{
     : `<body${attrs} lang="${escapeXml(language)}">`)
 }
 
+function normalizedEpubHeadingLabel(value:string):string{
+  return decodeVisibleEntities(value.replace(/<[^>]+>/g,' ')).normalize('NFKC').toLocaleLowerCase().replace(/\s+/g,' ').trim().replace(/^\d+\s*[.)]\s+/,'')
+}
+
 export function buildSemanticEpub(source: Buffer, document: SemanticDocumentV2, titleAuthority?: TitleAuthority, language?:string,authorName?:string,editionSeed?:string): Buffer {
   assertTranslated(document)
   if (document.sourceFormat !== 'epub') throw new Error('EPUB output requires an EPUB semantic source')
@@ -446,17 +450,28 @@ export function buildSemanticEpub(source: Buffer, document: SemanticDocumentV2, 
     xml=xml.replace(/<navPoint\b[^>]*>[\s\S]*?<\/navPoint>/gi,(block:string)=>entryContainsRemovedHeading(block)?'':block)
     xml=xml.replace(/<li\b[^>]*>[\s\S]*?<\/li>/gi,(block:string)=>entryContainsRemovedHeading(block)?'':block)
     for (const [sourceText, translatedText] of Array.from(headingMap.entries())) xml = xml.split(`>${sourceText}<`).join(`>${escapeXml(translatedText)}<`)
-    const normalizedHeadings=new Map(consolidated.map(node=>[decodeVisibleEntities(node.sourceText.replace(/<[^>]+>/g,' ')).normalize('NFKC').toLocaleLowerCase().replace(/\s+/g,' ').trim(),node.translatedText!]))
+    const normalizedHeadings=new Map(consolidated.map(node=>[normalizedEpubHeadingLabel(node.sourceText),node.translatedText!]))
     for(const node of document.nodes.filter(item=>item.type==='heading'&&retainedIds.has(item.id))){
       const artifactNode=consolidatedByFirstId.get(node.id)
       if(artifactNode&&artifactNode.sourceText!==node.sourceText)normalizedHeadings.set(decodeVisibleEntities(node.sourceText).normalize('NFKC').toLocaleLowerCase().replace(/\s+/g,' ').trim(),artifactNode.translatedText!)
     }
+    // TOC rows are translated in their own semantic nodes and can otherwise
+    // choose a synonym that differs from the canonical chapter heading. Bind
+    // every source-equivalent TOC translation back to the actual translated
+    // heading so navigation and content cannot drift apart.
+    const canonicalHeadings=new Map(consolidated.filter(node=>node.type==='heading').map(node=>[normalizedEpubHeadingLabel(node.sourceText),node.translatedText!]))
+    for(const node of document.nodes){
+      const canonical=canonicalHeadings.get(normalizedEpubHeadingLabel(node.sourceText))
+      if(canonical&&node.translatedText)normalizedHeadings.set(normalizedEpubHeadingLabel(node.translatedText),canonical)
+    }
     const systemLabels:Record<string,{cover:string;toc:string}>={'pt-br':{cover:'Capa',toc:'Sumário'},de:{cover:'Umschlag',toc:'Inhaltsverzeichnis'},fr:{cover:'Couverture',toc:'Table des matières'},'es-es':{cover:'Portada',toc:'Índice'}}
     if(language&&systemLabels[language]){normalizedHeadings.set('cover',systemLabels[language].cover);normalizedHeadings.set('table of contents',systemLabels[language].toc)}
     xml=xml.replace(/<(a|text)\b([^>]*)>([\s\S]*?)<\/\1>/gi,(full:string,tag:string,attrs:string,inner:string)=>{
-      const key=decodeVisibleEntities(inner.replace(/<[^>]+>/g,' ')).normalize('NFKC').toLocaleLowerCase().replace(/\s+/g,' ').trim()
+      const visible=decodeVisibleEntities(inner.replace(/<[^>]+>/g,' ')).replace(/\s+/g,' ').trim()
+      const key=normalizedEpubHeadingLabel(visible)
       const translated=normalizedHeadings.get(key)
-      return translated?`<${tag}${attrs}>${escapeXml(translated)}</${tag}>`:full
+      const ordinal=visible.match(/^(\d+\s*[.)])\s+/)?.[1]
+      return translated?`<${tag}${attrs}>${escapeXml(ordinal?`${ordinal} ${translated}`:translated)}</${tag}>`:full
     })
     if(titleAuthority?.translatedValue)xml=xml.replace(/<docTitle\b([^>]*)>[\s\S]*?<\/docTitle>/i,`<docTitle$1><text>${escapeXml(titleAuthority.translatedValue)}</text></docTitle>`)
     if(titleAuthority?.translatedValue)xml=xml.replace(/<title\b([^>]*)>[\s\S]*?<\/title>/gi,`<title$1>${escapeXml(titleAuthority.translatedValue)}</title>`)

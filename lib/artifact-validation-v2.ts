@@ -1,7 +1,7 @@
 import AdmZip from 'adm-zip'
 import path from 'path'
 
-export const ARTIFACT_VALIDATOR_VERSION = '1.7'
+export const ARTIFACT_VALIDATOR_VERSION = '1.8'
 export type ArtifactKind = 'epub' | 'docx'
 export interface ArtifactValidationIssue { code: string; message: string; location?: string }
 export interface ArtifactValidationResult {
