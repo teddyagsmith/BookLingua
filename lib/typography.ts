@@ -48,6 +48,11 @@ export function normalizeApostrophes(text: string): string {
 export function normalizeQuotes(text: string, language: string): string {
   const style = quoteStyle(language)
   if (!style) return text
+  if (language.toLowerCase().startsWith('de')) {
+    // A quotation can span semantic nodes, making a node-local quote count odd.
+    // These closing glyphs are still unambiguous and must not leak into German.
+    text = text.replace(/”/g, '“').replace(/«/g, '„').replace(/»/g, '“')
+  }
   const marks = text.match(QUOTE_CHARS)
   if (!marks || marks.length % 2 !== 0) return text
   let open = true

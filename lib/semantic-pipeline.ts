@@ -141,7 +141,7 @@ async function persistSemantic(supabase: SupabaseClient, input: { orderId: strin
 }
 
 async function validationReport(supabase: SupabaseClient, input: { orderId: string; language: string; buildId: string; stage: string; passed: boolean; errors?: unknown[]; metrics?: object }): Promise<string> {
-  const validatorVersion = 'semantic-v2.6'
+  const validatorVersion = 'semantic-v2.7'
   const { data, error } = await supabase.from('validation_reports').insert({ order_id: input.orderId, language: input.language, build_id: input.buildId, stage: input.stage, validator_version: validatorVersion, passed: input.passed, errors: input.errors || [], metrics: input.metrics || {} }).select('id').single()
   if (error?.code === '23505') {
     const { data: existing, error: existingError } = await supabase.from('validation_reports').select('id,passed,errors,metrics').eq('order_id',input.orderId).eq('language',input.language).eq('build_id',input.buildId).eq('stage',input.stage).eq('validator_version',validatorVersion).single()
@@ -379,6 +379,7 @@ export async function runSemanticPipeline(input: SemanticPipelineInput) {
     minimumStyles:input.sourceFormat==='docx'?headingStyles:undefined,
     minimumParagraphs: deliveredNodes.length,
     emphasis: sourceEmphasisCounts(input.source, input.sourceFormat,new Set(deliveredNodes.map(node=>node.sourceLocation))),
+    emphasisTolerance: input.sourceFormat === 'epub' ? 0.2 : 0.05,
   }),...checkFinalReviewWordParity(finalFacts,reviewFacts)]
   const blockingDeliveryFailures=deliveryFailures.filter(failure=>failure.severity!=='warning')
   await validationReport(input.supabase, {
