@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import { nodeBatchFingerprint, NodeTranslationInput } from '../lib/node-translation-contract'
-import { translateWithDeterministicJsonRecovery } from '../lib/semantic-model-recovery'
+import { RecoverableSemanticModelOutputError, translateWithDeterministicJsonRecovery } from '../lib/semantic-model-recovery'
 
 function input(ids: string[]): NodeTranslationInput {
   const nodes = ids.map(id => ({ id, text: `source ${id}` }))
@@ -39,6 +39,22 @@ test('non-JSON failures remain fail-closed without splitting', async () => {
     /provider unavailable/,
   )
   assert.equal(calls, 1)
+})
+
+test('empty model output deterministically splits into smaller requests', async () => {
+  const batch = input(['a', 'b', 'c', 'd'])
+  const calls: string[][] = []
+  const output = await translateWithDeterministicJsonRecovery(batch, 'parent', async part => {
+    calls.push(part.nodes.map(node => node.id))
+    if (part.nodes.length === 4) throw new RecoverableSemanticModelOutputError('no JSON text')
+    return {
+      schemaVersion: part.schemaVersion,
+      sourceFingerprint: part.sourceFingerprint,
+      nodes: part.nodes.map(node => ({ id: node.id, text: `translated ${node.id}` })),
+    }
+  })
+  assert.deepEqual(calls, [['a', 'b', 'c', 'd'], ['a', 'b'], ['c', 'd']])
+  assert.deepEqual(output.nodes.map(node => node.id), ['a', 'b', 'c', 'd'])
 })
 
 test('recovery recursively splits a malformed child but never reorders nodes', async () => {

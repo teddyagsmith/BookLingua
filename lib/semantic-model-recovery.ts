@@ -6,6 +6,13 @@ export interface SemanticRecoveryRequestContext {
   depth: number
 }
 
+export class RecoverableSemanticModelOutputError extends Error {
+  constructor(message: string) {
+    super(message)
+    this.name = 'RecoverableSemanticModelOutputError'
+  }
+}
+
 function childInput(parent: NodeTranslationInput, nodes: NodeTranslationInput['nodes']): NodeTranslationInput {
   return {
     schemaVersion: parent.schemaVersion,
@@ -29,7 +36,8 @@ export async function translateWithDeterministicJsonRecovery(
     try {
       return await request(batch, { requestId: currentRequestId, depth })
     } catch (error) {
-      if (!(error instanceof SyntaxError) || depth >= maxDepth || batch.nodes.length < 2) throw error
+      const recoverable = error instanceof SyntaxError || error instanceof RecoverableSemanticModelOutputError
+      if (!recoverable || depth >= maxDepth || batch.nodes.length < 2) throw error
       const midpoint = Math.ceil(batch.nodes.length / 2)
       const left = childInput(batch, batch.nodes.slice(0, midpoint))
       const right = childInput(batch, batch.nodes.slice(midpoint))

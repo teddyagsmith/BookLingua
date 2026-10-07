@@ -21,7 +21,7 @@ import { finalizeSemanticOrder } from './semantic-finalization'
 import { editorialSystemPrompt, translationSystemPrompt } from './editorial-prompt'
 import { cachedLaunchPack, launchPackRequestIdentity } from './launch-pack-cache'
 import { recordModelTelemetry } from './model-telemetry'
-import { translateWithDeterministicJsonRecovery } from './semantic-model-recovery'
+import { RecoverableSemanticModelOutputError, translateWithDeterministicJsonRecovery } from './semantic-model-recovery'
 
 const anthropic = new Anthropic({
   apiKey: process.env.ANTHROPIC_API_KEY,
@@ -355,7 +355,7 @@ export const translateBook = inngest.createFunction(
                     messages: [{ role: 'user', content: `${renderTranslationBriefPrompt(context.brief)}\n${context.pass === 1 ? 'Translation pass' : 'Editorial pass'}; target language ${context.language}.\n${JSON.stringify(requestBatch)}` }],
                   })
                   const text = response.content.find((block:any) => block.type === 'text')
-                  if (!text || text.type !== 'text') throw new Error('Semantic model returned no JSON text')
+                  if (!text || text.type !== 'text' || !text.text.trim()) throw new RecoverableSemanticModelOutputError('Semantic model returned no JSON text')
                   const parsed=JSON.parse(text.text.replace(/^```json\s*|\s*```$/g, ''))
                   await recordModelTelemetry(getSupabaseAdmin(),{orderId,language,stage,batchId:context.batchId,attempt:attempt+1,requestIdentity:recovery.requestId,
                     provider:'anthropic',modelId:response.model,providerRequestId:response.id,success:true,inputTokens:response.usage.input_tokens,
