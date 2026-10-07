@@ -5,7 +5,7 @@ import { SemanticDocumentV2, SemanticNodeV2 } from './semantic-document'
 import { customerLanguageName, sanitizeCustomerFilenamePart } from './customer-delivery'
 import { signReaderPanelToken } from './download-token'
 
-export const READER_SAMPLE_VERSION = 'reader-sample-v3-readable-layout'
+export const READER_SAMPLE_VERSION = 'reader-sample-v4-spacious-manuscript-layout'
 export const READER_PANEL_TEMPLATE_VERSION = 'reader-panel-email-v1'
 export const READER_PANEL_RECIPIENT = 'gilly@myromancereads.com'
 export const READER_PANEL_FEEDBACK_FORM_FILENAME = 'BookLingua_Reader_Panel_Feedback_Form.docx'
@@ -103,8 +103,9 @@ export async function buildReaderSampleDocx(input:{document:SemanticDocumentV2;t
       else children.push(new Paragraph({
         children:[new TextRun({text:node.translatedText!,size:24,font:'Georgia',color:'111111'})],
         alignment:AlignmentType.LEFT,
-        spacing:{after:100,line:276},
-        indent:node.type==='paragraph'?{firstLine:360}:undefined,
+        // 1.25 line spacing and a visible 10 pt gap make each paragraph easy
+        // to scan. A first-line indent is redundant when paragraphs are spaced.
+        spacing:{after:200,line:300},
         bullet:node.type==='list_item'?{level:0}:undefined,
         // Explicit pagination flags avoid Word/Pages preview engines inheriting
         // keep-with-next behaviour and placing one body paragraph per page.
