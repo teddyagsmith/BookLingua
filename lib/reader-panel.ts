@@ -1,11 +1,11 @@
 import { createHash } from 'crypto'
-import { AlignmentType, Document, Packer, Paragraph, TextRun } from 'docx'
+import { AlignmentType, Document, LineRuleType, Packer, Paragraph, TextRun } from 'docx'
 import { deterministicDocx } from './deterministic-docx'
 import { SemanticDocumentV2, SemanticNodeV2 } from './semantic-document'
 import { customerLanguageName, sanitizeCustomerFilenamePart } from './customer-delivery'
 import { signReaderPanelToken } from './download-token'
 
-export const READER_SAMPLE_VERSION = 'reader-sample-v4-spacious-manuscript-layout'
+export const READER_SAMPLE_VERSION = 'reader-sample-v5-clearly-spaced-layout'
 export const READER_PANEL_TEMPLATE_VERSION = 'reader-panel-email-v1'
 export const READER_PANEL_RECIPIENT = 'gilly@myromancereads.com'
 export const READER_PANEL_FEEDBACK_FORM_FILENAME = 'BookLingua_Reader_Panel_Feedback_Form.docx'
@@ -81,7 +81,7 @@ export function readerSampleWordCount(sections:ReaderSampleSection[]):number{ret
 export function readerPanelIdentity(orderId:string,language:string,buildId:string,customerPackageVersion:string):string{
   return createHash('sha256').update([orderId,language,buildId,customerPackageVersion,READER_SAMPLE_VERSION].join(':')).digest('hex')
 }
-export function readerSampleFilename(bookTitle:string,language:string):string{return `${sanitizeCustomerFilenamePart(bookTitle)} - Reader Sample - ${language.toUpperCase()}.docx`}
+export function readerSampleFilename(bookTitle:string,language:string):string{return `${sanitizeCustomerFilenamePart(bookTitle)} - Reader Sample - Spaced Layout - ${language.toUpperCase()}.docx`}
 
 export async function buildReaderSampleDocx(input:{document:SemanticDocumentV2;translatedTitle:string;language:string;sections?:ReaderSampleSection[]}):Promise<Buffer>{
   const sections=input.sections||selectReaderSample(input.document),count=readerSampleWordCount(sections)
@@ -103,9 +103,9 @@ export async function buildReaderSampleDocx(input:{document:SemanticDocumentV2;t
       else children.push(new Paragraph({
         children:[new TextRun({text:node.translatedText!,size:24,font:'Georgia',color:'111111'})],
         alignment:AlignmentType.LEFT,
-        // 1.25 line spacing and a visible 10 pt gap make each paragraph easy
+        // 1.5 line spacing and a visible 12 pt gap make each paragraph easy
         // to scan. A first-line indent is redundant when paragraphs are spaced.
-        spacing:{after:200,line:300},
+        spacing:{after:240,line:360,lineRule:LineRuleType.AUTO},
         bullet:node.type==='list_item'?{level:0}:undefined,
         // Explicit pagination flags avoid Word/Pages preview engines inheriting
         // keep-with-next behaviour and placing one body paragraph per page.
@@ -117,7 +117,7 @@ export async function buildReaderSampleDocx(input:{document:SemanticDocumentV2;t
     }
   }
   return deterministicDocx(Buffer.from(await Packer.toBuffer(new Document({
-    styles:{default:{document:{run:{font:'Georgia',size:24,color:'111111'},paragraph:{spacing:{line:300}}}}},
+    styles:{default:{document:{run:{font:'Georgia',size:24,color:'111111'},paragraph:{spacing:{line:360,lineRule:LineRuleType.AUTO}}}}},
     sections:[{
     properties:{page:{size:{width:11906,height:16838},margin:{top:1134,right:1134,bottom:1134,left:1134}}},
     children,
