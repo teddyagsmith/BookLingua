@@ -7,6 +7,7 @@ const postsDirectory = path.join(process.cwd(), 'content', 'blog')
 export interface BlogPost {
   slug: string
   title: string
+  seoTitle?: string
   description: string
   date: string
   author: string
@@ -46,6 +47,7 @@ export function getAllPosts(): BlogPost[] {
     return {
       slug,
       title: data.title || slug,
+      seoTitle: data.seoTitle,
       description: data.description || '',
       date: data.date ? new Date(data.date).toISOString() : new Date().toISOString(),
       author: data.author || 'Teddy Smith',

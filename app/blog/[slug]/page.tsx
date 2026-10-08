@@ -26,9 +26,10 @@ export async function generateMetadata({ params }: BlogPostPageProps): Promise<M
   if (!post) return {}
 
   const url = `${siteUrl}/blog/${post.slug}`
+  const socialTitle = post.seoTitle || `${post.title} | BookLingua`
 
   return {
-    title: `${post.title} | BookLingua`,
+    title: socialTitle,
     description: post.description,
     keywords: post.keywords,
     metadataBase: new URL(siteUrl),
@@ -36,7 +37,7 @@ export async function generateMetadata({ params }: BlogPostPageProps): Promise<M
       canonical: `/blog/${post.slug}`,
     },
     openGraph: {
-      title: post.title,
+      title: socialTitle,
       description: post.description,
       url,
       siteName: 'BookLingua',
@@ -48,7 +49,7 @@ export async function generateMetadata({ params }: BlogPostPageProps): Promise<M
     },
     twitter: {
       card: 'summary_large_image',
-      title: post.title,
+      title: socialTitle,
       description: post.description,
       images: post.image ? [post.image] : ['/og-image.png'],
     },
