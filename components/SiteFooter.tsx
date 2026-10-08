@@ -20,6 +20,18 @@ export default function SiteFooter({ note }: { note?: ReactNode }) {
             hello@booklingua.io
           </a>
         </p>
+        <a
+          href="https://www.facebook.com/BookLinguaBooks"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="mb-4 inline-flex items-center gap-2 text-sm text-gray-400 transition-colors hover:text-white"
+          aria-label="Follow BookLingua on Facebook"
+        >
+          <svg viewBox="0 0 24 24" aria-hidden="true" className="h-4 w-4 fill-current">
+            <path d="M22 12a10 10 0 1 0-11.56 9.88v-6.99H7.9V12h2.54V9.8c0-2.51 1.5-3.9 3.79-3.9 1.1 0 2.24.2 2.24.2v2.46h-1.26c-1.24 0-1.63.77-1.63 1.56V12h2.77l-.44 2.89h-2.33v6.99A10 10 0 0 0 22 12Z" />
+          </svg>
+          Follow BookLingua on Facebook
+        </a>
         <nav aria-label="Footer" className="mb-3 flex flex-wrap justify-center gap-x-5 gap-y-2 text-sm">
           <Link href="/manuscript-security" className="hover:text-white transition-colors">Manuscript security</Link>
           <Link href="/privacy" className="hover:text-white transition-colors">Privacy</Link>
