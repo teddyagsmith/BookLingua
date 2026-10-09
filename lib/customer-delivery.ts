@@ -1,4 +1,5 @@
 import { PackageArtifact, PackageManifestV1, evaluatePackageManifest } from './package-manifest'
+import { cleanBookTitle } from './authoritative-title'
 
 export const CUSTOMER_DELIVERY_TEMPLATE_VERSION = '2.0'
 
@@ -30,7 +31,7 @@ export function customerLanguageCode(language:string):string{return LANGUAGE_COD
 export function customerLanguageName(language:string):string{return LANGUAGE_NAMES[language]||language}
 
 export function sanitizeCustomerFilenamePart(value:string):string{
-  const cleaned=value.normalize('NFKC').replace(/[<>:"/\\|?*\u0000-\u001f]/g,' ').replace(/\s+/g,' ').replace(/^[. ]+|[. ]+$/g,'').trim()
+  const cleaned=cleanBookTitle(value).normalize('NFKC').replace(/[<>:"/\\|?*\u0000-\u001f]/g,' ').replace(/\s+/g,' ').replace(/^[. ]+|[. ]+$/g,'').trim()
   return (cleaned||'BookLingua Translation').slice(0,120).trim()
 }
 

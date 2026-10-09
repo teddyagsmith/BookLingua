@@ -30,6 +30,8 @@ test('customer filenames use exact labels/codes, actual extensions, and safe rea
   assert.throws(()=>customerArtifactFilename('Bride','fr',artifact('pass1_docx')),/Internal artifact/)
   assert.match(customerContentDisposition('Épouse - Final - FR.docx'),/filename\*=UTF-8''/)
   assert.equal(customerBundleFilename('Bride: Hollow/King'),'Bride Hollow King - BookLingua Files.zip')
+  assert.equal(customerBundleFilename('Timeless Nordic Fairy Tales-pRNR3y62ti'),'Timeless Nordic Fairy Tales - BookLingua Files.zip')
+  assert.equal(customerArtifactFilename('Timeless Nordic Fairy Tales-pRNR3y62ti','de',artifact('final_docx')),'Timeless Nordic Fairy Tales - Final - DE.docx')
 })
 
 test('customer portal offers one authenticated ZIP for the complete package',()=>{

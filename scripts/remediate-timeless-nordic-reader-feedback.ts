@@ -108,7 +108,7 @@ async function main(){
   const orderResult=await db.from('orders').select('*').eq('id',ORDER).single()
   if(orderResult.error||!orderResult.data)throw new Error('Order unavailable')
   const order=orderResult.data
-  if(order.status!=='reader_review_pending'||order.completed_at)throw new Error(`Order is not safely held: ${order.status}`)
+  if(!['reader_review_pending','ready_for_review'].includes(order.status)||order.completed_at)throw new Error(`Order is not safely held: ${order.status}`)
   const sourceRow=await db.from('files').select('file_url,original_content').eq('order_id',ORDER).eq('type','original').single()
   if(sourceRow.error||!sourceRow.data)throw new Error('Source unavailable')
   const metadata=typeof sourceRow.data.original_content==='string'?JSON.parse(sourceRow.data.original_content):sourceRow.data.original_content||{}
@@ -141,9 +141,13 @@ async function main(){
     }
     overrides.push({nodeId:storedPass2.nodes[index].id,before,after})
   }
-  const configHash=createHash('sha256').update(JSON.stringify({overrides,version:'reader-feedback-v1'})).digest('hex').slice(0,16)
+  const configHash=createHash('sha256').update(JSON.stringify({overrides,version:'reader-feedback-notes-v2'})).digest('hex').slice(0,16)
   const buildId=deterministicSemanticBuildId(ORDER,LANGUAGE,sourceHash,brief.revision,`${SEMANTIC_PROMPT_SIGNATURE}+timeless-reader-feedback-${configHash}`)
-  const notes={schemaVersion:'1.0' as const,language:LANGUAGE,approach:'The editorial review preserved the traditional fairy-tale voice while producing natural contemporary German.',sections:[{id:'book-title',title:'Book title',entries:[{source:'Timeless Nordic Fairy Tales',target:VERIFIED_TITLE,reason:'The title was translated directly to preserve its clear promise of enduring Nordic folk stories.'}]}]}
+  const notes={schemaVersion:'1.0' as const,language:LANGUAGE,approach:'The editorial review preserved the traditional fairy-tale voice while producing natural, idiomatic German.',sections:[{id:'representative-decisions',title:'Representative Editorial Decisions',entries:[
+    {source:'Timeless Nordic Fairy Tales',target:VERIFIED_TITLE,reason:'The German title preserves the original title’s clear promise of enduring Nordic folk stories.'},
+    {source:'The king declared that whoever could save his daughters would win the hand of one of them.',target:'Der König erklärte, wer seine Töchter rette, solle eine von ihnen zur Frau bekommen.',reason:'This uses natural fairy-tale German while preserving the king’s offer exactly.'},
+    {source:'The message pleased the king, who loved merriment, and he ordered the youth to be welcomed as an honored guest.',target:'Die Botschaft gefiel dem König, der gern lachte und feierte, und er befahl, den Jüngling als Ehrengast willkommen zu heißen.',reason:'This expresses “loved merriment” idiomatically while retaining the king’s cheerful character.'},
+  ]}]}
   const result=await runSemanticPipeline({supabase:db,orderId:ORDER,language:LANGUAGE,sourceFormat:'epub',source,title:order.book_title,verifiedTranslatedTitle:VERIFIED_TITLE,authorName:order.author_name,genre:order.genre,brief,notes,customerNotesAreAuthoritative:true,buildId,verifiedEditorialOverrides:overrides,allowPreviouslyReviewedEditorialReuse:true,dualFormat:true,maxBatchConcurrency:3,translate:async(_batch,context)=>{throw new Error(`Unexpected model call: pass ${context.pass}, batch ${context.batchIndex}`)}})
   if(result.manifest.status!=='pass')throw new Error('Rebuilt package did not pass')
   const artifacts=await db.from('artifacts').select('*').eq('order_id',ORDER).eq('language',LANGUAGE).eq('build_id',buildId)

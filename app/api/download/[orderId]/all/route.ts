@@ -6,6 +6,7 @@ import {customerBundleFilename,customerContentDisposition,customerLanguageName,c
 import {extractAuthoritativeTranslatedTitle,renderCustomerLaunchPackDocx,renderCustomerTranslationNotesDocx,renderCustomerUploadGuideDocx} from '@/lib/customer-delivery-docx'
 import {selectManifestArtifact,verifyStoredArtifact} from '@/lib/hardened-artifact'
 import type {ArtifactType,PackageArtifact,PackageManifestV1} from '@/lib/package-manifest'
+import {cleanBookTitle} from '@/lib/authoritative-title'
 
 export const runtime='nodejs'
 export const maxDuration=60
@@ -39,6 +40,7 @@ export async function GET(request:NextRequest,{params}:{params:{orderId:string}}
   const allowedStatuses=reviewScope?['ready_for_review','reader_review_pending','delivery_pending','completed']:['delivery_pending','completed']
   if(!order||!allowedStatuses.includes(order.status))return NextResponse.json({error:reviewScope?'Files are not ready for internal review':'Files are not approved for customer delivery'},{status:403})
   try{
+    const customerTitle=cleanBookTitle(order.book_title)
     const zip=new JSZip()
     zip.file('BookLingua - How to Use Your Translations + Upload Guide.docx',await renderCustomerUploadGuideDocx())
     for(const language of ((order.languages as string[])||[])){
@@ -46,7 +48,7 @@ export async function GET(request:NextRequest,{params}:{params:{orderId:string}}
       const {data:row}=build?await db.from('package_manifests').select('manifest').eq('order_id',order.id).eq('language',language).eq('build_id',build.id).eq('status','pass').maybeSingle():{data:null}
       if(!build||!row?.manifest)throw new Error('Current validated package unavailable')
       const manifest=row.manifest as PackageManifestV1
-      const visible=customerVisibleArtifacts(order.book_title,manifest)
+      const visible=customerVisibleArtifacts(customerTitle,manifest)
       let notesBytes:Buffer|undefined
       if(visible.some(item=>item.type==='launch_pack')){
         const notesArtifact=selectManifestArtifact(manifest,'translation_notes')
@@ -54,16 +56,16 @@ export async function GET(request:NextRequest,{params}:{params:{orderId:string}}
       }
       for(const item of visible){
         let bytes=await loadVerifiedArtifact(order.id,language,build.id,manifest,item.artifact)
-        if(item.type==='translation_notes')bytes=await renderCustomerTranslationNotesDocx(bytes,order.book_title,customerLanguageName(language))
+        if(item.type==='translation_notes')bytes=await renderCustomerTranslationNotesDocx(bytes,customerTitle,customerLanguageName(language))
         if(item.type==='launch_pack'){
-          const translatedTitle=notesBytes?extractAuthoritativeTranslatedTitle(notesBytes,order.book_title)||undefined:undefined
-          bytes=await renderCustomerLaunchPackDocx(bytes,order.book_title,translatedTitle)
+          const translatedTitle=notesBytes?extractAuthoritativeTranslatedTitle(notesBytes,customerTitle)||undefined:undefined
+          bytes=await renderCustomerLaunchPackDocx(bytes,customerTitle,translatedTitle)
         }
         zip.file(item.filename,bytes)
       }
     }
     const bytes=await zip.generateAsync({type:'nodebuffer',compression:'DEFLATE',compressionOptions:{level:6}})
-    return new NextResponse(new Uint8Array(bytes),{headers:{'Content-Type':'application/zip','Content-Disposition':customerContentDisposition(customerBundleFilename(order.book_title)),'Cache-Control':'private, no-store','X-BookLingua-Artifact':'customer-bundle-v1'}})
+    return new NextResponse(new Uint8Array(bytes),{headers:{'Content-Type':'application/zip','Content-Disposition':customerContentDisposition(customerBundleFilename(customerTitle)),'Cache-Control':'private, no-store','X-BookLingua-Artifact':'customer-bundle-v1'}})
   }catch(error){
     console.error('Customer bundle generation failed',error)
     return NextResponse.json({error:'Unable to build the download bundle'},{status:409})

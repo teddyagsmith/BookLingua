@@ -26,6 +26,7 @@ export function cleanBookTitle(value:string):string{
   return decodeXml(value)
     .replace(/^\s*(?:updated\s+)?(?:e-?book|ebook|final|revised|latest)(?:\s+(?:file|version|edition))?\s*[-_:–—]*\s*/i,'')
     .replace(/^\s*(?:german|deutsch|french|français|spanish|español|italian|italiano|portuguese|português|polish|polski)\s*[-_:–—]*\s*/i,'')
+    .replace(/-[A-Za-z0-9_-]{10,}\s*$/,'')
     .trim()||decodeXml(value)
 }
 
