@@ -37,6 +37,8 @@ test('customer portal offers one authenticated ZIP for the complete package',()=
   const route=readFileSync('app/api/download/[orderId]/all/route.ts','utf8')
   assert.match(page,/Download all files as ZIP/)
   assert.match(route,/verifyCustomerPortalToken/)
+  assert.match(route,/verifyReviewPortalToken/)
+  assert.match(page,/scope=review/)
   assert.match(route,/customerVisibleArtifacts/)
   assert.match(route,/renderCustomerUploadGuideDocx/)
   assert.match(route,/verifyStoredArtifact/)
