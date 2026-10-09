@@ -63,11 +63,55 @@ const replacements:Replacement[]=[
   {node:783,from:'begegnete allen so freundlich',to:'behandelte alle so freundlich',reason:'uses the correct verb for treating people kindly'},
   {node:791,from:'Der Treue erzählte alles, was geschehen war, und wie er glaubte, dies sei das letzte Mal, dass er seinen treuen Gefährten sehen würde.',to:'Der Treue erzählte alles, was geschehen war, und erklärte, er glaube, seinen treuen Gefährten zum letzten Mal zu sehen.',reason:'repairs broken coordination and compresses the English construction'},
   {node:792,from:'Wenn du den Troll siehst, wie er sein Maul weit aufreißt, klettere in ihn hinein.',to:'Wenn du siehst, wie der Troll sein Maul weit aufreißt, klettere hinein.',reason:'repairs clause order and removes an awkward pronoun'},
+  {node:53,from:'Red Peter',to:'der rote Peter',reason:'translates the descriptive character name consistently into German'},
+  {node:54,from:'Red Peter',to:'der rote Peter',reason:'translates the descriptive character name consistently into German'},
+  {node:61,from:'Red Peter',to:'der rote Peter',reason:'translates the descriptive character name consistently into German'},
+  {node:62,from:'Red Peter',to:'der rote Peter',reason:'translates the descriptive character name consistently into German'},
+  {node:74,from:'Red Peter',to:'dem roten Peter',reason:'translates and inflects the descriptive character name consistently into German'},
+  {node:77,from:'Göttsagen der Edda',to:'Göttersagen der Edda',reason:'corrects the bibliographic typo inherited from the English source'},
+  {node:80,from:'Jene, die ihn einst geschmeichelt und gelobt hatten',to:'Die ihm einst geschmeichelt und ihn gelobt hatten',reason:'corrects the dative object required by schmeicheln'},
+  {node:81,from:'aber Bettler können nicht wählerisch sein',to:'aber in der Not frisst der Teufel Fliegen',reason:'replaces a literal English idiom with its natural German equivalent'},
+  {node:82,from:'mein Magen klebt mir schon an den Rippen',to:'mir hängt der Magen schon in den Kniekehlen',reason:'uses the established German expression for extreme hunger'},
+  {node:315,from:'Dinge, die mile entfernt geschehen',to:'Dinge, die miles entfernt geschehen',reason:'preserves the author-approved English unit with correct source-number agreement'},
+  {node:1308,from:'Neun Meilen entfernt',to:'Neun miles entfernt',reason:'applies the author-approved instruction to retain the English unit consistently'},
+  {node:720,from:'Schaf-Peter',to:'Schäfer-Peter',reason:'standardizes the character name throughout the tale'},
+  {node:723,from:'Schaf-Peter',to:'Schäfer-Peter',reason:'standardizes the character name throughout the tale'},
+  {node:724,from:'Schaf-Peter',to:'Schäfer-Peter',reason:'standardizes the character name throughout the tale'},
+  {node:726,from:'Schaf-Peter',to:'Schäfer-Peter',reason:'standardizes the character name throughout the tale'},
+  {node:729,from:'Schaf-Peter',to:'Schäfer-Peter',reason:'standardizes the character name throughout the tale'},
+  {node:731,from:'Schaf-Peter',to:'Schäfer-Peter',reason:'standardizes the character name throughout the tale'},
+  {node:745,from:'Schaf-Peter',to:'Schäfer-Peter',reason:'standardizes the character name throughout the tale'},
+  {node:709,from:'‚Gott helfe mir, und Königin Kranich stehe mir bei, und es wird mir gelingen!‘',to:'‚Gott helfe mir, Königin Kranich stehe mir bei, dann wird es mir gelingen!‘',reason:'establishes one exact German form of the plot-critical spell'},
+  {node:712,from:'„Gott helfe mir, und Königin Kranich stehe mir bei, und es wird mir gelingen!“',to:'„Gott helfe mir, Königin Kranich stehe mir bei, dann wird es mir gelingen!“',reason:'uses the established spell verbatim'},
+  {node:716,from:'„bleib bei mir“',to:'„stehe mir bei“',reason:'matches the omitted words to the established spell'},
+  {node:717,from:'„Gott helfe mir, und Königin Kranich bleibe bei mir, so wird es mir gelingen!“',to:'„Gott helfe mir, Königin Kranich stehe mir bei, dann wird es mir gelingen!“',reason:'uses the established spell verbatim'},
+  {node:725,from:'„Gott helfe mir, und Königin Kranich bleibe bei mir, so wird es mir gelingen!“',to:'„Gott helfe mir, Königin Kranich stehe mir bei, dann wird es mir gelingen!“',reason:'uses the established spell verbatim'},
+  {node:728,from:'„Gott steh mir bei, und Königin Kranich bleibe mir treu, und ich werde es schaffen!“',to:'„Gott helfe mir, Königin Kranich stehe mir bei, dann wird es mir gelingen!“',reason:'uses the established spell verbatim'},
 ]
 
 const db=createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!,process.env.SUPABASE_SERVICE_ROLE_KEY!,{auth:{persistSession:false}})
 
 const normalized=(value:string)=>stripLeakedSourcePageMarkers(normalizeGermanTerminology(normalizeTypography(value,LANGUAGE)))
+
+function normalizeInformalAddress(value:string):string{
+  return value.replace(/\b(Du|Dir|Dich|Dein(?:e[rmns]?|en)?)\b/g,(match:string,_form:string,offset:number)=>{
+    const prior=value.slice(0,offset).replace(/\s+$/,'')
+    if(!prior||/[.!?…:][„“‚‘'"(]*$/.test(prior)||/[„‚(]$/.test(prior))return match
+    return match.charAt(0).toLocaleLowerCase()+match.slice(1)
+  })
+}
+
+function normalizeGermanSurface(value:string):string{
+  return normalizeInformalAddress(value)
+    .replace(/‘([^‘’]+)’/g,'‚$1‘')
+    .replace(/\s*([—–])\s*/g,(match:string,dash:string,offset:number)=>{
+      const before=value.charAt(offset-1),after=value.charAt(offset+match.length)
+      return /\d/.test(before)&&/\d/.test(after)?dash:' – '
+    })
+    .replace(/ ([—–])\s+([,.;:!?])/g,' $1$2')
+    .replace(/[ \t]{2,}/g,' ')
+    .trim()
+}
 
 async function downloadArtifact(artifact:any):Promise<Buffer>{
   const result=await db.storage.from(artifact.storage_bucket).download(artifact.storage_path)
@@ -141,12 +185,24 @@ async function main(){
     }
     overrides.push({nodeId:storedPass2.nodes[index].id,before,after})
   }
-  const configHash=createHash('sha256').update(JSON.stringify({overrides,version:'reader-feedback-notes-v2'})).digest('hex').slice(0,16)
+  for(let index=0;index<storedPass2.nodes.length;index++){
+    const existing=overrides.find(item=>item.nodeId===storedPass2.nodes[index].id)
+    const before=normalized(storedPass2.nodes[index].translatedText||'')
+    const candidate=normalizeGermanSurface(existing?.after||before)
+    if(candidate!==before){
+      if(existing)existing.after=candidate
+      else overrides.push({nodeId:storedPass2.nodes[index].id,before,after:candidate})
+    }
+  }
+  const configHash=createHash('sha256').update(JSON.stringify({overrides,version:'reader-feedback-language-qa-v3'})).digest('hex').slice(0,16)
   const buildId=deterministicSemanticBuildId(ORDER,LANGUAGE,sourceHash,brief.revision,`${SEMANTIC_PROMPT_SIGNATURE}+timeless-reader-feedback-${configHash}`)
   const notes={schemaVersion:'1.0' as const,language:LANGUAGE,approach:'The editorial review preserved the traditional fairy-tale voice while producing natural, idiomatic German.',sections:[{id:'representative-decisions',title:'Representative Editorial Decisions',entries:[
     {source:'Timeless Nordic Fairy Tales',target:VERIFIED_TITLE,reason:'The German title preserves the original title’s clear promise of enduring Nordic folk stories.'},
     {source:'The king declared that whoever could save his daughters would win the hand of one of them.',target:'Der König erklärte, wer seine Töchter rette, solle eine von ihnen zur Frau bekommen.',reason:'This uses natural fairy-tale German while preserving the king’s offer exactly.'},
     {source:'The message pleased the king, who loved merriment, and he ordered the youth to be welcomed as an honored guest.',target:'Die Botschaft gefiel dem König, der gern lachte und feierte, und er befahl, den Jüngling als Ehrengast willkommen zu heißen.',reason:'This expresses “loved merriment” idiomatically while retaining the king’s cheerful character.'},
+    {source:'God aid me, and Queen Crane stay by me, and I will succeed!',target:'Gott helfe mir, Königin Kranich stehe mir bei, dann wird es mir gelingen!',reason:'The plot-critical spell uses one exact German wording at every complete occurrence.'},
+    {source:'Because of his task, everyone called him "Sheep-Peter."',target:'Wegen seiner Aufgabe nannten ihn alle „Schäfer-Peter“.',reason:'The character name is rendered consistently as Schäfer-Peter throughout the tale.'},
+    {source:'he’s only ten miles away.',target:'er ist nur noch zehn miles entfernt.',reason:'The English unit is retained because the author explicitly instructed BookLingua to keep “mile” unchanged.'},
   ]}]}
   const result=await runSemanticPipeline({supabase:db,orderId:ORDER,language:LANGUAGE,sourceFormat:'epub',source,title:order.book_title,verifiedTranslatedTitle:VERIFIED_TITLE,authorName:order.author_name,genre:order.genre,brief,notes,customerNotesAreAuthoritative:true,buildId,verifiedEditorialOverrides:overrides,allowPreviouslyReviewedEditorialReuse:true,dualFormat:true,maxBatchConcurrency:3,translate:async(_batch,context)=>{throw new Error(`Unexpected model call: pass ${context.pass}, batch ${context.batchIndex}`)}})
   if(result.manifest.status!=='pass')throw new Error('Rebuilt package did not pass')
