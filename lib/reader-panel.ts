@@ -4,6 +4,7 @@ import { deterministicDocx } from './deterministic-docx'
 import { SemanticDocumentV2, SemanticNodeV2 } from './semantic-document'
 import { customerLanguageName, sanitizeCustomerFilenamePart } from './customer-delivery'
 import { signReaderPanelToken } from './download-token'
+import { decodeVisibleEntities } from './semantic-artifacts'
 
 export const READER_SAMPLE_VERSION = 'reader-sample-v5-clearly-spaced-layout'
 export const READER_PANEL_TEMPLATE_VERSION = 'reader-panel-email-v1'
@@ -13,7 +14,8 @@ export const READER_PANEL_FEEDBACK_FORM_SHA256 = '6aba2957e80ca09c191605f2c61322
 export type ReaderReviewVerdict = 'reader_review_pass'|'reader_review_pass_with_notes'|'reader_review_fail'
 export type ReaderSampleSection = { label:'Opening'|'Middle'|'Translation stress'; startOrder:number; endOrder:number; wordCount:number; nodes:SemanticNodeV2[] }
 
-const words=(value:string|null)=>value?.trim().split(/\s+/).filter(Boolean).length||0
+const displayText=(value:string|null|undefined)=>decodeVisibleEntities(value||'')
+const words=(value:string|null)=>displayText(value).trim().split(/\s+/).filter(Boolean).length||0
 const prose=(node:SemanticNodeV2)=>node.type!=='heading'&&node.type!=='scene_break'&&words(node.translatedText)>0
 const BODY_HEADING=/^(?:chapter|chapitre|cap[ií]tulo|kapitel|prologue|prolog|pr[oó]logo|introduction|introducci[oó]n|einleitung|part|teil)\b/i
 
@@ -33,7 +35,7 @@ export function translatedReaderTitle(document:SemanticDocumentV2,bookTitle:stri
   const normalise=(value:string)=>value.toLocaleLowerCase().replace(/[^a-z0-9\u00c0-\u024f]+/gi,' ').trim()
   const wanted=normalise(bookTitle.replace(/\s+-\s+[^-]+$/,''))
   const exact=document.nodes.find(node=>node.type==='heading'&&normalise(node.sourceText||'')===wanted)
-  return exact?.translatedText?.trim()||bookTitle
+  return displayText(exact?.translatedText).trim()||bookTitle
 }
 
 function mergeDropCaps(nodes:SemanticNodeV2[]):SemanticNodeV2[]{
@@ -41,7 +43,7 @@ function mergeDropCaps(nodes:SemanticNodeV2[]):SemanticNodeV2[]{
   for(let index=0;index<nodes.length;index++){
     const node=nodes[index],next=nodes[index+1]
     if(node.type==='paragraph'&&next?.type==='paragraph'&&/^[A-Za-z\u00c0-\u024f]$/.test(node.translatedText?.trim()||'')&&next.translatedText?.trim()){
-      merged.push({...next,translatedText:`${node.translatedText!.trim()}${next.translatedText!.trimStart()}`,sourceText:`${node.sourceText?.trim()||''}${next.sourceText?.trimStart()||''}`,order:node.order})
+      merged.push({...next,translatedText:`${displayText(node.translatedText).trim()}${displayText(next.translatedText).trimStart()}`,sourceText:`${node.sourceText?.trim()||''}${next.sourceText?.trimStart()||''}`,order:node.order})
       index++
     }else merged.push(node)
   }
@@ -57,7 +59,7 @@ function continuousWindow(nodes:SemanticNodeV2[],anchor:number,target:number):Re
 }
 
 function stressScore(node:SemanticNodeV2):number{
-  const text=node.translatedText||''
+  const text=displayText(node.translatedText)
   return Math.min(8,(text.match(/[“”"'!?—–:;]/g)||[]).length)+Math.min(8,words(text)/25)+(node.type==='paragraph'?2:0)
 }
 
@@ -97,11 +99,12 @@ export async function buildReaderSampleDocx(input:{document:SemanticDocumentV2;t
     const renderedNodes=mergeDropCaps(section.nodes)
     for(let nodeIndex=0;nodeIndex<renderedNodes.length;nodeIndex++){
       const node=renderedNodes[nodeIndex]
-      if(node.type==='heading')children.push(new Paragraph({children:[new TextRun({text:node.translatedText!,bold:true,size:node.headingLevel===1?30:26,font:'Georgia',color:'111111'})],alignment:AlignmentType.CENTER,spacing:{before:240,after:220},keepNext:true}))
+      const text=displayText(node.translatedText)
+      if(node.type==='heading')children.push(new Paragraph({children:[new TextRun({text,bold:true,size:node.headingLevel===1?30:26,font:'Georgia',color:'111111'})],alignment:AlignmentType.CENTER,spacing:{before:240,after:220},keepNext:true}))
       else if(node.type==='scene_break')children.push(new Paragraph({children:[new TextRun({text:'* * *',size:24,font:'Georgia',color:'333333'})],alignment:AlignmentType.CENTER,spacing:{before:180,after:180}}))
-      else if(renderedNodes[nodeIndex-1]?.type==='heading'&&words(node.translatedText)<=10)children.push(new Paragraph({children:[new TextRun({text:node.translatedText!,italics:true,size:24,font:'Georgia',color:'333333'})],alignment:AlignmentType.CENTER,spacing:{after:220}}))
+      else if(renderedNodes[nodeIndex-1]?.type==='heading'&&words(node.translatedText)<=10)children.push(new Paragraph({children:[new TextRun({text,italics:true,size:24,font:'Georgia',color:'333333'})],alignment:AlignmentType.CENTER,spacing:{after:220}}))
       else children.push(new Paragraph({
-        children:[new TextRun({text:node.translatedText!,size:24,font:'Georgia',color:'111111'})],
+        children:[new TextRun({text,size:24,font:'Georgia',color:'111111'})],
         alignment:AlignmentType.LEFT,
         // 1.5 line spacing and a visible 12 pt gap make each paragraph easy
         // to scan. A first-line indent is redundant when paragraphs are spaced.

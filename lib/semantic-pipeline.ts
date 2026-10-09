@@ -108,7 +108,7 @@ export function applyVerifiedEditorialOverrides(document:SemanticDocumentV2,over
  * output from identical inputs, and without this the completed package short-circuits
  * and the customer's files never change.
  */
-export const PIPELINE_OUTPUT_VERSION = 'output-v13-source-linked-customer-notes'
+export const PIPELINE_OUTPUT_VERSION = 'output-v14-source-page-marker-cleanup'
  
  export const SEMANTIC_PROMPT_SIGNATURE = `${TRANSLATION_PROMPT_VERSION}+${EDITORIAL_PROMPT_VERSION}+${PIPELINE_OUTPUT_VERSION}`
 export const SEMANTIC_BUILD_POLICY_VERSION = 'semantic-v2-review-diff-spacing-v10'
@@ -221,11 +221,13 @@ function sourceEmphasisCounts(source: Buffer, sourceFormat: 'epub'|'docx'|'txt',
 
 /** Typewriter punctuation is corrected on the way out of every pass, so the stored
  *  documents, the review diff and every artifact agree. */
+export function stripLeakedSourcePageMarkers(value:string):string{return value.replace(/\[\d{1,4}\]/g,'')}
+
 function normalizePassTypography(nodes: SemanticDocumentV2['nodes'], language: string): SemanticDocumentV2['nodes'] {
   return nodes.map(node => node.translatedText
     ? { ...node, translatedText: language.toLocaleLowerCase().startsWith('de')
-      ? normalizeGermanTerminology(normalizeTypography(node.translatedText, language))
-      : normalizeTypography(node.translatedText, language) }
+      ? stripLeakedSourcePageMarkers(normalizeGermanTerminology(normalizeTypography(node.translatedText, language)))
+      : stripLeakedSourcePageMarkers(normalizeTypography(node.translatedText, language)) }
     : node)
 }
 

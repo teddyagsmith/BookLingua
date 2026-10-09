@@ -1,7 +1,7 @@
 import AdmZip from 'adm-zip'
 import path from 'path'
 
-export const ARTIFACT_VALIDATOR_VERSION = '1.8'
+export const ARTIFACT_VALIDATOR_VERSION = '1.9'
 export type ArtifactKind = 'epub' | 'docx'
 export interface ArtifactValidationIssue { code: string; message: string; location?: string }
 export interface ArtifactValidationResult {
@@ -214,6 +214,7 @@ export function validateArtifact(buffer: Buffer, kind: ArtifactKind, options: Ar
   const joined = allText.join('\n')
   if(doubleEscapedEntity)errors.push({code:'DOUBLE_ESCAPED_ENTITY',message:'Customer-facing markup contains a double-escaped HTML/XML entity'})
   if(/&(?:quot|apos|amp|lt|gt|#\d+|#x[0-9a-f]+);/i.test(joined))errors.push({code:'VISIBLE_ESCAPED_ENTITY',message:'Customer-facing text contains an escaped HTML/XML entity'})
+  if(/\[\d{1,4}\]/.test(joined))errors.push({code:'SOURCE_PAGE_MARKER',message:'Customer-facing body text contains a leaked bracketed source page marker'})
   if (INTERNAL_MARKER.test(joined)) errors.push({ code: 'LEAKED_MARKER', message: 'Internal pipeline marker is visible' })
   if (VISIBLE_MARKDOWN_HEADING.test(joined)) errors.push({ code: 'VISIBLE_MARKDOWN', message: 'Markdown heading syntax is visible' })
   if (/\b(?:book|manuscript|document)\s+WORD\b/i.test(joined)) errors.push({ code: 'PLACEHOLDER_TITLE', message: 'Internal filename/project placeholder is visible in customer-facing content' })

@@ -34,6 +34,16 @@ test('reader sample uses explicit readable black typography and rejoins split dr
   assert.match(xml,/<w:color w:val="111111"\/>/)
   assert.match(xml,/<w:sz w:val="24"\/>/)
 })
+test('reader sample decodes visible source entities before rendering',async()=>{
+  const fixture:SemanticDocumentV2={...document,nodes:[
+    {...nodes[0],id:'chapter',order:0,sourceText:'Chapter 1',translatedText:'Kapitel 1'},
+    {...nodes[1],id:'entity',order:1,translatedText:'&#x201E;Hallo&#x201C; &#x2013; sch\u00f6n.'},
+  ]}
+  const sections=[{label:'Opening' as const,startOrder:0,endOrder:1,wordCount:4,nodes:fixture.nodes}]
+  const bytes=await buildReaderSampleDocx({document:fixture,translatedTitle:'Titel',language:'de',sections}),zip=await JSZip.loadAsync(bytes),xml=await zip.file('word/document.xml')!.async('string')
+  assert.match(xml,/Hallo/)
+  assert.doesNotMatch(xml,/&amp;#x201/)
+})
 test('identity is build-bound and deterministic',()=>{assert.equal(readerPanelIdentity('o','de','b','customer-package-v1'),readerPanelIdentity('o','de','b','customer-package-v1'));assert.notEqual(readerPanelIdentity('o','de','b','customer-package-v1'),readerPanelIdentity('o','de','new','customer-package-v1'))})
 test('email is Gilly-routing copy with required links and labels',()=>{const sections=selectReaderSample(document),email=renderReaderPanelEmail({bookTitle:'Original',translatedTitle:'Übersetzt',language:'de',genre:'Romance',wordCount:readerSampleWordCount(sections),sections,sampleUrl:'https://example.com/sample',feedbackUrl:'https://example.com/form'});assert.match(email.subject,/\[BOOKLINGUA READER PANEL\] German check needed/);assert.match(email.html,/Teddy manually assigns/);assert.match(email.html,/Download Reader Sample/);assert.match(email.html,/Translation stress/)})
 test('migration binds verdict to current build and blocks delivery',()=>{const sql=fs.readFileSync('supabase/migrations/202608180001_reader_panel_v1.sql','utf8');assert.match(sql,/reader_verdict_build_superseded/);assert.match(sql,/reader_panel_review_not_passed/);assert.match(sql,/reader_review_pass_with_notes/)})

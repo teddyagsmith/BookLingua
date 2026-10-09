@@ -147,6 +147,13 @@ test('leaked markers, markdown and substantial duplicate content hard-fail', () 
   assert.ok(codes.includes('DUPLICATE_CONTENT'))
 })
 
+test('leaked bracketed source page markers hard-fail', () => {
+  const result = validateArtifact(syntheticEpub([
+    { heading: 'Chapter 1', body: 'The magic wall broke and the[183] dogs were freed.' },
+  ]), 'epub')
+  assert.ok(result.errors.some(issue => issue.code === 'SOURCE_PAGE_MARKER'))
+})
+
 test('corrupt and empty EPUB/DOCX hard-fail', () => {
   for (const kind of ['epub', 'docx'] as const) {
     assert.equal(validateArtifact(Buffer.alloc(0), kind).passed, false)

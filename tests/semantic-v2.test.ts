@@ -3,13 +3,13 @@ import assert from 'node:assert/strict'
 import AdmZip from 'adm-zip'
 import sharp from 'sharp'
 import { Document, HeadingLevel, Packer, Paragraph } from 'docx'
-import { parseSemanticDocx, parseSemanticEpub, parseSemanticTxt } from '../lib/semantic-parser'
+import { blockText, parseSemanticDocx, parseSemanticEpub, parseSemanticTxt } from '../lib/semantic-parser'
 import { createNodeTranslationInput, validateAndMergeNodeOutput } from '../lib/node-translation-contract'
 import { buildChapterMap, renderChapterMapCsv, renderChapterMapDocx } from '../lib/chapter-map'
 import { evaluateSemanticEligibility } from '../lib/semantic-document'
 import { buildSemanticDocx, buildSemanticEpub, buildSemanticEpubFromDocument, buildSemanticReviewDocx, consolidatedArtifactNodes, normalizeEpubImages, resolveBookAuthor } from '../lib/semantic-artifacts'
 import { validateArtifact } from '../lib/artifact-validation-v2'
-import { applyVerifiedEditorialOverrides, deterministicSemanticBuildId } from '../lib/semantic-pipeline'
+import { applyVerifiedEditorialOverrides, deterministicSemanticBuildId, stripLeakedSourcePageMarkers } from '../lib/semantic-pipeline'
 import { editorialSystemPrompt } from '../lib/editorial-prompt'
 import { semanticV2AllowedForOrder } from '../lib/semantic-canary'
 
@@ -23,6 +23,14 @@ function epubFixture(): Buffer {
   zip.addFile('OEBPS/11.xhtml', Buffer.from('<html><body><h1>Chapter 11</h1><h2>The Root</h2><p>Eleven body.</p></body></html>'))
   return zip.toBuffer()
 }
+
+test('EPUB text extraction removes inline source page markers but preserves standalone bracketed numbers',()=>{
+  assert.equal(blockText('the[183] dogs and [42] answers'),'the dogs and [42] answers')
+})
+
+test('translation normalization removes leaked bracketed source page markers',()=>{
+  assert.equal(stripLeakedSourcePageMarkers('die[181] Hunde. Gefahr.[182]'),'die Hunde. Gefahr.')
+})
 
 test('EPUB, DOCX and TXT parsers produce stable ordered IDs', async () => {
   const docx = await Packer.toBuffer(new Document({ sections: [{ children: [

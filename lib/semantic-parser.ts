@@ -79,6 +79,11 @@ export function blockText(inner: string): string {
   return inner
     .replace(/<\/?(?:br|div|p|li|tr|td|th|h[1-6]|blockquote|section|article|figure)\b[^>]*>/gi, ' ')
     .replace(/<[^>]+>/g, '')
+    // Project Gutenberg-style page markers can sit inside prose ("the[183]
+    // dogs"). They are source-layout metadata, not book content, and must not
+    // reach translation or customer artifacts. Standalone bracketed numbers
+    // remain untouched because they may be intentional manuscript content.
+    .replace(/(?<=[A-Za-zÀ-ž0-9])\[\d{1,4}\](?=\s|[A-Za-zÀ-ž0-9.,;:!?]|$)/g, '')
     .replace(/\s+/g, ' ')
     .trim()
 }
