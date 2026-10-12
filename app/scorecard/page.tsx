@@ -20,7 +20,7 @@ export default function ScorecardPage() {
           <div className="flex flex-col justify-center p-8 sm:p-12">
             <p className="text-sm font-semibold text-brand-dark">German · Spanish · French · Italian · Portuguese</p>
             <h1 className="mt-4 font-serif text-4xl font-bold leading-tight sm:text-5xl">Which language should you translate your book into first?</h1>
-            <p className="mt-5 text-lg leading-8 text-gray-600">Download the scorecard, add up your market-match totals and identify the strongest first test for your book.</p>
+            <p className="mt-5 text-lg leading-8 text-gray-600">Download the scorecard, add up your market-match totals and identify the most promising first market for your book.</p>
 
             <a href={PDF_URL} download className="mt-8 inline-flex items-center justify-center rounded-xl bg-brand px-6 py-4 text-base font-bold text-white shadow-lg transition hover:bg-brand-dark focus:outline-none focus:ring-4 focus:ring-brand-light">
               Download the scorecard (PDF)
@@ -39,4 +39,3 @@ export default function ScorecardPage() {
     </main>
   )
 }
-
