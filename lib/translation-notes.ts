@@ -144,7 +144,7 @@ export function deriveEditorialTranslationNotes(input: {
     }
     return output
   }
-  const family=/romance|romantasy|erotic/i.test(input.genre||'')?'romance':/thriller|mystery|crime|suspense|spy/i.test(input.genre||'')?'thriller':'general'
+  const family=/romance|romantasy|erotic/i.test(input.genre||'')?'romance':/thriller|mystery|crime|suspense|spy/i.test(input.genre||'')?'thriller':/memoir|biograph|autobiograph/i.test(input.genre||'')?'memoir':'general'
   const reason=(source:string,index:number)=>{
     const opening=(source.match(/[A-Za-z]+(?:[’'][A-Za-z]+)?/g)||[]).slice(0,5).join(' ')
     const identity=opening?`The passage beginning ${opening}`:`Editorial decision ${index+1}`
@@ -152,6 +152,7 @@ export function deriveEditorialTranslationNotes(input: {
     if(/\bDMV\b/i.test(source))return`${identity} keeps the US agency reference clear in the delivered German.`
     if(family==='thriller')return`${identity} uses natural German while preserving the thriller’s pace, evidence, and narrative intent.`
     if(family==='romance')return`${identity} uses natural German while preserving the scene’s emotional meaning and narrative voice.`
+    if(family==='memoir')return`${identity} uses natural target-language wording while preserving the memoir’s factual meaning, candid voice, and dry humour.`
     return`${identity} uses natural target-language wording while preserving the author’s meaning and tone.`
   }
   const limit = Math.max(1, Math.min(input.limit || 12, 20))
@@ -159,7 +160,7 @@ export function deriveEditorialTranslationNotes(input: {
   if (input.authoritativeTitle&&input.authoritativeTitle.source.normalize('NFKC')!==input.authoritativeTitle.target.normalize('NFKC')) decisions.push({
     source: input.authoritativeTitle.source,
     target: input.authoritativeTitle.target,
-    reason: 'The German title follows the manuscript-authoritative title decision used consistently across the delivered files.',
+    reason: 'The translated title follows the manuscript-authoritative title decision used consistently across the delivered files.',
   })
   const pass1=normalizedNodes(input.pass1.nodes),pass2=normalizedNodes(input.pass2.nodes)
   for (let index = 0; index < pass1.length && decisions.length < limit; index++) {
