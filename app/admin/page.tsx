@@ -54,6 +54,27 @@ type EstimateLead = {
   followed_up_at: string | null
 }
 
+type ScorecardLead = {
+  id: string
+  email: string
+  full_name: string | null
+  genre: string | null
+  source: string
+  marketing_consent: boolean
+  email_status: 'pending' | 'sent' | 'failed'
+  submission_count: number
+  first_submitted_at: string
+  last_submitted_at: string
+  created_at: string
+  meta_campaign_id: string | null
+  meta_adset_id: string | null
+  meta_ad_id: string | null
+  utm_campaign: string | null
+  utm_content: string | null
+  follow_up_status: FollowUpStatus
+  followed_up_at: string | null
+}
+
 type Stats = {
   todayRevenue: number
   todayOrders: number
@@ -72,6 +93,8 @@ type Stats = {
   abandonedCount: number
   estimateLeadCount: number
   newEstimateLeadCount: number
+  scorecardLeadCount: number
+  newScorecardLeadCount: number
 }
 
 type InspectionLink = { language: string; label: string; url: string }
@@ -140,9 +163,10 @@ export default function AdminPage() {
   const [orders, setOrders] = useState<Order[]>([])
   const [abandonedUploads, setAbandonedUploads] = useState<AbandonedUpload[]>([])
   const [estimateLeads, setEstimateLeads] = useState<EstimateLead[]>([])
+  const [scorecardLeads, setScorecardLeads] = useState<ScorecardLead[]>([])
   const [stats, setStats] = useState<Stats | null>(null)
   const [filter, setFilter] = useState<string>('current')
-  const [activeTab, setActiveTab] = useState<'orders' | 'leads' | 'abandoned'>('orders')
+  const [activeTab, setActiveTab] = useState<'orders' | 'leads' | 'scorecard' | 'abandoned'>('orders')
   const [search, setSearch] = useState('')
   const [lastRefresh, setLastRefresh] = useState<Date | null>(null)
   const [actionLoading, setActionLoading] = useState<string | null>(null)
@@ -160,6 +184,24 @@ export default function AdminPage() {
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || 'Update failed')
       setEstimateLeads(current => current.map(lead => lead.id === leadId ? { ...lead, ...data.lead } : lead))
+    } catch (error) {
+      setActionMsg(current => ({ ...current, [leadId]: `❌ ${error instanceof Error ? error.message : 'Update failed'}` }))
+    } finally {
+      setActionLoading(null)
+    }
+  }
+
+  const handleScorecardLeadStatus = async (leadId: string, followUpStatus: FollowUpStatus) => {
+    setActionLoading(leadId)
+    try {
+      const res = await fetch(`/api/admin/scorecard-leads/${leadId}`, {
+        method: 'PATCH',
+        headers: { 'x-admin-password': password, 'content-type': 'application/json' },
+        body: JSON.stringify({ followUpStatus }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'Update failed')
+      setScorecardLeads(current => current.map(lead => lead.id === leadId ? { ...lead, ...data.lead } : lead))
     } catch (error) {
       setActionMsg(current => ({ ...current, [leadId]: `❌ ${error instanceof Error ? error.message : 'Update failed'}` }))
     } finally {
@@ -254,6 +296,7 @@ export default function AdminPage() {
       setOrders(data.orders)
       setAbandonedUploads(data.abandonedUploads || [])
       setEstimateLeads(data.estimateLeads || [])
+      setScorecardLeads(data.scorecardLeads || [])
       setStats(data.stats)
       setAuthed(true)
       setLastRefresh(new Date())
@@ -293,6 +336,12 @@ export default function AdminPage() {
     if (!search) return true
     const q = search.toLowerCase()
     return lead.email.toLowerCase().includes(q) || lead.utm_campaign?.toLowerCase().includes(q) || lead.follow_up_status.includes(q)
+  })
+
+  const filteredScorecardLeads = scorecardLeads.filter(lead => {
+    if (!search) return true
+    const q = search.toLowerCase()
+    return lead.email.toLowerCase().includes(q) || lead.full_name?.toLowerCase().includes(q) || lead.genre?.toLowerCase().includes(q) || lead.utm_campaign?.toLowerCase().includes(q) || lead.follow_up_status.includes(q)
   })
 
   // ── Login screen ──────────────────────────────────────────────────────────
@@ -417,6 +466,13 @@ export default function AdminPage() {
             {stats && stats.newEstimateLeadCount > 0 && <span className={`text-xs px-1.5 py-0.5 rounded-full font-bold ${activeTab === 'leads' ? 'bg-white/30 text-white' : 'bg-violet-100 text-violet-700'}`}>{stats.newEstimateLeadCount}</span>}
           </button>
           <button
+            onClick={() => setActiveTab('scorecard')}
+            className={`px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-1.5 ${activeTab === 'scorecard' ? 'bg-violet-600 text-white' : 'bg-white text-gray-600 border border-gray-200 hover:bg-gray-50'}`}
+          >
+            Scorecard Leads
+            {stats && stats.newScorecardLeadCount > 0 && <span className={`text-xs px-1.5 py-0.5 rounded-full font-bold ${activeTab === 'scorecard' ? 'bg-white/30 text-white' : 'bg-violet-100 text-violet-700'}`}>{stats.newScorecardLeadCount}</span>}
+          </button>
+          <button
             onClick={() => setActiveTab('abandoned')}
             className={`px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-1.5 ${activeTab === 'abandoned' ? 'bg-amber-500 text-white' : 'bg-white text-gray-600 border border-gray-200 hover:bg-gray-50'}`}
           >
@@ -458,6 +514,38 @@ export default function AdminPage() {
                 <p className="text-sm text-gray-600">{lead.word_count.toLocaleString()} words · {lead.languages.map(language => LANG_NAMES[language] || language.toUpperCase()).join(', ')}</p>
                 <div className="flex flex-wrap gap-2 text-xs"><span className={lead.marketing_consent ? 'rounded bg-green-100 px-2 py-1 text-green-800' : 'rounded bg-gray-100 px-2 py-1 text-gray-600'}>{lead.marketing_consent ? 'Marketing opt-in' : 'Estimate only'}</span><span className="rounded bg-gray-100 px-2 py-1 text-gray-600">{lead.utm_campaign || lead.utm_source || 'Direct'}</span></div>
                 <select aria-label={`Follow-up status for ${lead.email}`} disabled={actionLoading === lead.id} value={lead.follow_up_status} onChange={event => handleLeadStatus(lead.id, event.target.value as FollowUpStatus)} className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm">{Object.entries(FOLLOW_UP_LABELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select>
+              </div>)}</div>
+            </>}
+          </div>
+        )}
+
+        {activeTab === 'scorecard' && (
+          <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+            <div className="p-4 border-b border-gray-100 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <h2 className="font-semibold text-gray-800">Scorecard Leads</h2>
+                <p className="text-sm text-gray-500 mt-0.5">Unique people who requested the language market-match scorecard in the last 90 days</p>
+              </div>
+              <input type="text" placeholder="Search email, name, genre, campaign…" value={search} onChange={event => setSearch(event.target.value)} className="border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-violet-400" />
+            </div>
+            {filteredScorecardLeads.length === 0 ? <div className="text-center py-12 text-gray-400">No scorecard leads found</div> : <>
+              <div className="hidden lg:block overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead className="bg-gray-50 text-gray-500 text-xs uppercase"><tr><th className="px-4 py-3 text-left">Lead</th><th className="px-4 py-3 text-left">Genre</th><th className="px-4 py-3 text-left">Attribution</th><th className="px-4 py-3 text-left">Consent / Email</th><th className="px-4 py-3 text-left">Submissions</th><th className="px-4 py-3 text-left">Follow-up</th></tr></thead>
+                  <tbody className="divide-y divide-gray-50">{filteredScorecardLeads.map(lead => <tr key={lead.id} className="align-top hover:bg-violet-50/40">
+                    <td className="px-4 py-3"><a href={`mailto:${lead.email}`} className="font-medium text-violet-700 hover:underline">{lead.full_name || lead.email}</a>{lead.full_name && <p className="text-xs text-gray-500">{lead.email}</p>}<p className="mt-1 text-xs text-gray-400">{fmtDate(lead.last_submitted_at)} · {ago(lead.last_submitted_at)}</p></td>
+                    <td className="px-4 py-3 text-gray-700">{lead.genre?.replaceAll('_', ' ') || 'Unknown'}</td>
+                    <td className="px-4 py-3 text-xs text-gray-600"><p>{lead.utm_campaign || lead.source}</p>{lead.utm_content && <p className="mt-1 text-gray-400">{lead.utm_content}</p>}</td>
+                    <td className="px-4 py-3 text-xs"><p className={lead.marketing_consent ? 'font-medium text-green-700' : 'text-gray-400'}>{lead.marketing_consent ? '✓ Marketing opt-in' : 'Scorecard only'}</p><p className={`mt-1 ${lead.email_status === 'sent' ? 'text-green-700' : lead.email_status === 'failed' ? 'text-red-600' : 'text-amber-600'}`}>Email {lead.email_status}</p></td>
+                    <td className="px-4 py-3"><span className="rounded bg-gray-100 px-2 py-1 text-xs">{lead.submission_count}</span></td>
+                    <td className="px-4 py-3"><select aria-label={`Follow-up status for ${lead.email}`} disabled={actionLoading === lead.id} value={lead.follow_up_status} onChange={event => handleScorecardLeadStatus(lead.id, event.target.value as FollowUpStatus)} className="rounded-lg border border-gray-200 bg-white px-2 py-1.5 text-sm">{Object.entries(FOLLOW_UP_LABELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select>{actionMsg[lead.id] && <p className="mt-1 text-xs text-red-600">{actionMsg[lead.id]}</p>}</td>
+                  </tr>)}</tbody>
+                </table>
+              </div>
+              <div className="lg:hidden divide-y divide-gray-100">{filteredScorecardLeads.map(lead => <div key={lead.id} className="p-4 space-y-3">
+                <div><a href={`mailto:${lead.email}`} className="font-medium text-violet-700">{lead.full_name || lead.email}</a>{lead.full_name && <p className="text-xs text-gray-500">{lead.email}</p>}<p className="text-xs text-gray-400">{fmtDate(lead.last_submitted_at)}</p></div>
+                <div className="flex flex-wrap gap-2 text-xs"><span className="rounded bg-violet-50 px-2 py-1 text-violet-700">{lead.genre?.replaceAll('_', ' ') || 'Unknown genre'}</span><span className={lead.marketing_consent ? 'rounded bg-green-100 px-2 py-1 text-green-800' : 'rounded bg-gray-100 px-2 py-1 text-gray-600'}>{lead.marketing_consent ? 'Marketing opt-in' : 'Scorecard only'}</span><span className="rounded bg-gray-100 px-2 py-1 text-gray-600">{lead.submission_count} submission{lead.submission_count === 1 ? '' : 's'}</span></div>
+                <select aria-label={`Follow-up status for ${lead.email}`} disabled={actionLoading === lead.id} value={lead.follow_up_status} onChange={event => handleScorecardLeadStatus(lead.id, event.target.value as FollowUpStatus)} className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm">{Object.entries(FOLLOW_UP_LABELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select>
               </div>)}</div>
             </>}
           </div>

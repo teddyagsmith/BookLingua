@@ -72,6 +72,14 @@ export async function GET(request: NextRequest) {
 
     if (estimateLeadsError) throw estimateLeadsError
 
+    const { data: scorecardLeads, error: scorecardLeadsError } = await getSupabaseAdmin()
+      .from('scorecard_leads')
+      .select('id, email, full_name, genre, source, marketing_consent, email_status, submission_count, first_submitted_at, last_submitted_at, created_at, meta_campaign_id, meta_adset_id, meta_ad_id, utm_campaign, utm_content, follow_up_status, followed_up_at')
+      .gte('created_at', since)
+      .order('last_submitted_at', { ascending: false })
+
+    if (scorecardLeadsError && scorecardLeadsError.code !== '42P01') throw scorecardLeadsError
+
     const now = new Date()
     const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate()).toISOString()
     const weekStart = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString()
@@ -101,6 +109,7 @@ export async function GET(request: NextRequest) {
       orders: ordersWithReaderPanel,
       abandonedUploads: abandonedUploads || [],
       estimateLeads: estimateLeads || [],
+      scorecardLeads: scorecardLeads || [],
       stats: {
         todayRevenue,
         todayOrders: todayOrders.length,
@@ -119,6 +128,8 @@ export async function GET(request: NextRequest) {
         abandonedCount: abandonedUploads?.length || 0,
         estimateLeadCount: estimateLeads?.length || 0,
         newEstimateLeadCount: estimateLeads?.filter(lead => lead.follow_up_status === 'new').length || 0,
+        scorecardLeadCount: scorecardLeads?.length || 0,
+        newScorecardLeadCount: scorecardLeads?.filter(lead => lead.follow_up_status === 'new').length || 0,
       },
     })
   } catch (err) {
