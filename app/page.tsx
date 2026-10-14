@@ -703,10 +703,10 @@ export default function Home() {
                     Upload Your Book →
                   </button>
                   <a
-                    href="/examples"
+                    href="/pricing"
                     className="px-8 py-4 bg-white border-2 border-brand-light text-brand-dark rounded-2xl font-bold text-lg hover:border-brand-light hover:bg-[#F3F0F8] transition-all"
                   >
-                    See Examples
+                    Calculate Your Price →
                   </a>
                 </div>
 
