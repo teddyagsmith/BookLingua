@@ -1034,48 +1034,64 @@ export default function Home() {
           </div>
         </section>
 
-        {/* Founder */}
+        {/* Founder conversation */}
         <section className="py-16 bg-white">
-          <div className="max-w-5xl mx-auto px-8">
-            <div className="grid md:grid-cols-[220px_1fr] gap-8 md:gap-12 items-center bg-[#F3F0F8] rounded-3xl p-6 md:p-10 border border-brand-light">
-              <div className="mx-auto md:mx-0">
+          <div className="max-w-6xl mx-auto px-6 md:px-8">
+            <div className="grid md:grid-cols-[0.8fr_1.2fr] items-stretch overflow-hidden bg-gradient-to-br from-[#F3F0F8] to-white rounded-3xl border border-brand-light shadow-sm">
+              <a
+                href="https://podcasts.apple.com/us/podcast/can-ai-really-translate-your-book-my-wife-interviews-me/id1763218068?i=1000796375221"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="group relative min-h-[330px] overflow-hidden bg-gray-950"
+                aria-label="Listen to Can AI Really Translate Your Book on Apple Podcasts"
+              >
                 <Image
-                  src="/images/teddy-smith-headshot.jpeg"
-                  alt="Teddy Smith, founder of BookLingua"
-                  width={220}
-                  height={275}
-                  className="w-44 md:w-full h-auto rounded-2xl object-cover shadow-lg"
+                  src="/images/booklingua-podcast-cover.jpg"
+                  alt="Can AI Really Translate Your Book podcast episode"
+                  fill
+                  sizes="(min-width: 768px) 40vw, 100vw"
+                  className="object-cover opacity-80 transition-transform duration-500 group-hover:scale-105"
                 />
-              </div>
-              <div>
-                <p className="text-sm font-bold uppercase tracking-wider text-brand mb-2">Founder-led publishing experience</p>
+                <div className="absolute inset-0 bg-gradient-to-t from-black/65 via-black/5 to-transparent" />
+                <div className="absolute inset-0 flex items-center justify-center">
+                  <span className="flex h-20 w-20 items-center justify-center rounded-full bg-white/95 text-3xl text-brand shadow-2xl transition-transform group-hover:scale-110" aria-hidden="true">▶</span>
+                </div>
+                <div className="absolute bottom-0 left-0 right-0 p-6 text-white">
+                  <p className="text-sm font-semibold">The Publishing Performance Show</p>
+                  <p className="mt-1 text-sm text-white/80">34-minute conversation · Apple Podcasts</p>
+                </div>
+              </a>
+              <div className="p-7 md:p-12">
+                <p className="text-sm font-bold uppercase tracking-wider text-brand mb-3">Founder conversation</p>
                 <h2 className="text-3xl md:text-4xl font-bold text-gray-900 mb-4" style={serifFont}>
-                  Built by someone who understands authors
+                  Can AI really translate your book?
                 </h2>
                 <div className="space-y-4 text-gray-700 leading-relaxed">
                   <p>
-                    BookLingua was founded by Teddy Smith, an author, publishing marketer and host of <em>The Publishing Performance Show</em>. Through the romance book-discovery newsletter{' '}
-                    <a
-                      href="https://myromancereads.com/"
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="font-semibold text-brand-dark underline decoration-brand-light underline-offset-2 hover:text-brand transition-colors"
-                    >
-                      My Romance Reads
-                    </a>
-                    , he has also built an audience of more than 18,000 romance readers and helped independent authors promote their books.
+                    Clare interviews BookLingua founder Teddy Smith about translation quality, preserving an author&apos;s voice, the limits of AI, and why BookLingua combines technology with editorial checks.
                   </p>
-                  <p>
-                    Teddy created BookLingua to give authors a faster, more affordable way to reach international readers—without losing the voice and personality that made their books worth translating in the first place.
+                  <p className="text-sm text-gray-600">
+                    Teddy is an author, publishing marketer and host of <em>The Publishing Performance Show</em>. He created BookLingua to help independent authors reach international readers without losing what makes their writing distinctive.
                   </p>
                 </div>
-                <a
-                  href="https://teddyagsmith.com/"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-flex items-center gap-2 mt-5 text-brand-dark font-semibold hover:text-brand transition-colors"
-                >
-                  Meet Teddy <span aria-hidden="true">→</span>
+                <div className="flex flex-col sm:flex-row gap-3 mt-7">
+                  <a
+                    href="https://podcasts.apple.com/us/podcast/can-ai-really-translate-your-book-my-wife-interviews-me/id1763218068?i=1000796375221"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center justify-center rounded-xl bg-brand px-5 py-3 font-semibold text-white shadow-lg shadow-brand/20 transition-colors hover:bg-brand-dark"
+                  >
+                    Listen to the episode →
+                  </a>
+                  <a
+                    href="/pricing"
+                    className="inline-flex items-center justify-center rounded-xl border-2 border-brand-light bg-white px-5 py-3 font-semibold text-brand-dark transition-colors hover:border-brand hover:bg-[#F3F0F8]"
+                  >
+                    Calculate your price
+                  </a>
+                </div>
+                <a href="/blog/can-ai-really-translate-your-book" className="mt-5 inline-flex text-sm font-semibold text-brand-dark hover:text-brand transition-colors">
+                  Prefer to read? See the key takeaways →
                 </a>
               </div>
             </div>
