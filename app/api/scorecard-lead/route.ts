@@ -75,12 +75,23 @@ export async function POST(request: NextRequest) {
           name: fullName,
           genre,
           source: 'Website – Language Scorecard',
-          utmCampaign: text(body.utmCampaign) || 'language_scorecard',
+          utmSource: text(body.utmSource) || 'direct',
         })
         marketingSynced = true
+        await db.from('scorecard_leads').update({
+          mailerlite_sync_status: 'synced',
+          mailerlite_synced_at: now,
+          mailerlite_sync_error: null,
+          updated_at: now,
+        }).eq('id', leadId)
       } catch (error) {
         // The requested resource must still be delivered if the marketing sync is temporarily unavailable.
         console.error('MailerLite scorecard sync failed:', error)
+        await db.from('scorecard_leads').update({
+          mailerlite_sync_status: 'failed',
+          mailerlite_sync_error: error instanceof Error ? error.message.slice(0, 500) : 'Unknown sync error',
+          updated_at: now,
+        }).eq('id', leadId)
       }
     }
 

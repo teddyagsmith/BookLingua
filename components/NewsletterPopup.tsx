@@ -56,10 +56,18 @@ export default function NewsletterPopup({
 
     setStatus('loading')
     try {
+      const params = new URLSearchParams(window.location.search)
       const res = await fetch('/api/subscribe', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, source }),
+        body: JSON.stringify({
+          email,
+          source,
+          utmSource: params.get('utm_source'),
+          utmMedium: params.get('utm_medium'),
+          utmCampaign: params.get('utm_campaign'),
+          utmContent: params.get('utm_content'),
+        }),
       })
 
       if (res.ok) {
