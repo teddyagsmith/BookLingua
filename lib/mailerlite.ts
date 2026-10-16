@@ -14,6 +14,7 @@ type BookLinguaSubscriber = {
   genre?: string | null
   source: string
   lifecycleStatus: 'Subscriber' | 'Lead' | 'Customer'
+  marketingConsent: boolean
   utmSource?: string | null
 }
 
@@ -43,6 +44,7 @@ export async function upsertBookLinguaSubscriber(input: BookLinguaSubscriber) {
         source_origin: input.source,
         contact_status: input.lifecycleStatus,
         campaignutm_source: input.utmSource || undefined,
+        httpsmailerlitecom_accepts_marketing: input.marketingConsent ? 1 : 0,
       },
       groups: [input.groupId],
     }),
@@ -62,6 +64,7 @@ export function addScorecardSubscriber(input: {
   name?: string | null
   genre?: string | null
   source: string
+  marketingConsent: boolean
   utmSource?: string | null
 }) {
   return upsertBookLinguaSubscriber({
@@ -80,5 +83,6 @@ export function addGeneralSubscriber(input: {
     ...input,
     groupId: MAILERLITE_GROUPS.general,
     lifecycleStatus: 'Subscriber',
+    marketingConsent: true,
   })
 }
