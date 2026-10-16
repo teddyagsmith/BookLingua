@@ -68,20 +68,19 @@ export async function POST(request: NextRequest) {
     }
 
     let marketingSynced = false
-    if (marketingConsent) {
-      try {
-        await addScorecardSubscriber({
-          email,
-          name: fullName,
-          genre,
-          source: 'Website – Language Scorecard',
-          utmCampaign: text(body.utmCampaign) || 'language_scorecard',
-        })
-        marketingSynced = true
-      } catch (error) {
-        // The requested resource must still be delivered if the marketing sync is temporarily unavailable.
-        console.error('MailerLite scorecard sync failed:', error)
-      }
+    try {
+      await addScorecardSubscriber({
+        email,
+        name: fullName,
+        genre,
+        source: 'Website – Language Scorecard',
+        marketingConsent: Boolean(existing?.marketing_consent || marketingConsent),
+        utmSource: text(body.utmSource) || 'direct',
+      })
+      marketingSynced = true
+    } catch (error) {
+      // The requested resource must still be delivered if the MailerLite sync is temporarily unavailable.
+      console.error('MailerLite scorecard sync failed:', error)
     }
 
     const firstName = fullName?.split(/\s+/)[0]
