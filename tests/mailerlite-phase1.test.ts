@@ -14,11 +14,10 @@ test('MailerLite Phase 1 uses the BookLingua groups and preserves unsubscribes',
   assert.match(client, /BOOKLINGUA_MAILERLITE_API_KEY/)
 })
 
-test('newsletter signup stores consent and attribution before syncing MailerLite', () => {
+test('newsletter signup stores locally before syncing MailerLite', () => {
   const route = read('app/api/subscribe/route.ts')
-  assert.match(route, /marketing_consent:\s*true/)
-  assert.match(route, /utm_source:/)
-  assert.match(route, /mailerlite_sync_status:\s*'pending'/)
+  assert.match(route, /from\('email_subscribers'\)/)
+  assert.match(route, /subscribed_at:\s*now/)
   assert.match(route, /addGeneralSubscriber/)
 })
 
@@ -29,13 +28,14 @@ test('scorecard marketing remains optional and its MailerLite result is recovera
   assert.match(route, /addScorecardSubscriber/)
   assert.doesNotMatch(route, /if \(marketingConsent\)\s*{\s*try/)
   assert.match(route, /marketingConsent:\s*Boolean/)
-  assert.match(route, /mailerlite_sync_status:\s*'failed'/)
+  assert.match(route, /MailerLite scorecard sync failed/)
 })
 
 test('scorecard is available immediately and also delivered by follow-up email', () => {
   const form = read('app/language-scorecard/ScorecardSignup.tsx')
   const delivery = read('app/api/scorecard-lead/route.ts')
   assert.match(form, /router\.push\('\/scorecard\?source=website_signup'\)/)
+  assert.match(form, /fbq\?\.\('track', 'Lead', \{ content_name: 'Language scorecard' \}\)/)
   assert.match(delivery, /subject:\s*'Your free BookLingua language scorecard'/)
   assert.match(delivery, /Open your scorecard/)
 })

@@ -18,24 +18,18 @@ export async function POST(req: NextRequest) {
     const normalised = email.toLowerCase().trim()
     const now = new Date().toISOString()
     const clean = (value: unknown, max = 250) => typeof value === 'string' ? value.trim().slice(0, max) || null : null
+    const attribution = [clean(utmSource), clean(utmMedium), clean(utmCampaign), clean(utmContent)].filter(Boolean).join(' / ')
+    const localSource = [clean(source) || 'unknown', attribution].filter(Boolean).join(' | ').slice(0, 500)
 
-    // Newsletter submission is an explicit marketing opt-in. Supabase retains
-    // the consent/attribution record; MailerLite manages the email relationship.
+    // Newsletter submission is an explicit marketing opt-in. Keep the durable
+    // local record in the existing hosted schema; MailerLite manages delivery.
     const { error } = await getSupabaseAdmin()
       .from('email_subscribers')
       .upsert(
         {
           email: normalised,
-          source: clean(source) || 'unknown',
+          source: localSource,
           subscribed_at: now,
-          marketing_consent: true,
-          marketing_consented_at: now,
-          utm_source: clean(utmSource),
-          utm_medium: clean(utmMedium),
-          utm_campaign: clean(utmCampaign),
-          utm_content: clean(utmContent),
-          mailerlite_sync_status: 'pending',
-          updated_at: now,
         },
         { onConflict: 'email' }
       )
@@ -53,23 +47,11 @@ export async function POST(req: NextRequest) {
       await addGeneralSubscriber({
         email: normalised,
         source: clean(source) || 'Website newsletter',
-        utmSource: clean(utmSource),
+        utmSource: attribution || clean(utmSource),
       })
-      await getSupabaseAdmin().from('email_subscribers').update({
-        mailerlite_sync_status: 'synced',
-        mailerlite_synced_at: now,
-        mailerlite_sync_error: null,
-        updated_at: now,
-      }).eq('email', normalised)
       return NextResponse.json({ success: true, marketingSynced: true })
     } catch (syncError) {
       console.error('MailerLite general subscriber sync failed:', syncError)
-      await getSupabaseAdmin().from('email_subscribers').update({
-        mailerlite_sync_status: 'failed',
-        mailerlite_sync_error: syncError instanceof Error ? syncError.message.slice(0, 500) : 'Unknown sync error',
-        updated_at: now,
-      }).eq('email', normalised)
-
       // The local consent record is safely stored. Reconciliation can retry
       // without asking the visitor to submit the form again.
       return NextResponse.json({ success: true, marketingSynced: false })
