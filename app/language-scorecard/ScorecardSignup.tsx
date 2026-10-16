@@ -44,7 +44,7 @@ export default function ScorecardSignup() {
       })
       const result = await response.json()
       if (!response.ok) throw new Error(result.error || 'Please try again.')
-      router.push('/scorecard-sent')
+      router.push('/scorecard?source=website_signup')
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Please try again.')
       setLoading(false)

@@ -32,14 +32,10 @@ test('scorecard marketing remains optional and its MailerLite result is recovera
   assert.match(route, /mailerlite_sync_status:\s*'failed'/)
 })
 
-test('scorecard is delivered by email rather than exposed immediately after signup', () => {
+test('scorecard is available immediately and also delivered by follow-up email', () => {
   const form = read('app/language-scorecard/ScorecardSignup.tsx')
-  const confirmation = read('app/scorecard-sent/page.tsx')
   const delivery = read('app/api/scorecard-lead/route.ts')
-  assert.match(form, /router\.push\('\/scorecard-sent'\)/)
-  assert.doesNotMatch(form, /router\.push\('\/scorecard[?'\)]/)
-  assert.match(confirmation, /Check your inbox/)
-  assert.doesNotMatch(confirmation, /Download the scorecard/)
+  assert.match(form, /router\.push\('\/scorecard\?source=website_signup'\)/)
   assert.match(delivery, /subject:\s*'Your free BookLingua language scorecard'/)
   assert.match(delivery, /Open your scorecard/)
 })
