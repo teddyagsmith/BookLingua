@@ -16,6 +16,10 @@ export interface BlogPost {
   keywords: string[]
   image?: string
   youtube?: string
+  faqs?: Array<{
+    question: string
+    answer: string
+  }>
   content: string
   readingTime: string
 }
@@ -56,6 +60,15 @@ export function getAllPosts(): BlogPost[] {
       keywords: Array.isArray(data.keywords) ? data.keywords : [],
       image: data.image,
       youtube: data.youtube,
+      faqs: Array.isArray(data.faqs)
+        ? data.faqs.filter(
+            (faq: unknown): faq is { question: string; answer: string } =>
+              typeof faq === 'object' &&
+              faq !== null &&
+              typeof (faq as { question?: unknown }).question === 'string' &&
+              typeof (faq as { answer?: unknown }).answer === 'string'
+          )
+        : undefined,
       content,
       readingTime: estimateReadingTime(content),
     } as BlogPost

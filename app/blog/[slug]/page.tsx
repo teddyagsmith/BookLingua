@@ -60,13 +60,16 @@ const serifFont = { fontFamily: "'EB Garamond', Georgia, serif" }
 
 const Logo = ({ size = 'md' }: { size?: 'sm' | 'md' | 'lg' }) => {
   const sizes = { sm: 120, md: 200, lg: 300 }
+  const responsiveClass = size === 'lg'
+    ? 'h-auto w-[140px] sm:w-[220px] lg:w-[300px]'
+    : 'h-auto w-auto'
   return (
     <Image
       src="/logo.png"
       alt="BookLingua"
       width={sizes[size]}
       height={sizes[size]}
-      className="object-contain"
+      className={`object-contain ${responsiveClass}`}
     />
   )
 }
@@ -118,6 +121,21 @@ export default function BlogPostPage({ params }: BlogPostPageProps) {
     },
   }
 
+  const faqJsonLd = post.faqs?.length
+    ? {
+        '@context': 'https://schema.org',
+        '@type': 'FAQPage',
+        mainEntity: post.faqs.map((faq) => ({
+          '@type': 'Question',
+          name: faq.question,
+          acceptedAnswer: {
+            '@type': 'Answer',
+            text: faq.answer,
+          },
+        })),
+      }
+    : null
+
   return (
     <div className="min-h-screen bg-cream">
       <style>{`@import url('https://fonts.googleapis.com/css2?family=EB+Garamond:ital,wght@0,400;0,500;0,600;1,400&display=swap');`}</style>
@@ -126,6 +144,12 @@ export default function BlogPostPage({ params }: BlogPostPageProps) {
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
       />
+      {faqJsonLd && (
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{ __html: JSON.stringify(faqJsonLd) }}
+        />
+      )}
 
       {/* Nav */}
       <nav className="relative z-50 flex items-center justify-between px-4 sm:px-8 py-6 max-w-7xl mx-auto">
@@ -153,8 +177,8 @@ export default function BlogPostPage({ params }: BlogPostPageProps) {
       </nav>
 
       {/* Breadcrumbs */}
-      <nav aria-label="Breadcrumb" className="max-w-3xl mx-auto px-8 pt-4 pb-2">
-        <ol className="flex items-center gap-2 text-sm text-gray-500">
+      <nav aria-label="Breadcrumb" className="max-w-3xl mx-auto overflow-hidden px-8 pt-4 pb-2">
+        <ol className="flex min-w-0 items-center gap-2 text-sm text-gray-500">
           <li>
             <Link href="/" className="hover:text-brand-dark transition-colors">
               Home
@@ -173,7 +197,7 @@ export default function BlogPostPage({ params }: BlogPostPageProps) {
             </Link>
           </li>
           <li>→</li>
-          <li aria-current="page" className="text-gray-700 font-medium truncate">
+          <li aria-current="page" className="min-w-0 truncate text-gray-700 font-medium">
             {post.title}
           </li>
         </ol>
@@ -200,7 +224,7 @@ export default function BlogPostPage({ params }: BlogPostPageProps) {
               height={64}
               className="h-14 w-14 flex-none rounded-full object-cover object-top sm:h-16 sm:w-16"
             />
-            <div>
+            <div className="min-w-0">
               <p className="font-semibold text-gray-900">Written by <a href="https://teddyagsmith.com" className="text-brand-dark hover:underline">{post.author}</a></p>
               <p className="mt-0.5 text-sm leading-5 text-gray-600">BookLingua founder, author and host of <em>The Publishing Performance Show</em></p>
               <div className="mt-1.5 flex flex-wrap items-center gap-2 text-xs text-gray-500">

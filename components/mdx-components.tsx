@@ -5,6 +5,7 @@ import ApplePodcast from './ApplePodcast'
 import BookLinguaProcess from './BookLinguaProcess'
 import ArticleCTA from './ArticleCTA'
 import BookLinguaPricingTable from './BookLinguaPricingTable'
+import ArticleVideo from './ArticleVideo'
 
 export const mdxComponents = {
   YouTube,
@@ -14,4 +15,5 @@ export const mdxComponents = {
   BookLinguaProcess,
   ArticleCTA,
   BookLinguaPricingTable,
+  ArticleVideo,
 }
