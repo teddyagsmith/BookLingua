@@ -220,6 +220,7 @@ export default function AffiliatesPage() {
             <Link href="/blog" className="hover:text-white">Guides</Link>
             <Link href="/affiliates" className="text-white">Affiliates</Link>
             <a href="https://www.facebook.com/BookLinguaBooks" target="_blank" rel="noopener noreferrer" className="hover:text-white">Facebook</a>
+            <a href="https://www.linkedin.com/company/booklingua/" target="_blank" rel="noopener noreferrer" className="hover:text-white">LinkedIn</a>
             <a href="mailto:hello@booklingua.io" className="hover:text-white">Contact</a>
           </div>
           <p className="text-sm">© 2026 BookLingua</p>
