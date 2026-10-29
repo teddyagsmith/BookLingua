@@ -474,7 +474,27 @@ export function buildSemanticEpub(source: Buffer, document: SemanticDocumentV2, 
     xml=xml.replace(/<(a|text)\b([^>]*)>([\s\S]*?)<\/\1>/gi,(full:string,tag:string,attrs:string,inner:string)=>{
       const visible=decodeVisibleEntities(inner.replace(/<[^>]+>/g,' ')).replace(/\s+/g,' ').trim()
       const key=normalizedEpubHeadingLabel(visible)
-      const translated=normalizedHeadings.get(key)
+      let translated=normalizedHeadings.get(key)
+      // A TOC label can be translated independently from the heading it links
+      // to and therefore choose different (but individually valid) wording.
+      // The linked content heading is authoritative for navigation: readers
+      // should see the exact same title in both places.
+      if(tag.toLowerCase()==='a'){
+        const href=decodeVisibleEntities(attrs.match(/\bhref\s*=\s*["']([^"']+)["']/i)?.[1]||'')
+        if(href&&!/^[a-z][a-z0-9+.-]*:/i.test(href)){
+          const [relativePath,fragment]=href.split('#',2)
+          if(fragment){
+            const targetPath=path.posix.normalize(path.posix.join(path.posix.dirname(entry.entryName),relativePath||path.posix.basename(entry.entryName)))
+            const target=zip.getEntry(targetPath)?.getData().toString('utf8')
+            if(target){
+              const escapedFragment=fragment.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')
+              const linked=target.match(new RegExp(`<h[1-6]\\b[^>]*\\bid=["']${escapedFragment}["'][^>]*>([\\s\\S]*?)<\\/h[1-6]>`,'i'))?.[1]
+              const linkedText=linked&&decodeVisibleEntities(linked.replace(/<[^>]+>/g,' ')).replace(/\s+/g,' ').trim()
+              if(linkedText)translated=linkedText
+            }
+          }
+        }
+      }
       const ordinal=visible.match(/^(\d+\s*[.)])\s+/)?.[1]
       const alreadyNumbered=Boolean(ordinal&&translated?.trim().startsWith(ordinal))
       return translated?`<${tag}${attrs}>${escapeXml(ordinal&&!alreadyNumbered?`${ordinal} ${translated}`:translated)}</${tag}>`:full

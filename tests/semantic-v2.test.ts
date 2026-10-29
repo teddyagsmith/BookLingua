@@ -233,6 +233,21 @@ test('EPUB navigation treats part-heading punctuation as presentation only',()=>
   assert.ok(!result.errors.some(error=>error.code==='EPUB_NAV_TEXT_MISMATCH'),JSON.stringify(result.errors))
 })
 
+test('EPUB navigation uses the exact translated heading at its linked anchor',()=>{
+  const zip:any=new AdmZip();zip.addFile('mimetype',Buffer.from('application/epub+zip'));zip.getEntry('mimetype').header.method=0
+  zip.addFile('META-INF/container.xml',Buffer.from('<container><rootfiles><rootfile full-path="OPS/book.opf"/></rootfiles></container>'))
+  zip.addFile('OPS/book.opf',Buffer.from('<package><metadata xmlns:dc="http://purl.org/dc/elements/1.1/"><dc:title>Book</dc:title><dc:language>en</dc:language></metadata><manifest><item id="b" href="b.xhtml" media-type="application/xhtml+xml"/><item id="n" href="nav.xhtml" media-type="application/xhtml+xml" properties="nav"/></manifest><spine><itemref idref="b"/></spine></package>'))
+  zip.addFile('OPS/b.xhtml',Buffer.from('<html><body><h1 id="part-two">PART II SOURCE HEADING</h1><p>Body.</p></body></html>'))
+  zip.addFile('OPS/nav.xhtml',Buffer.from('<html><body><nav><ol><li><a href="b.xhtml#part-two">PART II ALTERNATE SOURCE LABEL</a></li></ol></nav></body></html>'))
+  const document=parseSemanticEpub(zip.toBuffer(),'hash')
+  document.nodes[0].translatedText='TEIL II KANONISCHE ÜBERSCHRIFT'
+  document.nodes[1].translatedText='Text.'
+  const output:any=new AdmZip(buildSemanticEpub(zip.toBuffer(),document,undefined,'de','Autor'))
+  const nav=output.getEntry('OPS/nav.xhtml').getData().toString()
+  assert.match(nav,/TEIL II KANONISCHE ÜBERSCHRIFT/)
+  assert.doesNotMatch(nav,/PART II ALTERNATE SOURCE LABEL/)
+})
+
 test('customer gate blocks double-escaped visible entities',()=>{
   const doc:any=new AdmZip();
   return Packer.toBuffer(new Document({sections:[{children:[new Paragraph('A &quot;broken&quot; line')]}]})).then(bytes=>{
