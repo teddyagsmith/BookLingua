@@ -146,6 +146,13 @@ export function resolveBookAuthor(document:SemanticDocumentV2,fallback?:string):
 }
 
 export function decodeVisibleEntities(value:string):string{
+  const named:Record<string,string>={
+    nbsp:'\u00a0',ensp:'\u2002',emsp:'\u2003',thinsp:'\u2009',
+    ndash:'–',mdash:'—',hellip:'…',
+    lsquo:'‘',rsquo:'’',sbquo:'‚',ldquo:'“',rdquo:'”',bdquo:'„',
+    laquo:'«',raquo:'»',lsaquo:'‹',rsaquo:'›',bull:'•',middot:'·',
+    copy:'©',reg:'®',trade:'™',deg:'°',plusmn:'±',times:'×',divide:'÷',
+  }
   let previous=''
   let output=value
   for(let i=0;i<3&&output!==previous;i++){
@@ -154,6 +161,7 @@ export function decodeVisibleEntities(value:string):string{
       .replace(/&#x([0-9a-f]+);/gi,(_m,hex)=>String.fromCodePoint(parseInt(hex,16)))
       .replace(/&#(\d+);/g,(_m,decimal)=>String.fromCodePoint(parseInt(decimal,10)))
       .replace(/&(?:amp|apos|quot|lt|gt|nbsp);/g,entity=>({ '&amp;':'&','&apos;':"'",'&quot;':'"','&lt;':'<','&gt;':'>','&nbsp;':'\u00a0' }[entity]!))
+      .replace(/&([a-z]+);/gi,(entity,name)=>named[name.toLowerCase()]??entity)
   }
   return output
 }

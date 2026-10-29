@@ -7,7 +7,7 @@ import { blockText, parseSemanticDocx, parseSemanticEpub, parseSemanticTxt } fro
 import { createNodeTranslationInput, validateAndMergeNodeOutput } from '../lib/node-translation-contract'
 import { buildChapterMap, renderChapterMapCsv, renderChapterMapDocx } from '../lib/chapter-map'
 import { evaluateSemanticEligibility } from '../lib/semantic-document'
-import { buildSemanticDocx, buildSemanticEpub, buildSemanticEpubFromDocument, buildSemanticReviewDocx, consolidatedArtifactNodes, normalizeEpubImages, resolveBookAuthor } from '../lib/semantic-artifacts'
+import { buildSemanticDocx, buildSemanticEpub, buildSemanticEpubFromDocument, buildSemanticReviewDocx, consolidatedArtifactNodes, decodeVisibleEntities, normalizeEpubImages, resolveBookAuthor } from '../lib/semantic-artifacts'
 import { validateArtifact } from '../lib/artifact-validation-v2'
 import { applyVerifiedEditorialOverrides, deterministicSemanticBuildId, stripLeakedSourcePageMarkers } from '../lib/semantic-pipeline'
 import { editorialSystemPrompt } from '../lib/editorial-prompt'
@@ -26,6 +26,10 @@ function epubFixture(): Buffer {
 
 test('EPUB text extraction removes inline source page markers but preserves standalone bracketed numbers',()=>{
   assert.equal(blockText('the[183] dogs and [42] answers'),'the dogs and [42] answers')
+})
+
+test('visible HTML typography entities become real customer-facing characters',()=>{
+  assert.equal(decodeVisibleEntities('&bdquo;Hallo&hellip;&ldquo; &mdash; Caf&eacute;'),'„Hallo…“ — Caf&eacute;')
 })
 
 test('translation normalization removes leaked bracketed source page markers',()=>{
