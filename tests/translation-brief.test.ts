@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { buildTranslationBrief, renderTranslationBriefPrompt, translationBriefFingerprint } from '../lib/translation-brief'
+import { buildTranslationBrief, renderTranslationBriefPrompt, translationBriefFingerprint, verifiedExplanatoryNotesFromBrief } from '../lib/translation-brief'
 
 test('brief is versioned per language and tied to the source fingerprint', () => {
   const brief = buildTranslationBrief({
@@ -42,4 +42,18 @@ test('German briefs carry article-country and book-wide explanation guidance int
   assert.match(prompt,/first source occurrence only/)
   assert.match(prompt,/die Slowakei, die Schweiz, die Türkei, der Iran/)
   assert.match(prompt,/in der Slowakei/)
+})
+
+test('author-approved explanatory wording is wired into the deterministic book-wide gate',()=>{
+  const brief=buildTranslationBrief({language:'de',sourceManifestFingerprint:'source',approvedAt:'2026-10-29T00:00:00.000Z',decisions:[{
+    term:'FDA',decision:'footnote',targetTerm:'FDA',explanatoryNote:'US-amerikanische Lebensmittel- und Arzneimittelbehörde',
+  }]})
+  assert.deepEqual(verifiedExplanatoryNotesFromBrief(brief),[{
+    sourceTerm:'FDA',targetTerm:'FDA',canonicalNote:'US-amerikanische Lebensmittel- und Arzneimittelbehörde',
+  }])
+})
+
+test('an incomplete author-selected explanation fails before translation work starts',()=>{
+  const brief=buildTranslationBrief({language:'de',sourceManifestFingerprint:'source',approvedAt:'2026-10-29T00:00:00.000Z',decisions:[{term:'FDA',decision:'footnote'}]})
+  assert.throws(()=>verifiedExplanatoryNotesFromBrief(brief),/lacks canonical target wording: FDA/)
 })

@@ -26,6 +26,25 @@ export interface TranslationBriefV1 {
   items: TranslationBriefItem[]
 }
 
+export function verifiedExplanatoryNotesFromBrief(brief: TranslationBriefV1): Array<{
+  sourceTerm: string
+  targetTerm: string
+  canonicalNote: string
+}> {
+  return brief.items
+    .filter(item => item.authorDecision === 'footnote' || item.authorDecision === 'convert_with_note')
+    .map(item => {
+      if (!item.targetTerm?.trim() || !item.explanatoryNote?.trim()) {
+        throw new Error(`Author-selected explanatory term lacks canonical target wording: ${item.sourceTerm}`)
+      }
+      return {
+        sourceTerm: item.sourceTerm,
+        targetTerm: item.targetTerm.trim(),
+        canonicalNote: item.explanatoryNote.trim(),
+      }
+    })
+}
+
 function canonicalJson(value: unknown): string {
   if (Array.isArray(value)) return `[${value.map(canonicalJson).join(',')}]`
   if (value && typeof value === 'object') return `{${Object.entries(value as Record<string, unknown>).filter(([,item]) => item !== undefined).sort(([a],[b]) => a.localeCompare(b)).map(([key,item]) => `${JSON.stringify(key)}:${canonicalJson(item)}`).join(',')}}`

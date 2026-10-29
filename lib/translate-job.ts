@@ -9,7 +9,7 @@ import crypto from 'crypto'
 import { extractStyleProfile, storeStyleProfile, loadStylePrompt } from './style-extractor'
 import { extractCulturalTerms, storeCulturalTerms, loadGlossaryPrompt } from './cultural-term-extractor'
 import { recordTerminalFailure } from './pipeline-events'
-import { assertTranslationBriefForSource, loadTranslationBrief, renderTranslationBriefPrompt, translationBriefFingerprint } from './translation-brief'
+import { assertTranslationBriefForSource, loadTranslationBrief, renderTranslationBriefPrompt, translationBriefFingerprint, verifiedExplanatoryNotesFromBrief } from './translation-brief'
 import { HARDENED_V1_ENABLED } from './pipeline-capabilities'
 import { SEMANTIC_V2_ENABLED } from './semantic-document'
 import { deterministicSemanticBuildId, runSemanticPipeline } from './semantic-pipeline'
@@ -344,6 +344,7 @@ export const translateBook = inngest.createFunction(
             supabase: getSupabaseAdmin(), orderId, language, sourceFormat: format, source,
             title: order.book_title, authorName: order.author_name, brief, notes, buildId: deterministicSemanticBuildId(orderId,language,crypto.createHash('sha256').update(source).digest('hex'),brief.revision), allowReviewedStructure: order.semantic_structure_approved === true,
             launchPack, dualFormat: (order.upsells || []).includes('dual-format'), genre: order.genre || undefined,
+            verifiedExplanatoryNotes: verifiedExplanatoryNotesFromBrief(brief),
             translate: async (batch, context) => {
               const stage=context.pass===1?'translation':'editorial';const requestIdentity=`${orderId}:${language}:${stage}:${context.batchId}`
               return translateWithDeterministicJsonRecovery(batch, requestIdentity, async (requestBatch, recovery) => {
