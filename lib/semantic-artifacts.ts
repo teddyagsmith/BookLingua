@@ -471,6 +471,31 @@ export function buildSemanticEpub(source: Buffer, document: SemanticDocumentV2, 
       'es-es':{cover:'Portada','cover page':'Portada','table of contents':'Índice'},
     }
     if(language&&systemLabels[language])for(const [sourceLabel,targetLabel] of Object.entries(systemLabels[language]))normalizedHeadings.set(sourceLabel,targetLabel)
+    const linkedHeadingForHref=(rawHref:string):string|undefined=>{
+      const href=decodeVisibleEntities(rawHref)
+      if(!href||/^[a-z][a-z0-9+.-]*:/i.test(href))return undefined
+      const [relativePath,fragment]=href.split('#',2)
+      const targetPath=path.posix.normalize(path.posix.join(path.posix.dirname(entry.entryName),relativePath||path.posix.basename(entry.entryName)))
+      const target=zip.getEntry(targetPath)?.getData().toString('utf8')
+      if(!target)return undefined
+      let linked:string|undefined
+      if(fragment){
+        const escapedFragment=fragment.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')
+        linked=target.match(new RegExp(`<h[1-6]\\b[^>]*\\bid=["']${escapedFragment}["'][^>]*>([\\s\\S]*?)<\\/h[1-6]>`,'i'))?.[1]
+      }
+      // Split part headings in publisher EPUBs often put the anchor inside a
+      // paragraph that gets consolidated into the page's first semantic h1.
+      linked ||= target.match(/<h[1-6]\b[^>]*>([\s\S]*?)<\/h[1-6]>/i)?.[1]
+      const linkedText=linked&&decodeVisibleEntities(linked.replace(/<[^>]+>/g,' ')).replace(/\s+/g,' ').trim()
+      return linkedText||undefined
+    }
+    // EPUB 2 NCX keeps the label and destination in sibling elements, so bind
+    // each navPoint as a unit before the generic <text> translation below.
+    xml=xml.replace(/<navPoint\b[^>]*>[\s\S]*?<\/navPoint>/gi,(block:string)=>{
+      const href=block.match(/<content\b[^>]*\bsrc\s*=\s*["']([^"']+)["']/i)?.[1]
+      const linked=href&&linkedHeadingForHref(href)
+      return linked?block.replace(/<text\b([^>]*)>[\s\S]*?<\/text>/i,`<text$1>${escapeXml(linked)}</text>`):block
+    })
     xml=xml.replace(/<(a|text)\b([^>]*)>([\s\S]*?)<\/\1>/gi,(full:string,tag:string,attrs:string,inner:string)=>{
       const visible=decodeVisibleEntities(inner.replace(/<[^>]+>/g,' ')).replace(/\s+/g,' ').trim()
       const key=normalizedEpubHeadingLabel(visible)
@@ -481,19 +506,7 @@ export function buildSemanticEpub(source: Buffer, document: SemanticDocumentV2, 
       // should see the exact same title in both places.
       if(tag.toLowerCase()==='a'){
         const href=decodeVisibleEntities(attrs.match(/\bhref\s*=\s*["']([^"']+)["']/i)?.[1]||'')
-        if(href&&!/^[a-z][a-z0-9+.-]*:/i.test(href)){
-          const [relativePath,fragment]=href.split('#',2)
-          if(fragment){
-            const targetPath=path.posix.normalize(path.posix.join(path.posix.dirname(entry.entryName),relativePath||path.posix.basename(entry.entryName)))
-            const target=zip.getEntry(targetPath)?.getData().toString('utf8')
-            if(target){
-              const escapedFragment=fragment.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')
-              const linked=target.match(new RegExp(`<h[1-6]\\b[^>]*\\bid=["']${escapedFragment}["'][^>]*>([\\s\\S]*?)<\\/h[1-6]>`,'i'))?.[1]
-              const linkedText=linked&&decodeVisibleEntities(linked.replace(/<[^>]+>/g,' ')).replace(/\s+/g,' ').trim()
-              if(linkedText)translated=linkedText
-            }
-          }
-        }
+        translated=linkedHeadingForHref(href)||translated
       }
       const ordinal=visible.match(/^(\d+\s*[.)])\s+/)?.[1]
       const alreadyNumbered=Boolean(ordinal&&translated?.trim().startsWith(ordinal))
