@@ -464,8 +464,13 @@ export function buildSemanticEpub(source: Buffer, document: SemanticDocumentV2, 
       const canonical=canonicalHeadings.get(normalizedEpubHeadingLabel(node.sourceText))
       if(canonical&&node.translatedText)normalizedHeadings.set(normalizedEpubHeadingLabel(node.translatedText),canonical)
     }
-    const systemLabels:Record<string,{cover:string;toc:string}>={'pt-br':{cover:'Capa',toc:'Sumário'},de:{cover:'Umschlag',toc:'Inhaltsverzeichnis'},fr:{cover:'Couverture',toc:'Table des matières'},'es-es':{cover:'Portada',toc:'Índice'}}
-    if(language&&systemLabels[language]){normalizedHeadings.set('cover',systemLabels[language].cover);normalizedHeadings.set('table of contents',systemLabels[language].toc)}
+    const systemLabels:Record<string,Record<string,string>>={
+      'pt-br':{cover:'Capa','cover page':'Capa','table of contents':'Sumário'},
+      de:{cover:'Umschlag','cover page':'Umschlag','title page':'Titelseite','copyright page':'Impressum','free resources for you':'Kostenlose Ressourcen für Sie',"author's note and disclaimer":'Anmerkung des Autors und Haftungsausschluss','table of contents':'Inhaltsverzeichnis'},
+      fr:{cover:'Couverture','cover page':'Couverture','table of contents':'Table des matières'},
+      'es-es':{cover:'Portada','cover page':'Portada','table of contents':'Índice'},
+    }
+    if(language&&systemLabels[language])for(const [sourceLabel,targetLabel] of Object.entries(systemLabels[language]))normalizedHeadings.set(sourceLabel,targetLabel)
     xml=xml.replace(/<(a|text)\b([^>]*)>([\s\S]*?)<\/\1>/gi,(full:string,tag:string,attrs:string,inner:string)=>{
       const visible=decodeVisibleEntities(inner.replace(/<[^>]+>/g,' ')).replace(/\s+/g,' ').trim()
       const key=normalizedEpubHeadingLabel(visible)
@@ -475,7 +480,7 @@ export function buildSemanticEpub(source: Buffer, document: SemanticDocumentV2, 
     })
     if(titleAuthority?.translatedValue)xml=xml.replace(/<docTitle\b([^>]*)>[\s\S]*?<\/docTitle>/i,`<docTitle$1><text>${escapeXml(titleAuthority.translatedValue)}</text></docTitle>`)
     if(titleAuthority?.translatedValue)xml=xml.replace(/<title\b([^>]*)>[\s\S]*?<\/title>/gi,`<title$1>${escapeXml(titleAuthority.translatedValue)}</title>`)
-    if(language&&systemLabels[language])xml=xml.replace(/<h([1-6])\b([^>]*)>\s*(?:Contents|Table of Contents)\s*<\/h\1>/gi,`<h$1$2>${escapeXml(systemLabels[language].toc)}</h$1>`)
+    if(language&&systemLabels[language])xml=xml.replace(/<h([1-6])\b([^>]*)>\s*(?:Contents|Table of Contents)\s*<\/h\1>/gi,`<h$1$2>${escapeXml(systemLabels[language]['table of contents'])}</h$1>`)
     zip.updateFile(entry.entryName, Buffer.from(xml))
   }
   if (titleAuthority?.translatedValue || language) for (const entry of zip.getEntries().filter((e: any) => /\.opf$/i.test(e.entryName))) {

@@ -159,7 +159,7 @@ export function validateArtifact(buffer: Buffer, kind: ArtifactKind, options: Ar
           if(navigationHeadings.length&&!headings.length)errors.push({code:'EPUB_NAV_CONTENT_UNVERIFIABLE',message:'EPUB navigation exists but no semantic content headings were found'})
           const normalizedContent=new Set(headings.map(normalizeNavigationLabel))
           const contentNumbers=new Set(chapterNumbers(headings))
-          const localizedLandmarks:Record<string,Set<string>>={'pt-br':new Set(['capa','sumário']),'de':new Set(['umschlag','inhaltsverzeichnis']),'fr':new Set(['couverture','table des matières']),'es-es':new Set(['portada','índice'])}
+          const localizedLandmarks:Record<string,Set<string>>={'pt-br':new Set(['capa','sumário']),'de':new Set(['umschlag','titelseite','impressum','kostenlose ressourcen für sie','anmerkung des autors und haftungsausschluss','inhaltsverzeichnis']),'fr':new Set(['couverture','table des matières']),'es-es':new Set(['portada','índice'])}
           const landmarks=localizedLandmarks[options.expectedLanguage||'']||new Set<string>()
           const numberedNavigation=chapterNumbers(navigationHeadings)
           // Some publisher EPUBs link "Chapter N" in nav to a content heading that
