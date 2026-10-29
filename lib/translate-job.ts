@@ -202,7 +202,7 @@ function parse4PartResponse(text: string): {
 
 export const translateBook = inngest.createFunction(
   {
-    id: 'translate-book',
+    id: 'translate-book-v2',
     retries: 3,
     // Retries and manual retriggers for one paid order must not execute model
     // work concurrently; later runs reuse the authoritative immutable cache.
