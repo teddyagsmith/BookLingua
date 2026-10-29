@@ -104,7 +104,7 @@ export function applyBookWideExplanatoryNotes(input:{
     const firstIndex=input.source.nodes.findIndex(node=>includesTerm(node.sourceText,item.sourceTerm))
     if(firstIndex<0)throw new Error(`Author-selected explanatory term is absent from source: ${item.sourceTerm}`)
     const node=nodes[firstIndex],target=node.translatedText||'',occurrences=target.split(spec.targetTerm).length-1
-    if(occurrences!==1)throw new Error(`Canonical target term must occur exactly once in first source node: ${item.sourceTerm}`)
+    if(occurrences<1)throw new Error(`Canonical target term is absent from first source node: ${item.sourceTerm}`)
     node.translatedText=target.replace(spec.targetTerm,`${spec.targetTerm} (${spec.canonicalNote.trim()})`)
   }
 

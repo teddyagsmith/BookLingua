@@ -43,6 +43,15 @@ test('a canonical note cannot be attached where its source term is absent',()=>{
   assert.throws(()=>applyBookWideExplanatoryNotes({source,target,brief:{...brief,items:[brief.items[1]]},verified:[verified[1]],removeUnexpected:false}),/Target explanatory addition absent in source/)
 })
 
+test('a repeated selected term in its first source node receives one explanation',()=>{
+  const source=document([['The FDA expects FDA approval.','']])
+  const target=document([['The FDA expects FDA approval.','Die FDA erwartet eine FDA-Zulassung.']])
+  const onlyFda:TranslationBriefV1={...brief,items:[{...brief.items[1],sourceTerm:'FDA'}]}
+  const output=applyBookWideExplanatoryNotes({source,target,brief:onlyFda,verified:[{sourceTerm:'FDA',targetTerm:'FDA',canonicalNote:'US-amerikanische Arzneimittelbehörde'}],removeUnexpected:true})
+  assert.equal(output.nodes[0].translatedText,'Die FDA (US-amerikanische Arzneimittelbehörde) erwartet eine FDA-Zulassung.')
+  assert.equal((output.nodes[0].translatedText!.match(/US-amerikanische Arzneimittelbehörde/g)||[]).length,1)
+})
+
 test('explanation contract detects brackets, paired hyphen/en/em dashes, and free-standing colon additions',()=>{
   const spans=explanatorySpans('A (bracket note). B - das heißt Schule -. C – amerikanische Schule –. D — meaning school —. Highschool: die amerikanische Oberstufe.')
   assert.deepEqual(spans.map(item=>item.style),['bracket','paired_dash','paired_dash','paired_dash','colon'])
