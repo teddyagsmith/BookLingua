@@ -345,6 +345,7 @@ export const translateBook = inngest.createFunction(
             title: order.book_title, authorName: order.author_name, brief, notes, buildId: deterministicSemanticBuildId(orderId,language,crypto.createHash('sha256').update(source).digest('hex'),brief.revision), allowReviewedStructure: order.semantic_structure_approved === true,
             launchPack, dualFormat: (order.upsells || []).includes('dual-format'), genre: order.genre || undefined,
             verifiedExplanatoryNotes: verifiedExplanatoryNotesFromBrief(brief),
+            repairUnexpectedExplanatoryBrackets: String(order.special_instructions || '').includes('[REPAIR_UNEXPECTED_EXPLANATORY_BRACKETS]'),
             translate: async (batch, context) => {
               const stage=context.pass===1?'translation':'editorial';const requestIdentity=`${orderId}:${language}:${stage}:${context.batchId}`
               return translateWithDeterministicJsonRecovery(batch, requestIdentity, async (requestBatch, recovery) => {
