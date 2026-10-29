@@ -38,6 +38,10 @@ test('visible numeric quote entities are decoded before German normalisation', (
   assert.equal(normalizeTypography('&#x201C;Hallo&#x201D;', 'de'), '„Hallo“')
 })
 
+test('visible named German quote entities are decoded before register validation', () => {
+  assert.equal(normalizeTypography('&bdquo;Du hältst die Geldbörse&hellip;&rdquo;', 'de'), '„Du hältst die Geldbörse…“')
+})
+
 test('normalisation leaves languages without a configured convention untouched', () => {
   assert.equal(normalizeQuotes('He said "hi".', 'ja'), 'He said "hi".')
 })

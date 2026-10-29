@@ -74,6 +74,9 @@ export function normalizeTypography(text: string, language: string): string {
       .replace(/&#x([0-9a-f]+);/gi, (_match, hex) => String.fromCodePoint(parseInt(hex, 16)))
       .replace(/&#(\d+);/g, (_match, decimal) => String.fromCodePoint(Number(decimal)))
       .replace(/&amp;/g, '&').replace(/&apos;/g, "'").replace(/&quot;/g, '"')
+      .replace(/&(?:bdquo|sbquo);/gi,'„').replace(/&(?:ldquo|rdquo);/gi,entity=>entity.toLowerCase()==='&ldquo;'?'“':'”')
+      .replace(/&(?:lsquo|rsquo);/gi,entity=>entity.toLowerCase()==='&lsquo;'?'‘':'’')
+      .replace(/&hellip;/gi,'…').replace(/&ndash;/gi,'–').replace(/&mdash;/gi,'—')
     if (next === decoded) break
     decoded = next
   }
