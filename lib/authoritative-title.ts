@@ -43,6 +43,35 @@ function isVerifiedSemanticTitle(sourceText:string,checkoutTitle:string):boolean
   return Boolean(base&&normalize(base)===checkout)
 }
 
+function words(value:string):string[]{
+  return value.match(/[A-Za-zÀ-ž0-9’'’-]+/g)||[]
+}
+
+/**
+ * Some EPUBs render the cover title as an image, leaving no standalone semantic
+ * title node. A heading such as “What people say about BOOK TITLE” can still
+ * provide title authority when at least one distinctive title token is preserved
+ * in the translation. Starting at that anchor, the title-length target span is
+ * deterministic and remains tied to an explicit source-title reference.
+ */
+function translatedTitleFromReference(document:SemanticDocumentV2,checkoutTitle:string):{nodeId:string;value:string}|null{
+  const titleWords=words(checkoutTitle)
+  if(!titleWords.length)return null
+  for(const node of document.nodes){
+    if(node.type!=='heading'||!node.translatedText?.trim()||!normalize(node.sourceText).includes(normalize(checkoutTitle)))continue
+    const targetWords=words(node.translatedText)
+    for(const sourceWord of titleWords){
+      const anchor=normalize(sourceWord)
+      if(anchor.length<4)continue
+      const start=targetWords.findIndex(word=>normalize(word)===anchor)
+      if(start<0||start+titleWords.length>targetWords.length)continue
+      const value=targetWords.slice(start,start+titleWords.length).join(' ')
+      if(normalize(value)&&normalize(value)!==normalize(checkoutTitle))return{nodeId:node.id,value}
+    }
+  }
+  return null
+}
+
 export function extractSourceMetadataTitle(source:Buffer,format:SemanticDocumentV2['sourceFormat']):{kind:TitleSourceKind;value:string}|null{
   if(format==='txt')return null
   try{
@@ -71,6 +100,11 @@ export function resolveTitleAuthority(input:{document:SemanticDocumentV2;checkou
   if(semantic?.translatedText)return{
     sourceKind:'semantic_title_node',sourceValue:cleanBookTitle(semantic.sourceText),translatedValue:semantic.translatedText.trim(),effectiveValue:semantic.translatedText.trim(),
     confidence:'verified',fallbackUsed:false,semanticNodeId:semantic.id,
+  }
+  const reference=translatedTitleFromReference(input.document,checkoutTitle)
+  if(reference)return{
+    sourceKind:'semantic_title_node',sourceValue:checkoutTitle,translatedValue:reference.value,effectiveValue:reference.value,
+    confidence:'verified',fallbackUsed:false,
   }
   const sourceValue=manuscriptTitle
   return{
