@@ -44,6 +44,16 @@ test('metadata-only EPUB preserves its title and never treats first H1 Chapter 1
   assert.match(opf,/<dc:title>Bride of the Hollow King<\/dc:title>/);assert.doesNotMatch(opf,/<dc:title>Chapitre 1<\/dc:title>/)
 })
 
+test('metadata-only EPUB derives title authority from an explicit translated title reference',()=>{
+  const input=document([{sourceText:'WHAT PEOPLE SAY ABOUT ECSTASY AS MEDICINE',translatedText:'WAS DIE LEUTE ÜBER ECSTASY ALS MEDIZIN SAGEN'}])
+  const authority=resolveTitleAuthority({document:input,checkoutTitle:'ecstasy as medicine',source:epub('ecstasy as medicine','Praise')})
+  assert.equal(authority.sourceKind,'semantic_title_node')
+  assert.equal(authority.translatedValue,'ECSTASY ALS MEDIZIN')
+  assert.equal(authority.fallbackUsed,false)
+  const applied=applyTitleAuthority(input,'ecstasy as medicine',authority)
+  assert.equal(applied.document.nodes[0].translatedText,'WAS DIE LEUTE ÜBER ECSTASY ALS MEDIZIN SAGEN')
+})
+
 test('internal upload labels are stripped from title fallback',()=>{
   assert.equal(cleanBookTitle('Updated eBook Reclaim Your Longevity'),'Reclaim Your Longevity')
   const doc=document([{sourceText:'Reclaim Your Longevity',translatedText:'Recupera tu longevidad'}])
