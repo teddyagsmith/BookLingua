@@ -91,12 +91,12 @@ function navigationLabels(xml: string): string[] {
 }
 
 function normalizeNavigationLabel(value: string): string {
-  return value.normalize('NFKC').toLocaleLowerCase().replace(/\s+/g, ' ').trim()
+  return value.normalize('NFKC').toLocaleLowerCase().replace(/[^\w\u00c0-\u024f]+/g, ' ').replace(/\s+/g, ' ').trim()
     // Some publisher TOCs present an ordinal as a separate visual line before
     // the real story heading (for example "1.\nPrologue"). The content heading
     // itself remains "Prologue", so compare the meaningful label while retaining
     // the original navigation text in the generated EPUB.
-    .replace(/^\d+\s*[.)]\s+/, '')
+    .replace(/^\d+\s+/, '')
 }
 
 function docxParagraphs(xml: string): Array<{ text: string; style: string }> {
