@@ -476,7 +476,7 @@ export function buildSemanticEpub(source: Buffer, document: SemanticDocumentV2, 
       const key=normalizedEpubHeadingLabel(visible)
       const translated=normalizedHeadings.get(key)
       const ordinal=visible.match(/^(\d+\s*[.)])\s+/)?.[1]
-      const alreadyNumbered=Boolean(ordinal&&translated.trim().startsWith(ordinal))
+      const alreadyNumbered=Boolean(ordinal&&translated?.trim().startsWith(ordinal))
       return translated?`<${tag}${attrs}>${escapeXml(ordinal&&!alreadyNumbered?`${ordinal} ${translated}`:translated)}</${tag}>`:full
     })
     if(titleAuthority?.translatedValue)xml=xml.replace(/<docTitle\b([^>]*)>[\s\S]*?<\/docTitle>/i,`<docTitle$1><text>${escapeXml(titleAuthority.translatedValue)}</text></docTitle>`)
