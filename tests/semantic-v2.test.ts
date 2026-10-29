@@ -213,6 +213,16 @@ test('EPUB navigation ordinal prefixes may resolve to unnumbered story headings'
   assert.ok(!result.errors.some(error=>error.code==='EPUB_NAV_TEXT_MISMATCH'),JSON.stringify(result.errors))
 })
 
+test('EPUB numeric navigation may resolve to localized Kapitel headings',()=>{
+  const zip:any=new AdmZip();zip.addFile('mimetype',Buffer.from('application/epub+zip'));zip.getEntry('mimetype').header.method=0
+  zip.addFile('META-INF/container.xml',Buffer.from('<container><rootfiles><rootfile full-path="OPS/book.opf"/></rootfiles></container>'))
+  zip.addFile('OPS/book.opf',Buffer.from('<package><metadata xmlns:dc="http://purl.org/dc/elements/1.1/"><dc:title>Buch</dc:title><dc:language>de</dc:language><dc:creator>Autor</dc:creator><dc:identifier>id</dc:identifier></metadata><manifest><item id="b" href="b.xhtml" media-type="application/xhtml+xml"/><item id="n" href="nav.xhtml" media-type="application/xhtml+xml" properties="nav"/></manifest><spine><itemref idref="b"/></spine></package>'))
+  zip.addFile('OPS/b.xhtml',Buffer.from('<html lang="de"><body lang="de"><h1 id="c1">Kapitel 1: Das bahnbrechende Medikament</h1><p>Text.</p></body></html>'))
+  zip.addFile('OPS/nav.xhtml',Buffer.from('<html><body><nav><ol><li><a href="b.xhtml#c1">1. Das bahnbrechende Medikament</a></li></ol></nav></body></html>'))
+  const result=validateArtifact(zip.toBuffer(),'epub',{expectedLanguage:'de',expectedCreator:'Autor'})
+  assert.ok(!result.errors.some(error=>error.code==='EPUB_NAV_TEXT_MISMATCH'),JSON.stringify(result.errors))
+})
+
 test('customer gate blocks double-escaped visible entities',()=>{
   const doc:any=new AdmZip();
   return Packer.toBuffer(new Document({sections:[{children:[new Paragraph('A &quot;broken&quot; line')]}]})).then(bytes=>{

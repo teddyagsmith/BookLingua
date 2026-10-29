@@ -167,7 +167,7 @@ export function validateArtifact(buffer: Buffer, kind: ArtifactKind, options: Ar
           // content headings to account for every numbered nav entry, the href-based
           // navigation remains useful even though text/number equality is impossible.
           const subtitleOnlyChapterHeadings=!contentNumbers.size&&numberedNavigation.length>0&&headings.length>=new Set(numberedNavigation).size
-          const unmatched=navigationHeadings.filter(value=>{const normalized=normalizeNavigationLabel(value);return!landmarks.has(normalized)&&!normalizedContent.has(normalized)&&!(subtitleOnlyChapterHeadings&&chapterNumbers([value]).length)&&!chapterNumbers([value]).some(number=>contentNumbers.has(number))})
+          const unmatched=navigationHeadings.filter(value=>{const normalized=normalizeNavigationLabel(value),ordinal=value.match(/^\s*(\d+)\s*[.)]\s+/)?.[1];return!landmarks.has(normalized)&&!normalizedContent.has(normalized)&&!(subtitleOnlyChapterHeadings&&Boolean(ordinal||chapterNumbers([value]).length))&&!(ordinal&&contentNumbers.has(ordinal))&&!chapterNumbers([value]).some(number=>contentNumbers.has(number))})
           if(headings.length&&unmatched.length)errors.push({code:'EPUB_NAV_TEXT_MISMATCH',message:`Navigation labels do not resolve to content headings: ${unmatched.slice(0,5).join(' | ')}`})
           const forbiddenEnglishNav = options.expectedLanguage === 'fr'
             ? /^(?:chapter|table of contents|cover)\b/i // "Introduction" is valid French.

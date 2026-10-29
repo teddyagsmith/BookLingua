@@ -116,9 +116,9 @@ export function consolidatedArtifactNodes(document:SemanticDocumentV2):SemanticN
   const output:SemanticNodeV2[]=[]
   for(let index=0;index<document.nodes.length;index++){
     const node=document.nodes[index]
-    if(node.type==='heading'&&/^chapter\s+(?:\d+|[ivxlcdm]+)\s*:?$/i.test(decodeVisibleEntities(node.sourceText).trim())){
+    if(node.type==='heading'&&/^(?:chapter\s+(?:\d+|[ivxlcdm]+)|part\s+[ivxlcdm]+)\s*:?$/i.test(decodeVisibleEntities(node.sourceText).trim())){
       const group=[node]
-      while((document.nodes[index+1]?.type==='heading'&&!/^chapter\s+(?:\d+|[ivxlcdm]+)\b/i.test(decodeVisibleEntities(document.nodes[index+1].sourceText).trim()))||(document.nodes[index+1]?.type==='paragraph'&&document.nodes[index+2]?.type==='heading'&&!/^chapter\s+(?:\d+|[ivxlcdm]+)\b/i.test(decodeVisibleEntities(document.nodes[index+2].sourceText).trim())&&decodeVisibleEntities(document.nodes[index+1].sourceText).trim().split(/\s+/).length<=8&&!/[.!?]$/.test(decodeVisibleEntities(document.nodes[index+1].sourceText).trim())))group.push(document.nodes[++index])
+      while((document.nodes[index+1]?.type==='heading'&&!/^(?:chapter\s+(?:\d+|[ivxlcdm]+)|part\s+[ivxlcdm]+)\b/i.test(decodeVisibleEntities(document.nodes[index+1].sourceText).trim()))||(document.nodes[index+1]?.type==='paragraph'&&document.nodes[index+2]?.type==='heading'&&!/^(?:chapter\s+(?:\d+|[ivxlcdm]+)|part\s+[ivxlcdm]+)\b/i.test(decodeVisibleEntities(document.nodes[index+2].sourceText).trim())&&decodeVisibleEntities(document.nodes[index+1].sourceText).trim().split(/\s+/).length<=8&&!/[.!?]$/.test(decodeVisibleEntities(document.nodes[index+1].sourceText).trim())))group.push(document.nodes[++index])
       output.push({...node,sourceText:joinHeadingFragments(group.map(item=>item.sourceText)),translatedText:joinHeadingFragments(group.map(item=>item.translatedText||''))})
     }else output.push(node)
   }
@@ -476,7 +476,8 @@ export function buildSemanticEpub(source: Buffer, document: SemanticDocumentV2, 
       const key=normalizedEpubHeadingLabel(visible)
       const translated=normalizedHeadings.get(key)
       const ordinal=visible.match(/^(\d+\s*[.)])\s+/)?.[1]
-      return translated?`<${tag}${attrs}>${escapeXml(ordinal?`${ordinal} ${translated}`:translated)}</${tag}>`:full
+      const alreadyNumbered=Boolean(ordinal&&translated.trim().startsWith(ordinal))
+      return translated?`<${tag}${attrs}>${escapeXml(ordinal&&!alreadyNumbered?`${ordinal} ${translated}`:translated)}</${tag}>`:full
     })
     if(titleAuthority?.translatedValue)xml=xml.replace(/<docTitle\b([^>]*)>[\s\S]*?<\/docTitle>/i,`<docTitle$1><text>${escapeXml(titleAuthority.translatedValue)}</text></docTitle>`)
     if(titleAuthority?.translatedValue)xml=xml.replace(/<title\b([^>]*)>[\s\S]*?<\/title>/gi,`<title$1>${escapeXml(titleAuthority.translatedValue)}</title>`)
