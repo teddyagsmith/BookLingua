@@ -171,14 +171,15 @@ export function deriveEditorialTranslationNotes(input: {
     if(input.authoritativeTitle&&source===normalizedExact(input.authoritativeTitle.source)&&target===normalizedExact(input.authoritativeTitle.target))continue
     decisions.push({source,target,reason:reason(source,decisions.length)})
   }
-  const existingSections = input.existing?.sections || []
   return {
     schemaVersion: TRANSLATION_NOTES_SCHEMA_VERSION,
     language: input.language,
     approach: 'The translation preserves the author’s narrative voice and semantic structure. These notes highlight representative title, terminology, dialogue, tone, and editorial decisions evidenced in the completed two-pass translation.',
     sections: [
       ...(decisions.length ? [{ id: 'editorial-decisions', title: 'Representative Editorial Decisions', entries: decisions }] : []),
-      ...existingSections.map(section => ({ ...section, id: `approved-${section.id}`, title: `Approved Instructions — ${section.title}` })),
+      // Brief sections are processing instructions, including scanner false
+      // positives, rather than exact manuscript-to-delivery evidence. Only the
+      // source-linked editorial decisions above belong in customer Notes.
     ],
   }
 }

@@ -221,6 +221,14 @@ test('translation notes are derived from real editorial changes and remain schem
   assert.deepEqual(validateCustomerTranslationNotes(notes,{sourceTexts:pass1.nodes.map((node:any)=>node.sourceText),finalText:pass2.nodes.map((node:any)=>node.translatedText).join('\n'),authoritativeSourceTitle:'Title'}),[])
 })
 
+test('translation notes do not expose scanner false positives as customer decisions', () => {
+  const pass1=document([{sourceText:'The FDA reviewed it.',translatedText:'Die FDA prüfte es.'}])
+  const pass2=structuredClone(pass1);pass2.nodes[0].translatedText='Die FDA hat es geprüft.'
+  const existing:any={schemaVersion:'1.0',language:'de',approach:'Brief',sections:[{id:'brief',title:'Instructions',entries:[{source:'SAT',target:'Ignore this scanner finding',reason:'false_positive'}]}]}
+  const notes=deriveEditorialTranslationNotes({language:'de',pass1,pass2,existing})
+  assert.ok(!notes.sections.some(section=>section.entries.some(entry=>entry.source==='SAT')))
+})
+
 test('translation notes expose author English to delivered final, route thriller reasons, and rejoin drop caps',()=>{
   const pass1=document([
     {sourceText:'I',translatedText:'W'},

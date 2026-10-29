@@ -113,6 +113,14 @@ export const PIPELINE_OUTPUT_VERSION = 'output-v14-source-page-marker-cleanup'
  export const SEMANTIC_PROMPT_SIGNATURE = `${TRANSLATION_PROMPT_VERSION}+${EDITORIAL_PROMPT_VERSION}+${PIPELINE_OUTPUT_VERSION}`
 export const SEMANTIC_BUILD_POLICY_VERSION = 'semantic-v2-review-diff-spacing-v10'
 
+export function readerRegisterNarrationText(nodes:SemanticDocumentV2['nodes']):string{
+  const genericLabels=/^(?:note|exercise|example|warning|tip|step|question|answer|summary|remember)$/i
+  const labels=nodes.map(node=>node.sourceText.match(/^([A-Za-zÀ-ÖØ-öø-ÿ][A-Za-zÀ-ÖØ-öø-ÿ .’'\-]{0,40}):\s/)?.[1]?.trim())
+  const counts=new Map<string,number>()
+  for(const label of labels)if(label&&!genericLabels.test(label))counts.set(label,(counts.get(label)||0)+1)
+  return nodes.map((node,index)=>labels[index]&&(counts.get(labels[index]!)||0)>=2?'':node.translatedText||'').join('\n')
+}
+
 export function deterministicSemanticBuildId(orderId: string, language: string, sourceHash: string, briefRevision: number, promptSignature: string = SEMANTIC_PROMPT_SIGNATURE): string {
   const hex = createHash('sha256').update(`${orderId}:${language}:${sourceHash}:${briefRevision}:${SEMANTIC_BUILD_POLICY_VERSION}:${promptSignature}`).digest('hex').slice(0, 32).split('')
   hex[12] = '5'; hex[16] = ((parseInt(hex[16], 16) & 3) | 8).toString(16)
@@ -141,7 +149,7 @@ async function persistSemantic(supabase: SupabaseClient, input: { orderId: strin
 }
 
 async function validationReport(supabase: SupabaseClient, input: { orderId: string; language: string; buildId: string; stage: string; passed: boolean; errors?: unknown[]; metrics?: object }): Promise<string> {
-  const validatorVersion = 'semantic-v3.7'
+  const validatorVersion = 'semantic-v3.9'
   const { data, error } = await supabase.from('validation_reports').insert({ order_id: input.orderId, language: input.language, build_id: input.buildId, stage: input.stage, validator_version: validatorVersion, passed: input.passed, errors: input.errors || [], metrics: input.metrics || {} }).select('id').single()
   if (error?.code === '23505') {
     const { data: existing, error: existingError } = await supabase.from('validation_reports').select('id,passed,errors,metrics').eq('order_id',input.orderId).eq('language',input.language).eq('build_id',input.buildId).eq('stage',input.stage).eq('validator_version',validatorVersion).single()
@@ -375,6 +383,7 @@ export async function runSemanticPipeline(input: SemanticPipelineInput) {
   const finalFacts=inspectDeliveredDocx(finalDocx),reviewFacts=inspectDeliveredDocx(reviewDocx)
   const deliveryFailures = [...checkDeliveredDocx(finalFacts, {
     language: input.language,
+    readerRegisterText:readerRegisterNarrationText(deliveredNodes),
     genre: input.genre,
     readerRegister,
     styles: input.sourceFormat==='docx'?{}:headingStyles,

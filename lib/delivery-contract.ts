@@ -88,6 +88,8 @@ export function inspectDeliveredDocx(buffer: Buffer): DocxFacts {
 
 export interface DeliveryExpectation {
   language: string
+  /** Narration-only text when source structure can identify transcript dialogue. */
+  readerRegisterText?: string
   genre?: string
   readerRegister: ReaderRegister
   /** Required paragraph counts per style. Structure must survive translation unchanged. */
@@ -171,7 +173,7 @@ export function checkDeliveredDocx(facts: DocxFacts, expectation: DeliveryExpect
     if(facts.germanQuotes.mixedMarks)failures.push({code:'GERMAN_MIXED_QUOTES',detail:`${facts.germanQuotes.mixedMarks} mixed German quote marks remain`})
   }
   if (languageHasReaderRegister(expectation.language)) {
-    const violations = readerRegisterViolations(stripQuotedSpeech(facts.text,expectation.language), expectation.language, expectation.readerRegister)
+    const violations = readerRegisterViolations(stripQuotedSpeech(expectation.readerRegisterText??facts.text,expectation.language), expectation.language, expectation.readerRegister)
     if (violations.length) {
       failures.push({
         code: 'READER_REGISTER',

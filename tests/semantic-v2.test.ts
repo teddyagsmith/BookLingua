@@ -9,7 +9,7 @@ import { buildChapterMap, renderChapterMapCsv, renderChapterMapDocx } from '../l
 import { evaluateSemanticEligibility } from '../lib/semantic-document'
 import { buildSemanticDocx, buildSemanticEpub, buildSemanticEpubFromDocument, buildSemanticReviewDocx, consolidatedArtifactNodes, decodeVisibleEntities, normalizeEpubImages, resolveBookAuthor } from '../lib/semantic-artifacts'
 import { validateArtifact } from '../lib/artifact-validation-v2'
-import { applyVerifiedEditorialOverrides, deterministicSemanticBuildId, stripLeakedSourcePageMarkers } from '../lib/semantic-pipeline'
+import { applyVerifiedEditorialOverrides, deterministicSemanticBuildId, readerRegisterNarrationText, stripLeakedSourcePageMarkers } from '../lib/semantic-pipeline'
 import { editorialSystemPrompt } from '../lib/editorial-prompt'
 import { semanticV2AllowedForOrder } from '../lib/semantic-canary'
 
@@ -30,6 +30,18 @@ test('EPUB text extraction removes inline source page markers but preserves stan
 
 test('visible HTML typography entities become real customer-facing characters',()=>{
   assert.equal(decodeVisibleEntities('&bdquo;Hallo&hellip;&ldquo; &mdash; Caf&eacute;'),'„Hallo…“ — Caf&eacute;')
+})
+
+test('reader-register narration excludes repeated speakers but retains instructional labels',()=>{
+  const nodes:any[]=[
+    {sourceText:'Martha: You never listen.',translatedText:'Martha: Du hörst nie zu.'},
+    {sourceText:'Martha: I mean it.',translatedText:'Martha: Ich meine es.'},
+    {sourceText:'Note: Check your habits.',translatedText:'Hinweis: Prüfe deine Gewohnheiten.'},
+    {sourceText:'Note: Continue tomorrow.',translatedText:'Hinweis: Fahre morgen fort.'},
+  ]
+  const narration=readerRegisterNarrationText(nodes)
+  assert.doesNotMatch(narration,/Du hörst/)
+  assert.match(narration,/Prüfe deine Gewohnheiten/)
 })
 
 test('translation normalization removes leaked bracketed source page markers',()=>{
