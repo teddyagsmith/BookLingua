@@ -45,6 +45,18 @@ export default function SiteFooter({ note }: { note?: ReactNode }) {
             </svg>
             LinkedIn
           </a>
+          <a
+            href="https://www.youtube.com/channel/UCg7qwkY_Tih2UlB82b3ysTg"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-2 text-gray-400 transition-colors hover:text-white"
+            aria-label="Watch BookLingua on YouTube"
+          >
+            <svg viewBox="0 0 24 24" aria-hidden="true" className="h-4 w-4 fill-current">
+              <path d="M23.5 6.19a3.02 3.02 0 0 0-2.12-2.14C19.5 3.55 12 3.55 12 3.55s-7.5 0-9.38.5A3.02 3.02 0 0 0 .5 6.19 31.5 31.5 0 0 0 0 12a31.5 31.5 0 0 0 .5 5.81 3.02 3.02 0 0 0 2.12 2.14c1.88.5 9.38.5 9.38.5s7.5 0 9.38-.5a3.02 3.02 0 0 0 2.12-2.14A31.5 31.5 0 0 0 24 12a31.5 31.5 0 0 0-.5-5.81ZM9.55 15.57V8.43L15.82 12l-6.27 3.57Z" />
+            </svg>
+            YouTube
+          </a>
         </div>
         <nav aria-label="Footer" className="mb-3 flex flex-wrap justify-center gap-x-5 gap-y-2 text-sm">
           <Link href="/manuscript-security" className="hover:text-white transition-colors">Manuscript security</Link>
