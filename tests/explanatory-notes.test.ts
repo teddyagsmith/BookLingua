@@ -43,6 +43,14 @@ test('a canonical note cannot be attached where its source term is absent',()=>{
   assert.throws(()=>applyBookWideExplanatoryNotes({source,target,brief:{...brief,items:[brief.items[1]]},verified:[verified[1]],removeUnexpected:false}),/Target explanatory addition absent in source/)
 })
 
+test('a repeated selected term in its first paragraph receives only one explanation',()=>{
+  const source=document([['The DMV reviewed the DMV application.','']])
+  const target=document([['The DMV reviewed the DMV application.','Die DMV prüfte den DMV-Antrag.']])
+  const output=applyBookWideExplanatoryNotes({source,target,brief:{...brief,items:[brief.items[1]]},verified:[verified[1]]})
+  assert.equal(output.nodes[0].translatedText,'Die DMV (US-amerikanische Kraftfahrzeugbehörde) prüfte den DMV-Antrag.')
+  assert.equal((output.nodes[0].translatedText!.match(/US-amerikanische Kraftfahrzeugbehörde/g)||[]).length,1)
+})
+
 test('explanation contract detects brackets, paired hyphen/en/em dashes, and free-standing colon additions',()=>{
   const spans=explanatorySpans('A (bracket note). B - das heißt Schule -. C – amerikanische Schule –. D — meaning school —. Highschool: die amerikanische Oberstufe.')
   assert.deepEqual(spans.map(item=>item.style),['bracket','paired_dash','paired_dash','paired_dash','colon'])

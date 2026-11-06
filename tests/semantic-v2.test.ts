@@ -3,7 +3,7 @@ import assert from 'node:assert/strict'
 import AdmZip from 'adm-zip'
 import sharp from 'sharp'
 import { Document, HeadingLevel, Packer, Paragraph } from 'docx'
-import { parseSemanticDocx, parseSemanticEpub, parseSemanticTxt } from '../lib/semantic-parser'
+import { blockText, parseSemanticDocx, parseSemanticEpub, parseSemanticTxt } from '../lib/semantic-parser'
 import { createNodeTranslationInput, validateAndMergeNodeOutput } from '../lib/node-translation-contract'
 import { buildChapterMap, renderChapterMapCsv, renderChapterMapDocx } from '../lib/chapter-map'
 import { evaluateSemanticEligibility } from '../lib/semantic-document'
@@ -318,4 +318,8 @@ test('build identity changes when output behaviour changes, not only prompts', (
   // this the completed package is returned and the delivered files never change.
   const base = deterministicSemanticBuildId('order', 'fr', 'source', 1)
   assert.notEqual(base, deterministicSemanticBuildId('order', 'fr', 'source', 1, 'translation-v1+editorial-v2+output-v3'))
+})
+
+test('EPUB parser decodes named and numeric visible entities',()=>{
+  assert.equal(blockText('Er sagte &bdquo;Hallo&ldquo;&hellip; &#x2014; gut.'),'Er sagte „Hallo“… — gut.')
 })

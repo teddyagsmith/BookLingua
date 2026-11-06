@@ -106,6 +106,11 @@ test('German romance dialogue inside low-high quotes does not violate narration 
   assert.deepEqual(checkDeliveredDocx(facts,{...expectation,genre:'Romance'}).filter(f=>f.code==='READER_REGISTER'),[])
 })
 
+test('consecutive speaker-labelled dialogue does not trigger reader register drift',()=>{
+  const facts=inspectDeliveredDocx(docx({text:'Martha: Du hörst mir nicht zu.\nJoe: Ich muss dich im Auge behalten.'}))
+  assert.deepEqual(checkDeliveredDocx(facts,{...expectation,genre:'Self-Help'}).filter(f=>f.code==='READER_REGISTER'),[])
+})
+
 test('German self-help instruction outside quotes remains a hard register failure',()=>{
   const facts=inspectDeliveredDocx(docx({text:'Beginne damit, deine Gewohnheiten zu prüfen.'}))
   const failure=checkDeliveredDocx(facts,{...expectation,genre:'Self-Help'}).find(f=>f.code==='READER_REGISTER')

@@ -91,12 +91,13 @@ function navigationLabels(xml: string): string[] {
 }
 
 function normalizeNavigationLabel(value: string): string {
-  return value.normalize('NFKC').toLocaleLowerCase().replace(/\s+/g, ' ').trim()
+  return value.normalize('NFKC').toLocaleLowerCase()
     // Some publisher TOCs present an ordinal as a separate visual line before
     // the real story heading (for example "1.\nPrologue"). The content heading
     // itself remains "Prologue", so compare the meaningful label while retaining
     // the original navigation text in the generated EPUB.
     .replace(/^\d+\s*[.)]\s+/, '')
+    .replace(/[^a-z0-9À-ɏḀ-ỿ]+/gi, ' ').replace(/\s+/g, ' ').trim()
 }
 
 function docxParagraphs(xml: string): Array<{ text: string; style: string }> {
@@ -158,8 +159,9 @@ export function validateArtifact(buffer: Buffer, kind: ArtifactKind, options: Ar
           const contentSequence = chapterNumbers(headings)
           if(navigationHeadings.length&&!headings.length)errors.push({code:'EPUB_NAV_CONTENT_UNVERIFIABLE',message:'EPUB navigation exists but no semantic content headings were found'})
           const normalizedContent=new Set(headings.map(normalizeNavigationLabel))
+          const normalizedAdjacentContent=new Set(headings.slice(0,-1).map((value,index)=>normalizeNavigationLabel(`${value} ${headings[index+1]}`)))
           const contentNumbers=new Set(chapterNumbers(headings))
-          const localizedLandmarks:Record<string,Set<string>>={'pt-br':new Set(['capa','sumário']),'de':new Set(['umschlag','inhaltsverzeichnis']),'fr':new Set(['couverture','table des matières']),'es-es':new Set(['portada','índice'])}
+          const localizedLandmarks:Record<string,Set<string>>={'pt-br':new Set(['capa','sumário']),'de':new Set(['umschlag','titelseite','impressum','kostenlose ressourcen für sie','anmerkung des autors und haftungsausschluss','inhaltsverzeichnis']),'fr':new Set(['couverture','table des matières']),'es-es':new Set(['portada','índice'])}
           const landmarks=localizedLandmarks[options.expectedLanguage||'']||new Set<string>()
           const numberedNavigation=chapterNumbers(navigationHeadings)
           // Some publisher EPUBs link "Chapter N" in nav to a content heading that
@@ -167,7 +169,7 @@ export function validateArtifact(buffer: Buffer, kind: ArtifactKind, options: Ar
           // content headings to account for every numbered nav entry, the href-based
           // navigation remains useful even though text/number equality is impossible.
           const subtitleOnlyChapterHeadings=!contentNumbers.size&&numberedNavigation.length>0&&headings.length>=new Set(numberedNavigation).size
-          const unmatched=navigationHeadings.filter(value=>{const normalized=normalizeNavigationLabel(value);return!landmarks.has(normalized)&&!normalizedContent.has(normalized)&&!(subtitleOnlyChapterHeadings&&chapterNumbers([value]).length)&&!chapterNumbers([value]).some(number=>contentNumbers.has(number))})
+          const unmatched=navigationHeadings.filter(value=>{const normalized=normalizeNavigationLabel(value);return!landmarks.has(normalized)&&!normalizedContent.has(normalized)&&!normalizedAdjacentContent.has(normalized)&&!(subtitleOnlyChapterHeadings&&chapterNumbers([value]).length)&&!chapterNumbers([value]).some(number=>contentNumbers.has(number))})
           if(headings.length&&unmatched.length)errors.push({code:'EPUB_NAV_TEXT_MISMATCH',message:`Navigation labels do not resolve to content headings: ${unmatched.slice(0,5).join(' | ')}`})
           const forbiddenEnglishNav = options.expectedLanguage === 'fr'
             ? /^(?:chapter|table of contents|cover)\b/i // "Introduction" is valid French.
