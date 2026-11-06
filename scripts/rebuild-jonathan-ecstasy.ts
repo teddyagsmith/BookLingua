@@ -55,7 +55,7 @@ async function main() {
   const translatedById = new Map(repairedDocument.nodes.map(node => [node.id, node.sourceText]))
   const pass1ById = new Map(prior.pass1.nodes.map((node: any) => [node.id, node.translatedText]))
 
-  const buildId = deterministicSemanticBuildId(ORDER_ID, LANGUAGE, sourceHash, brief.revision, `${SEMANTIC_PROMPT_SIGNATURE}+jonathan-reviewed-epub-v12`)
+  const buildId = deterministicSemanticBuildId(ORDER_ID, LANGUAGE, sourceHash, brief.revision, `${SEMANTIC_PROMPT_SIGNATURE}+jonathan-reviewed-epub-v14`)
   const notes: TranslationNotesV1 = {
     schemaVersion: '1.0', language: LANGUAGE,
     approach: 'These notes link representative English wording directly to the reviewed German wording in the delivered Final.',

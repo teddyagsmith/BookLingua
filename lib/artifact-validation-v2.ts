@@ -1,7 +1,7 @@
 import AdmZip from 'adm-zip'
 import path from 'path'
 
-export const ARTIFACT_VALIDATOR_VERSION = '1.9'
+export const ARTIFACT_VALIDATOR_VERSION = '2.0'
 export type ArtifactKind = 'epub' | 'docx'
 export interface ArtifactValidationIssue { code: string; message: string; location?: string }
 export interface ArtifactValidationResult {
@@ -10,7 +10,7 @@ export interface ArtifactValidationResult {
   passed: boolean
   errors: ArtifactValidationIssue[]
   warnings: ArtifactValidationIssue[]
-  metrics: { contentFiles: number; headings: string[]; navigationHeadings: string[]; chapterNumbers: string[]; textCharacters: number }
+  metrics: { contentFiles: number; headings: string[]; navigationHeadings: string[]; chapterNumbers: string[]; textCharacters: number; invalidSupMarkers?:number; invalidExternalLinkLabels?:number }
 }
 
 export interface ArtifactValidationOptions {
@@ -113,6 +113,7 @@ export function validateArtifact(buffer: Buffer, kind: ArtifactKind, options: Ar
   const headings: string[] = []; const navigationHeadings: string[] = []; const paragraphs: string[] = []; const allText: string[] = []
   let doubleEscapedEntity = false
   let contentFiles = 0
+  let invalidSupMarkers=0,invalidExternalLinkLabels=0
   if (!buffer.length) errors.push({ code: 'EMPTY_FILE', message: 'Artifact is empty' })
   try {
     if (!errors.length) {
@@ -145,6 +146,16 @@ export function validateArtifact(buffer: Buffer, kind: ArtifactKind, options: Ar
             const entry = entryPath ? entries.get(entryPath) : undefined
             if (!item || !entry || !/xhtml|html/.test(item.mediaType)) { errors.push({ code: 'EPUB_SPINE_ITEM', message: `Unreadable spine item: ${id}` }); continue }
             const rawMarkup=entry.getData().toString('utf8');doubleEscapedEntity ||= /&amp;(?:quot|apos|amp|lt|gt|#\d+|#x[0-9a-f]+);/i.test(rawMarkup)
+            for(const sup of Array.from(rawMarkup.matchAll(/<sup\b[^>]*>([\s\S]*?)<\/sup>/gi))){
+              const marker=textFromMarkup(sup[1]).trim()
+              if(!/^\d+$/.test(marker)){invalidSupMarkers++;errors.push({code:'EPUB_SUP_MARKER_TEXT',message:`Footnote superscript must contain only a number, found: ${marker||'(empty)'}`,location:entryPath!})}
+            }
+            for(const anchor of Array.from(rawMarkup.matchAll(/<a\b([^>]*\bhref\s*=\s*(["'])((?:https?:\/\/|mailto:)[^"']+)\2[^>]*)>([\s\S]*?)<\/a>/gi))){
+              const href=decodeXml(anchor[3]),label=textFromMarkup(anchor[4]).toLocaleLowerCase()
+              let expected=''
+              try{expected=href.toLowerCase().startsWith('mailto:')?href.slice(7):new URL(href).hostname.replace(/^www\./i,'')}catch{expected=href}
+              if(!expected||!label.includes(expected.toLocaleLowerCase())){invalidExternalLinkLabels++;errors.push({code:'EPUB_EXTERNAL_LINK_LABEL',message:`External link text must contain its address, email, or domain: ${href}`,location:entryPath!})}
+            }
             const blocks = htmlBlocks(rawMarkup); contentFiles++; headings.push(...blocks.headings); paragraphs.push(...blocks.paragraphs); allText.push(blocks.text)
             if (!blocks.text) errors.push({ code: 'EMPTY_CONTENT', message: 'Spine content document is empty', location: entryPath! })
             if (chapterNumbers(blocks.headings).length && blocks.paragraphs.join(' ').trim().length < 2) errors.push({ code: 'EMPTY_CHAPTER', message: 'Chapter has no body content', location: entryPath! })
@@ -231,7 +242,7 @@ export function validateArtifact(buffer: Buffer, kind: ArtifactKind, options: Ar
     const duplicateContent = duplicateSubstantialParagraphs(paragraphs)[0]
     if (duplicateContent) errors.push({ code: 'DUPLICATE_CONTENT', message: `Substantial duplicate content detected: ${duplicateContent}…` })
   }
-  return { validatorVersion: ARTIFACT_VALIDATOR_VERSION, kind, passed: !errors.length, errors, warnings, metrics: { contentFiles, headings, navigationHeadings, chapterNumbers: numbers, textCharacters: joined.length } }
+  return { validatorVersion: ARTIFACT_VALIDATOR_VERSION, kind, passed: !errors.length, errors, warnings, metrics: { contentFiles, headings, navigationHeadings, chapterNumbers: numbers, textCharacters: joined.length,invalidSupMarkers,invalidExternalLinkLabels } }
 }
 
 export function validateExpectedChapterSequence(result: ArtifactValidationResult, expectedNumbers: string[]): ArtifactValidationResult {

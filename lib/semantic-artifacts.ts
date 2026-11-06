@@ -384,7 +384,19 @@ export async function buildFinalSemanticDocx(source:Buffer,document:SemanticDocu
 
 function replaceTextPreservingInline(inner: string, translated: string): string {
   const tokens = inner.split(/(<[^>]+>)/g)
-  const textIndexes = tokens.map((token,index) => !token.startsWith('<') && token.trim() ? index : -1).filter(index => index >= 0)
+  let inSup=false
+  const protectedSupIndexes=new Set<number>()
+  tokens.forEach((token,index)=>{
+    if(/^<sup\b/i.test(token))inSup=true
+    else if(/^<\/sup/i.test(token))inSup=false
+    else if(inSup&&!token.startsWith('<')&&token.trim())protectedSupIndexes.add(index)
+  })
+  const externalLinks=Array.from(inner.matchAll(/<a\b([^>]*\bhref\s*=\s*(["'])(https?:\/\/|mailto:)[^"']+\2[^>]*)>([\s\S]*?)<\/a>/gi)).map(match=>({
+    open:`<a${match[1]}>`,
+    href:match[1].match(/\bhref\s*=\s*(["'])([^"']+)\1/i)?.[2]||'',
+    label:decodeVisibleEntities(match[4].replace(/<[^>]+>/g,'')).trim(),
+  }))
+  const textIndexes = tokens.map((token,index) => !token.startsWith('<') && token.trim()&&!protectedSupIndexes.has(index) ? index : -1).filter(index => index >= 0)
   if (!textIndexes.length) return inner
   const weights = textIndexes.map(index => tokens[index].trim().split(/\s+/).length)
   const words = translated.trim().split(/\s+/); let offset = 0; const total = weights.reduce((a,b)=>a+b,0)
@@ -394,9 +406,21 @@ function replaceTextPreservingInline(inner: string, translated: string): string 
     const leading = tokens[tokenIndex].match(/^\s*/)?.[0] || ''; const trailing = tokens[tokenIndex].match(/\s*$/)?.[0] || ''
     tokens[tokenIndex] = `${leading}${escapeXml(words.slice(offset,offset+count).join(' '))}${trailing}`; offset += count
   })
-  return tokens.join('')
-    .replace(/<\/(?:b|strong|i|em|big|span)>(?=[A-Za-zÀ-ÖØ-öø-ÿ0-9„“])/gi,match=>`${match} `)
-    .replace(/([A-Za-zÀ-ÖØ-öø-ÿ0-9”])(?=<(?:b|strong|i|em|big|span)\b)/gi,'$1 ')
+  let output=tokens.join('')
+  for(const link of externalLinks){
+    output=output.replace(/<\/a>(?=[A-Za-zÀ-ÖØ-öø-ÿ0-9„“])/gi,'</a> ')
+    const escapedHref=link.href.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')
+    output=output.replace(new RegExp(`<a\\b([^>]*\\bhref\\s*=\\s*(["'])${escapedHref}\\2[^>]*)>([\\s\\S]*?)<\\/a>`,'i'),'$3')
+    const escapedLabel=escapeXml(link.label)
+    const parts=output.split(/(<[^>]+>)/g)
+    const labelIndex=parts.findIndex(part=>!part.startsWith('<')&&part.includes(escapedLabel))
+    if(labelIndex<0)throw new Error(`External link label is absent from translated EPUB text: ${link.label}`)
+    parts[labelIndex]=parts[labelIndex].replace(escapedLabel,`${link.open}${escapedLabel}</a>`)
+    output=parts.join('')
+  }
+  return output
+    .replace(/<\/(?:a|b|strong|i|em|big|span)>(?=[A-Za-zÀ-ÖØ-öø-ÿ0-9„“])/gi,match=>`${match} `)
+    .replace(/([A-Za-zÀ-ÖØ-öø-ÿ0-9”])(?=<(?:a|b|strong|i|em|big|span)\b)/gi,'$1 ')
 }
 
 function editionIdentifier(seed:string,language:string):string{
