@@ -27,6 +27,7 @@ import { ReaderRegister, resolveReaderRegister, readerRegisterPromptLine } from 
 import { checkDeliveredDocx, checkFinalReviewWordParity, describeFailures, inspectDeliveredDocx } from './delivery-contract'
 import { applyBookWideExplanatoryNotes, VerifiedExplanatoryNote } from './explanatory-notes'
 import { normalizeGermanTerminology } from './german-terminology'
+import { validateEpub } from './epub-validator'
 
 /** Below this share of nodes changed, an editorial pass is treated as having done nothing. */
 export const EDITORIAL_MIN_CHANGE_RATIO = 0.01
@@ -54,6 +55,8 @@ export interface SemanticPipelineInput {
   /** A separately verified title translation, used when the source title exists only in metadata. */
   verifiedTranslatedTitle?: string
   verifiedEditorialOverrides?: Array<{ nodeId:string; before:string; after:string }>
+  /** Per-order, book-wide terminology/grammar decisions with fail-closed counts. */
+  bookWideReplacements?: Array<{ before:string; after:string; expectedCount:number }>
   /** Exact author-approved wording used to make explanation state deterministic. */
   verifiedExplanatoryNotes?: VerifiedExplanatoryNote[]
   /** Narrow rebuild-only cleanup for legacy target brackets absent from the source. */
@@ -93,6 +96,16 @@ export function applyVerifiedEditorialOverrides(document:SemanticDocumentV2,over
     return{...node,translatedText:text.replace(override.before,override.after)}
   })
   if(pending.size)throw new Error(`Verified editorial override node missing: ${Array.from(pending.keys()).join(', ')}`)
+  return{...document,nodes}
+}
+
+export function applyBookWideReplacements(document:SemanticDocumentV2,rules:NonNullable<SemanticPipelineInput['bookWideReplacements']>):SemanticDocumentV2{
+  let nodes=document.nodes
+  for(const rule of rules){
+    const count=nodes.reduce((sum,node)=>sum+((node.translatedText||'').split(rule.before).length-1),0)
+    if(!rule.before||!rule.after||count!==rule.expectedCount)throw new Error(`Book-wide replacement count mismatch for "${rule.before}": found ${count}, expected ${rule.expectedCount}`)
+    nodes=nodes.map(node=>({...node,translatedText:node.translatedText?.split(rule.before).join(rule.after)}))
+  }
   return{...document,nodes}
 }
 
@@ -177,6 +190,11 @@ async function storeValidated(input: SemanticPipelineInput, buildId: string, typ
     validationStatus: existing.validation_status, validationReportId: existing.validation_report_id || undefined,
   }
   const result = kind ? validateArtifact(buffer, kind, { semanticDuplicateParityValidated, semanticHeadingDuplicateParityValidated: semanticDuplicateParityValidated, expectedLanguage: input.language,expectedCreator }) : { passed: buffer.length > 0, errors: buffer.length ? [] : [{ code: 'EMPTY', message: 'Artifact empty' }], metrics: {} }
+  if(kind==='epub'){
+    const checked=validateEpub(buffer)
+    ;(result.metrics as Record<string,unknown>).epubCheck={valid:checked.valid,errors:checked.errors.length,warnings:checked.warnings.length}
+    if(!checked.valid){result.passed=false;result.errors.push({code:'EPUBCHECK',message:checked.errors.concat(checked.warnings).join('; ')||'EPUBCheck failed'})}
+  }
   const reportId = await validationReport(input.supabase, { orderId: input.orderId, language: input.language, buildId, stage: `artifact:${type}`, passed: result.passed, errors: result.errors, metrics: result.metrics })
   if (!result.passed) throw new Error(`${type} validation failed: ${result.errors.map((error: any) => error.message).join('; ')}`)
   return storeImmutableArtifact({ supabase: input.supabase, orderId: input.orderId, language: input.language, buildId, type, filename, buffer, schemaVersion: 'semantic-v2', validationStatus: 'pass', validationReportId: reportId })
@@ -316,7 +334,7 @@ export async function runSemanticPipeline(input: SemanticPipelineInput) {
   // fragment (for example "Creating Your") is mistaken for a duplicate heading.
   assertSourceAwareHeadingDuplicateParity(consolidatedArtifactNodes(sourceDocument), consolidatedArtifactNodes(pass1))
   await persistSemantic(input.supabase, { orderId: input.orderId, language: input.language, buildId, pass: 'pass1', document: pass1, eligibility: eligibility.status })
-  const correctedPass2 = applyVerifiedEditorialOverrides({ ...pass1, nodes: normalizePassTypography(await runBatchedPass(input, pass1.nodes, 2), input.language) },input.verifiedEditorialOverrides||[])
+  const correctedPass2 = applyBookWideReplacements(applyVerifiedEditorialOverrides({ ...pass1, nodes: normalizePassTypography(await runBatchedPass(input, pass1.nodes, 2), input.language) },input.verifiedEditorialOverrides||[]),input.bookWideReplacements||[])
   const rawPass2 = applyBookWideExplanatoryNotes({source:sourceDocument,target:correctedPass2,brief:input.brief,verified:input.verifiedExplanatoryNotes||[],removeUnexpected:input.repairUnexpectedExplanatoryBrackets})
   let titleAuthority = resolveTitleAuthority({ document: rawPass2, checkoutTitle: input.title, source: input.source })
   const verifiedTranslatedTitle=input.verifiedTranslatedTitle?.trim()
@@ -365,6 +383,7 @@ export async function runSemanticPipeline(input: SemanticPipelineInput) {
   const reviewDocx=await buildSemanticReviewDocx(pass1, pass2, titleAuthority.effectiveValue)
   await storeValidated(input, buildId, 'review_docx', `${input.title} - ${input.language} - Review.docx`, reviewDocx, 'docx', true)
   const bookAuthor=resolveBookAuthor(pass2,input.authorName)
+  if(input.authorName?.trim()&&bookAuthor!==input.authorName.trim())throw new Error(`Author contract failed: expected ${input.authorName.trim()}, received ${bookAuthor||'(missing)'}`)
   if (input.sourceFormat === 'epub' || input.dualFormat) await storeValidated(input, buildId, 'final_epub', `${input.title} - ${input.language} - Final.epub`, input.sourceFormat === 'epub' ? buildSemanticEpub(await normalizeEpubImages(input.source), pass2, titleAuthority, input.language,bookAuthor,input.orderId) : buildSemanticEpubFromDocument(pass2, titleAuthority.effectiveValue,input.language,bookAuthor||'Unknown',input.orderId), 'epub', true,bookAuthor)
   // The delivery contract reads the bytes the customer will open, not the pipeline's own
   // record of what it built. Everything asserted here has shipped broken at least once.
@@ -402,7 +421,7 @@ export async function runSemanticPipeline(input: SemanticPipelineInput) {
   if (blockingDeliveryFailures.length) throw new Error(`Delivery contract failed for ${input.language}: ${describeFailures(blockingDeliveryFailures)}`)
   await storeValidated(input, buildId, 'final_docx', `${input.title} - ${input.language} - Final.docx`, finalDocx, 'docx', true)
   const map = buildChapterMap(pass2)
-  const sourceHeadingCount=consolidatedArtifactNodes(sourceDocument).filter(node=>node.type==='heading').length
+  const sourceHeadingCount=buildChapterMap(sourceDocument).length
   const minimumMapRows=Math.max(1,Math.ceil(sourceHeadingCount*0.9))
   if(map.length<minimumMapRows)throw new Error(`Chapter map validation failed: ${map.length} rows; expected at least ${minimumMapRows} from ${sourceHeadingCount} source headings`)
   if (map.some(row => row.status !== 'mapped')) throw new Error('Chapter map is incomplete')

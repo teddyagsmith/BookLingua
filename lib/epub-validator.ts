@@ -17,12 +17,14 @@ export function validateEpub(epubBuffer: Buffer): EpubCheckResult {
     writeFileSync(epubPath, epubBuffer)
 
     let output = ''
+    let commandFailed = false
     try {
       output = execSync(
         `epubcheck "${epubPath}"`,
         { encoding: 'utf-8', maxBuffer: 10 * 1024 * 1024 } as ExecSyncOptions
       ) as string
     } catch (e: any) {
+      commandFailed = true
       // epubcheck exits with non-zero code when errors are found
       const stdout = e.stdout
       if (typeof stdout === 'string') {
@@ -49,7 +51,8 @@ export function validateEpub(epubBuffer: Buffer): EpubCheckResult {
 
     // epubcheck returns exit 0 if 0 fatals, 0 errors, 0 warnings
     // We consider it valid only if truly clean (no errors, no warnings)
-    const valid = errors.length === 0 && warnings.length === 0
+    if(commandFailed&&errors.length===0)errors.push(output.trim()||'EPUBCheck could not be executed')
+    const valid = !commandFailed && errors.length === 0 && warnings.length === 0
 
     return { valid, output, errors, warnings }
   } finally {

@@ -11,7 +11,7 @@ import { renderCustomerTranslationNotesDocx } from '../lib/customer-delivery-doc
 
 const ORDER_ID = '4639f634-8c58-495b-b418-8371b018df77'
 const LANGUAGE = 'de'
-const REPAIRED_EPUB = path.resolve(process.cwd(), '../media/inbound/openclaw-staged-176290e1-6c93-4dd1-b996-3f0b9f2f5865/ecstasy_as_medicine_-_Final_-_DE---64f058db-4c65-4708-a81e-489bc51880db.epub')
+const REPAIRED_EPUB = process.env.JONATHAN_REPAIRED_EPUB || path.resolve(process.cwd(), '../media/inbound/openclaw-staged-176290e1-6c93-4dd1-b996-3f0b9f2f5865/ecstasy_as_medicine_-_Final_-_DE---64f058db-4c65-4708-a81e-489bc51880db.epub')
 
 const db = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!, { auth: { persistSession: false } })
 
@@ -55,7 +55,7 @@ async function main() {
   const translatedById = new Map(repairedDocument.nodes.map(node => [node.id, node.sourceText]))
   const pass1ById = new Map(prior.pass1.nodes.map((node: any) => [node.id, node.translatedText]))
 
-  const buildId = deterministicSemanticBuildId(ORDER_ID, LANGUAGE, sourceHash, brief.revision, `${SEMANTIC_PROMPT_SIGNATURE}+jonathan-reviewed-epub-v9`)
+  const buildId = deterministicSemanticBuildId(ORDER_ID, LANGUAGE, sourceHash, brief.revision, `${SEMANTIC_PROMPT_SIGNATURE}+jonathan-reviewed-epub-v12`)
   const notes: TranslationNotesV1 = {
     schemaVersion: '1.0', language: LANGUAGE,
     approach: 'These notes link representative English wording directly to the reviewed German wording in the delivered Final.',
@@ -83,6 +83,11 @@ async function main() {
     buildId,
     verifiedExplanatoryNotes: [{ sourceTerm: 'FDA', targetTerm: 'FDA', canonicalNote: 'US-amerikanische Lebensmittel- und Arzneimittelbehörde' }],
     repairUnexpectedExplanatoryBrackets: true,
+    bookWideReplacements: [
+      { before: 'Food and Drug Administration (FDA, die US-Arzneimittelbehörde)', after: 'Food and Drug Administration (FDA)', expectedCount: 1 },
+      { before: 'das Ihnen Spaß gemacht oder Sie sich gut fühlen lassen hat?', after: 'das Ihnen Spaß gemacht oder Ihnen ein gutes Gefühl gegeben hat?', expectedCount: 1 },
+      { before: 'Klientinnen und Klienten', after: 'Klienten', expectedCount: 8 },
+    ],
     allowReviewedStructure: true,
     translationModel: 'reviewed-epub-jonathan-v1',
     editorialModel: 'reviewed-epub-jonathan-v1',

@@ -19,16 +19,21 @@ export interface ChapterMapRow {
 export function buildChapterMap(document: SemanticDocumentV2): ChapterMapRow[] {
   const candidates = consolidatedArtifactNodes(document)
     .filter(node => node.type === 'heading')
-    .map(node => ({
+    .map(node => {
+      const sourceTitle=decodeVisibleEntities(node.sourceText).trim()
+      const major=sourceTitle.match(/^(CHAPTER\s+(\d+|[IVXLCDM]+)|PART\s+([IVXLCDM]+))\b/i)
+      if(!major)return null
+      const chapterNumber=major[2]||`Part ${major[3].toUpperCase()}`
+      return ({
       chapterId: node.id,
       headingLevel: node.headingLevel || 1,
       locationMarker: `Paragraph ${node.order + 1}`,
-      sourceChapterNumber: node.sourceChapterNumber,
-      sourceTitle: decodeVisibleEntities(node.sourceText),
-      translatedChapterNumber: node.sourceChapterNumber,
+      sourceChapterNumber: chapterNumber,
+      sourceTitle,
+      translatedChapterNumber: chapterNumber,
       translatedTitle: decodeVisibleEntities(node.translatedText || ''),
       status: node.translatedText ? 'mapped' as const : 'missing_translation' as const,
-    }))
+    })}).filter((row):row is ChapterMapRow=>Boolean(row))
   // Some source parsers associate front-matter H1s with the first numbered
   // chapter. When the same chapter number appears twice, the later heading is
   // the actual chapter boundary; omit the front-matter/title row.
@@ -56,7 +61,7 @@ export async function renderChapterMapDocx(rows: ChapterMapRow[], options: { boo
   const tableRows = [
     new TableRow({ tableHeader:true, children: ['Chapter', 'Level', 'Location', 'Original heading', 'Translated heading'].map(header) }),
     ...rows.map(row => new TableRow({ children: [
-      new TableCell({width:{size:1200,type:WidthType.DXA},margins:{left:90,right:90},children:[new Paragraph({alignment:AlignmentType.CENTER,children:[new TextRun({text:row.sourceChapterNumber||row.chapterId.replace(/^node-0*/,''),bold:true})]})]}),
+      new TableCell({width:{size:1200,type:WidthType.DXA},margins:{left:90,right:90},children:[new Paragraph({alignment:AlignmentType.CENTER,children:[new TextRun({text:row.sourceChapterNumber||'',bold:true})]})]}),
       new TableCell({width:{size:800,type:WidthType.DXA},margins:{left:70,right:70},children:[new Paragraph(`H${row.headingLevel||1}`)]}),
       new TableCell({width:{size:1700,type:WidthType.DXA},margins:{left:70,right:70},children:[new Paragraph(row.locationMarker||row.chapterId)]}),
       new TableCell({width:{size:2650,type:WidthType.DXA},margins:{left:90,right:90},children:[new Paragraph(row.sourceTitle)]}),

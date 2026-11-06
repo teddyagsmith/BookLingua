@@ -136,13 +136,14 @@ export function artifactDocxNodes(document:SemanticDocumentV2):SemanticNodeV2[]{
   return [...nodes.slice(0,tocIndex+1),...tocRows,...nodes.slice(firstBodyHeading)]
 }
 
-/** Prefer author attribution embedded in the book over a checkout/customer label. */
+/** The order author is authoritative; source heuristics are only a legacy fallback. */
 export function resolveBookAuthor(document:SemanticDocumentV2,fallback?:string):string|undefined{
+  const clean=decodeVisibleEntities(fallback||'').replace(/^prepared for\s+/i,'').trim()
+  if(clean)return clean
   const about=document.nodes.findIndex(node=>/^about the author$/i.test(decodeVisibleEntities(node.sourceText).trim()))
   const candidate=about>=0?decodeVisibleEntities(document.nodes[about+1]?.sourceText||'').trim():''
   if(candidate&&candidate.length<=120&&!/[.!?]$/.test(candidate))return candidate
-  const clean=decodeVisibleEntities(fallback||'').replace(/^prepared for\s+/i,'').trim()
-  return clean||undefined
+  return undefined
 }
 
 export function decodeVisibleEntities(value:string):string{
@@ -393,7 +394,9 @@ function replaceTextPreservingInline(inner: string, translated: string): string 
     const leading = tokens[tokenIndex].match(/^\s*/)?.[0] || ''; const trailing = tokens[tokenIndex].match(/\s*$/)?.[0] || ''
     tokens[tokenIndex] = `${leading}${escapeXml(words.slice(offset,offset+count).join(' '))}${trailing}`; offset += count
   })
-  return tokens.join('').replace(/<\/(?:b|strong|i|em)>(?=[A-Za-zÀ-ÖØ-öø-ÿ0-9])/g,match=>`${match} `)
+  return tokens.join('')
+    .replace(/<\/(?:b|strong|i|em|big|span)>(?=[A-Za-zÀ-ÖØ-öø-ÿ0-9„“])/gi,match=>`${match} `)
+    .replace(/([A-Za-zÀ-ÖØ-öø-ÿ0-9”])(?=<(?:b|strong|i|em|big|span)\b)/gi,'$1 ')
 }
 
 function editionIdentifier(seed:string,language:string):string{
@@ -432,15 +435,21 @@ export function buildSemanticEpub(source: Buffer, document: SemanticDocumentV2, 
   for (const [entryPath, nodes] of Array.from(byPath.entries())) {
     const entry = zip.getEntry(entryPath); if (!entry) throw new Error(`EPUB source entry missing: ${entryPath}`)
     let index = 0
-    let xml = entry.getData().toString('utf8').replace(/<(h[1-6]|p|li)\b([^>]*)>([\s\S]*?)<\/\1>/gi, (_full: string, tag: string, attrs: string, inner: string) => {
+    const sourceXml=entry.getData().toString('utf8')
+    const semanticBlocks=Array.from(sourceXml.matchAll(/<(h[1-6]|p|li)\b([^>]*)>([\s\S]*?)<\/\1>/gi))
+      .filter(match=>Boolean(match[3].replace(/<[^>]+>/g,' ').replace(/\s+/g,' ').trim()))
+    const anchoredBlocks=semanticBlocks.map(match=>/<a\b[^>]*(?:\bid|\bhref)\s*=/i.test(match[3]))
+    let xml = sourceXml.replace(/<(h[1-6]|p|li)\b([^>]*)>([\s\S]*?)<\/\1>/gi, (_full: string, tag: string, attrs: string, inner: string) => {
       // The canonical parser deliberately omits empty/markup-only blocks. The
       // rebuilder must apply the identical selection rule or its source-location
       // indexes diverge on real EPUBs containing empty layout paragraphs.
       if (!inner.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim()) return _full
+      const blockIndex=index
       const node = nodes[index++]
       if (!node) throw new Error(`EPUB semantic block count changed: ${entryPath}`)
-      if(!retainedIds.has(node.id))return ''
-      const artifactNode=consolidatedByFirstId.get(node.id)||node
+      const anchorProtected=anchoredBlocks[blockIndex]
+      if(!retainedIds.has(node.id)&&!anchorProtected)return ''
+      const artifactNode=(anchoredBlocks[blockIndex+1]||anchorProtected)?node:(consolidatedByFirstId.get(node.id)||node)
       const outputTag=node.type==='heading'?`h${Math.max(1,Math.min(6,node.headingLevel||1))}`:tag
       return `<${outputTag}${attrs}>${replaceTextPreservingInline(inner,artifactNode.translatedText!)}</${outputTag}>`
     })
@@ -490,6 +499,7 @@ export function buildSemanticEpub(source: Buffer, document: SemanticDocumentV2, 
       if(fragment){
         const escapedFragment=fragment.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')
         linked=target.match(new RegExp(`<h[1-6]\\b[^>]*\\bid=["']${escapedFragment}["'][^>]*>([\\s\\S]*?)<\\/h[1-6]>`,'i'))?.[1]
+        linked ||= target.match(new RegExp(`<h[1-6]\\b[^>]*>([\\s\\S]*?<a\\b[^>]*\\bid=["']${escapedFragment}["'][^>]*>[\\s\\S]*?)<\\/h[1-6]>`,'i'))?.[1]
       }
       // Split part headings in publisher EPUBs often put the anchor inside a
       // paragraph that gets consolidated into the page's first semantic h1.
@@ -525,6 +535,7 @@ export function buildSemanticEpub(source: Buffer, document: SemanticDocumentV2, 
     if(language&&systemLabels[language])xml=xml.replace(/<h([1-6])\b([^>]*)>\s*(?:Contents|Table of Contents)\s*<\/h\1>/gi,`<h$1$2>${escapeXml(systemLabels[language]['table of contents'])}</h$1>`)
     zip.updateFile(entry.entryName, Buffer.from(xml))
   }
+  let packageIdentifier:string|undefined
   if (titleAuthority?.translatedValue || language) for (const entry of zip.getEntries().filter((e: any) => /\.opf$/i.test(e.entryName))) {
     let xml = entry.getData().toString('utf8')
     if(titleAuthority?.translatedValue)xml=xml.replace(/<dc:title(?:\s[^>]*)?>[\s\S]*?<\/dc:title>/i, (match: string) => match.replace(/>[^<]*</, `>${escapeXml(titleAuthority.translatedValue!)}<`))
@@ -534,6 +545,7 @@ export function buildSemanticEpub(source: Buffer, document: SemanticDocumentV2, 
       const creator=resolveBookAuthor(document,authorName)
       if(creator)xml=/<dc:creator(?:\s[^>]*)?>/i.test(xml)?xml.replace(/<dc:creator(?:\s[^>]*)?>[\s\S]*?<\/dc:creator>/gi,`<dc:creator>${escapeXml(creator)}</dc:creator>`):xml.replace(/<metadata\b([^>]*)>/i,`<metadata$1><dc:creator>${escapeXml(creator)}</dc:creator>`)
       const identifier=editionIdentifier(editionSeed||document.sourceHash,language)
+      packageIdentifier=identifier
       xml=/<dc:identifier(?:\s[^>]*)?>/i.test(xml)?xml.replace(/<dc:identifier(?:\s[^>]*)?>[\s\S]*?<\/dc:identifier>/i,(match:string)=>match.replace(/>[^<]*</,`>${identifier}<`)):xml.replace(/<metadata\b([^>]*)>/i,`<metadata$1><dc:identifier id="bookid">${identifier}</dc:identifier>`)
     }
     const copyright=document.nodes.find(node=>/^Copyright\b/i.test(decodeVisibleEntities(node.sourceText)))?.translatedText
@@ -542,6 +554,14 @@ export function buildSemanticEpub(source: Buffer, document: SemanticDocumentV2, 
       xml=xml.replace(/<meta\b([^>]*property=["']dcterms:rights["'][^>]*)>[\s\S]*?<\/meta>/gi,`<meta$1>${escapeXml(copyright)}</meta>`)
     }
     zip.updateFile(entry.entryName, Buffer.from(xml))
+  }
+  if(language)for(const entry of zip.getEntries().filter((e:any)=>/\.ncx$/i.test(e.entryName))){
+    let xml=entry.getData().toString('utf8')
+    xml=xml.replace(/<ncx\b([^>]*)>/i,(_full:string,attrs:string)=>`<ncx${/\bxml:lang\s*=/i.test(attrs)?attrs.replace(/\bxml:lang\s*=\s*(["'])[^"']*\1/i,`xml:lang="${escapeXml(language)}"`):`${attrs} xml:lang="${escapeXml(language)}"`}>`)
+    if(packageIdentifier)xml=/<meta\b[^>]*name=["']dtb:uid["'][^>]*\/?\s*>/i.test(xml)
+      ?xml.replace(/<meta\b[^>]*name=["']dtb:uid["'][^>]*\/?\s*>/i,`<meta name="dtb:uid" content="${packageIdentifier}"/>`)
+      :xml
+    zip.updateFile(entry.entryName,Buffer.from(xml))
   }
   // Repack instead of serializing the mutated source archive directly. Some
   // Google Docs EPUBs use ZIP data descriptors; adm-zip otherwise preserves
