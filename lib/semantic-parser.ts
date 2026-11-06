@@ -79,6 +79,9 @@ export function blockText(inner: string): string {
   return inner
     .replace(/<\/?(?:br|div|p|li|tr|td|th|h[1-6]|blockquote|section|article|figure)\b[^>]*>/gi, ' ')
     .replace(/<[^>]+>/g, '')
+    .replace(/&#x([0-9a-f]+);/gi,(_match,hex)=>String.fromCodePoint(parseInt(hex,16)))
+    .replace(/&#(\d+);/g,(_match,decimal)=>String.fromCodePoint(parseInt(decimal,10)))
+    .replace(/&(amp|quot|apos|lt|gt|nbsp|ndash|mdash|hellip|rsquo|lsquo|rdquo|ldquo|bdquo);/gi,(_match,name)=>({amp:'&',quot:'"',apos:"'",lt:'<',gt:'>',nbsp:' ',ndash:'–',mdash:'—',hellip:'…',rsquo:'’',lsquo:'‘',rdquo:'”',ldquo:'“',bdquo:'„'} as Record<string,string>)[name.toLowerCase()])
     // Project Gutenberg-style page markers can sit inside prose ("the[183]
     // dogs"). They are source-layout metadata, not book content, and must not
     // reach translation or customer artifacts. Standalone bracketed numbers

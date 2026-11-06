@@ -478,7 +478,7 @@ export function buildSemanticEpub(source: Buffer, document: SemanticDocumentV2, 
       fr:{cover:'Couverture','cover page':'Couverture','table of contents':'Table des matières'},
       'es-es':{cover:'Portada','cover page':'Portada','table of contents':'Índice'},
     }
-    if(language&&systemLabels[language])for(const [sourceLabel,targetLabel] of Object.entries(systemLabels[language]))normalizedHeadings.set(sourceLabel,targetLabel)
+    if(language&&systemLabels[language])for(const [sourceLabel,targetLabel] of Object.entries(systemLabels[language]))normalizedHeadings.set(normalizedEpubHeadingLabel(sourceLabel),targetLabel)
     const linkedHeadingForHref=(rawHref:string):string|undefined=>{
       const href=decodeVisibleEntities(rawHref)
       if(!href||/^[a-z][a-z0-9+.-]*:/i.test(href))return undefined
@@ -517,7 +517,7 @@ export function buildSemanticEpub(source: Buffer, document: SemanticDocumentV2, 
         translated=linkedHeadingForHref(href)||translated
       }
       const ordinal=visible.match(/^(\d+\s*[.)])\s+/)?.[1]
-      const alreadyNumbered=Boolean(ordinal&&translated?.trim().startsWith(ordinal))
+      const alreadyNumbered=Boolean(ordinal&&translated&&new RegExp(`^(?:${ordinal.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')}|(?:Kapitel|Chapter|Chapitre|Cap[ií]tulo)\\s+${ordinal.match(/\d+/)?.[0]}\\b)`,'i').test(translated.trim()))
       return translated?`<${tag}${attrs}>${escapeXml(ordinal&&!alreadyNumbered?`${ordinal} ${translated}`:translated)}</${tag}>`:full
     })
     if(titleAuthority?.translatedValue)xml=xml.replace(/<docTitle\b([^>]*)>[\s\S]*?<\/docTitle>/i,`<docTitle$1><text>${escapeXml(titleAuthority.translatedValue)}</text></docTitle>`)

@@ -382,3 +382,7 @@ test('build identity changes when output behaviour changes, not only prompts', (
   const base = deterministicSemanticBuildId('order', 'fr', 'source', 1)
   assert.notEqual(base, deterministicSemanticBuildId('order', 'fr', 'source', 1, 'translation-v1+editorial-v2+output-v3'))
 })
+
+test('EPUB parser decodes named and numeric visible entities',()=>{
+  assert.equal(blockText('Er sagte &bdquo;Hallo&ldquo;&hellip; &#x2014; gut.'),'Er sagte „Hallo“… — gut.')
+})

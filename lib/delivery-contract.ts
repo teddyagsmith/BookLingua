@@ -123,7 +123,12 @@ export function stripQuotedSpeech(text:string,language:string):string{
     const open=style.open.trim(),close=style.close.trim()
     prose=prose.replace(new RegExp(`${escapePattern(open)}[\\s\\S]*?${escapePattern(close)}`,'g'),' ')
   }
-  return prose.replace(/^[\u2013\u2014\u2015]\s*.*$/gm,' ')
+  prose=prose.replace(/^[-\u2013\u2014\u2015]\s*.*$/gm,' ')
+  const lines=prose.split('\n')
+  const speakerLine=(value:string)=>/^[A-ZÀ-ÖØ-Þa-zà-öø-ɏ][A-Za-zÀ-ɏ.'’ -]{0,38}:\s+\S/.test(value.trim())
+  // Interview and scripted examples often use unquoted NAME: dialogue. Remove
+  // only consecutive speaker-labelled lines, not isolated author headings.
+  return lines.map((line,index)=>speakerLine(line)&&(speakerLine(lines[index-1]||'')||speakerLine(lines[index+1]||''))?' ':line).join('\n')
 }
 
 const FICTION_GENRES=/romance|fantasy|romantasy|fiction|young adult|\bya\b|children|middle grade|thriller|mystery|horror|erotic/i
