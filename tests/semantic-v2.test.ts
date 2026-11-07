@@ -128,6 +128,20 @@ test('EPUB rebuild preserves inline semantics, links, attributes and anchors', (
   assert.equal(validation.passed,true,JSON.stringify(validation.errors))
 })
 
+test('EPUB rebuild turns reviewed plain footnote numbers into the sole raised markers', () => {
+  const zip:any=new AdmZip(epubFixture())
+  zip.updateFile('OEBPS/10.xhtml',Buffer.from('<html><body><p>Source sentence.<sup><a id="fna3"></a><a href="#fn3">3</a></sup></p><p class="foot"><sup><a id="fn3"></a><a href="#fna3">3</a></sup> https://example.com</p></body></html>'))
+  const doc=parseSemanticEpub(zip.toBuffer(),'footnote-hash')
+  doc.nodes.forEach(node=>{node.translatedText=node.sourceText})
+  doc.nodes[0].translatedText='Angst und Sucht.3 Unter günstigen Bedingungen.'
+  doc.nodes[1].translatedText='3 3 https://example.com'
+  const output:any=new AdmZip(buildSemanticEpub(zip.toBuffer(),doc))
+  const xml=output.getEntry('OEBPS/10.xhtml').getData().toString()
+  assert.match(xml,/Sucht\.<sup><a id="fna3"><\/a><a href="#fn3">3<\/a><\/sup> Unter/)
+  assert.match(xml,/<p class="foot"><sup><a id="fn3"><\/a><a href="#fna3">3<\/a><\/sup>\s*https:/)
+  assert.doesNotMatch(xml,/<\/sup>\s*3\b/)
+})
+
 test('EPUB rebuild ignores parser-omitted empty layout blocks', () => {
   const source:any=new AdmZip(epubFixture())
   source.updateFile('OEBPS/10.xhtml',Buffer.from('<html><body><h1>Chapter 10</h1><p>Ten body.</p><p><span> </span></p></body></html>'))

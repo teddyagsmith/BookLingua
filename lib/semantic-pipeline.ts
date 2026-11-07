@@ -1,6 +1,7 @@
 import { createHash } from 'crypto'
 import { readFile } from 'fs/promises'
 import path from 'path'
+import AdmZip from 'adm-zip'
 import { SupabaseClient } from '@supabase/supabase-js'
 import { parseSemanticDocx, parseSemanticEpub, parseSemanticTxt } from './semantic-parser'
 import { evaluateSemanticEligibility, SemanticDocumentV2 } from './semantic-document'
@@ -18,6 +19,33 @@ import { UPLOAD_GUIDE_ASSET_PATH, UPLOAD_GUIDE_SHA256 } from './upload-guide'
 import { LaunchPackV1, validateLaunchPack, validateLaunchPackRegister } from './launch-pack-schema'
 import { normalizeLegacyLaunchPackForCustomer, renderCustomerLaunchPackDocx } from './customer-delivery-docx'
 import { BOOKLINGUA_MODEL_CONFIG } from './model-config'
+
+function assertEpubFootnotePlacementMatchesDocx(epub:Buffer,docx:Buffer):void{
+  const lastWord=(value:string)=>(value.match(/([A-Za-zÀ-ÖØ-öø-ÿ]+)[^A-Za-zÀ-ÖØ-öø-ÿ]*$/)||[])[1]||''
+  const epubMarkers=new Map<string,string>()
+  for(const entry of (new (AdmZip as any)(epub)).getEntries().filter((item:any)=>/\.x?html$/i.test(item.entryName))){
+    for(const paragraph of entry.getData().toString('utf8').match(/<p\b[^>]*>[\s\S]*?<\/p>/gi)||[]){
+      let before=''
+      for(const part of paragraph.split(/(<sup\b[^>]*>[\s\S]*?<\/sup>)/gi)){
+        if(/^<sup/i.test(part)&&/#fn\d+/i.test(part)){
+          const marker=part.replace(/<[^>]+>/g,'').trim()
+          if(/^\d+$/.test(marker))epubMarkers.set(marker,lastWord(before.replace(/<[^>]+>/g,'')))
+        }else before+=part
+      }
+    }
+  }
+  const xml=new (AdmZip as any)(docx).getEntry('word/document.xml')?.getData().toString('utf8')||''
+  const docxMarkers=new Map<string,string>()
+  for(const paragraph of xml.match(/<w:p\b[\s\S]*?<\/w:p>/g)||[]){
+    let before=''
+    for(const run of paragraph.match(/<w:r\b[\s\S]*?<\/w:r>/g)||[]){
+      const text=Array.from(run.matchAll(/<w:t\b[^>]*>([\s\S]*?)<\/w:t>/g) as IterableIterator<RegExpMatchArray>).map(match=>match[1]).join('')
+      if(/w:vertAlign\s+w:val=["']superscript["']/.test(run)&&before.trim())docxMarkers.set(text.trim(),lastWord(before))
+      before+=text
+    }
+  }
+  for(const [marker,word] of Array.from(epubMarkers.entries()))if(!word||docxMarkers.get(marker)!==word)throw new Error(`Footnote placement contract failed for ${marker}: EPUB follows ${word||'(nothing)'}, DOCX follows ${docxMarkers.get(marker)||'(nothing)'}`)
+}
 import { assertCompleteBatchCoverage, createDeterministicSemanticBatches, semanticBatchIdentity } from './semantic-batching'
 import { recordModelTelemetry } from './model-telemetry'
 import { assertSourceAwareDuplicateParity, assertSourceAwareHeadingDuplicateParity } from './semantic-duplicate-validation'
@@ -384,12 +412,18 @@ export async function runSemanticPipeline(input: SemanticPipelineInput) {
   await storeValidated(input, buildId, 'review_docx', `${input.title} - ${input.language} - Review.docx`, reviewDocx, 'docx', true)
   const bookAuthor=resolveBookAuthor(pass2,input.authorName)
   if(input.authorName?.trim()&&bookAuthor!==input.authorName.trim())throw new Error(`Author contract failed: expected ${input.authorName.trim()}, received ${bookAuthor||'(missing)'}`)
-  if (input.sourceFormat === 'epub' || input.dualFormat) await storeValidated(input, buildId, 'final_epub', `${input.title} - ${input.language} - Final.epub`, input.sourceFormat === 'epub' ? buildSemanticEpub(await normalizeEpubImages(input.source), pass2, titleAuthority, input.language,bookAuthor,input.orderId) : buildSemanticEpubFromDocument(pass2, titleAuthority.effectiveValue,input.language,bookAuthor||'Unknown',input.orderId), 'epub', true,bookAuthor)
+  const finalEpub=(input.sourceFormat === 'epub' || input.dualFormat)
+    ? (input.sourceFormat === 'epub' ? buildSemanticEpub(await normalizeEpubImages(input.source), pass2, titleAuthority, input.language,bookAuthor,input.orderId) : buildSemanticEpubFromDocument(pass2, titleAuthority.effectiveValue,input.language,bookAuthor||'Unknown',input.orderId))
+    : undefined
   // The delivery contract reads the bytes the customer will open, not the pipeline's own
   // record of what it built. Everything asserted here has shipped broken at least once.
   const finalDocx = input.reusedFinalDocx?.buffer || await buildFinalSemanticDocx(input.source, pass2, titleAuthority.effectiveValue)
   if(input.reusedFinalDocx&&createHash('sha256').update(finalDocx).digest('hex')!==input.reusedFinalDocx.expectedSha256){
     throw new Error('Reused Final DOCX hash does not match the approved immutable artifact')
+  }
+  if(finalEpub){
+    assertEpubFootnotePlacementMatchesDocx(finalEpub,finalDocx)
+    await storeValidated(input, buildId, 'final_epub', `${input.title} - ${input.language} - Final.epub`, finalEpub, 'epub', true,bookAuthor)
   }
   const deliveredNodes = artifactDocxNodes(pass2)
   const headingStyles: Record<string, number> = {}

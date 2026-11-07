@@ -10,7 +10,7 @@ export interface ArtifactValidationResult {
   passed: boolean
   errors: ArtifactValidationIssue[]
   warnings: ArtifactValidationIssue[]
-  metrics: { contentFiles: number; headings: string[]; navigationHeadings: string[]; chapterNumbers: string[]; textCharacters: number; invalidSupMarkers?:number; invalidExternalLinkLabels?:number }
+  metrics: { contentFiles: number; headings: string[]; navigationHeadings: string[]; chapterNumbers: string[]; textCharacters: number; invalidSupMarkers?:number; invalidExternalLinkLabels?:number; duplicateFootnoteNumbers?:number; adjacentPlainFootnoteDigits?:number }
 }
 
 export interface ArtifactValidationOptions {
@@ -113,7 +113,8 @@ export function validateArtifact(buffer: Buffer, kind: ArtifactKind, options: Ar
   const headings: string[] = []; const navigationHeadings: string[] = []; const paragraphs: string[] = []; const allText: string[] = []
   let doubleEscapedEntity = false
   let contentFiles = 0
-  let invalidSupMarkers=0,invalidExternalLinkLabels=0
+  let invalidSupMarkers=0,invalidExternalLinkLabels=0,adjacentPlainFootnoteDigits=0
+  const footnoteBodyCounts=new Map<string,number>(),footnoteNoteCounts=new Map<string,number>()
   if (!buffer.length) errors.push({ code: 'EMPTY_FILE', message: 'Artifact is empty' })
   try {
     if (!errors.length) {
@@ -149,6 +150,14 @@ export function validateArtifact(buffer: Buffer, kind: ArtifactKind, options: Ar
             for(const sup of Array.from(rawMarkup.matchAll(/<sup\b[^>]*>([\s\S]*?)<\/sup>/gi))){
               const marker=textFromMarkup(sup[1]).trim()
               if(!/^\d+$/.test(marker)){invalidSupMarkers++;errors.push({code:'EPUB_SUP_MARKER_TEXT',message:`Footnote superscript must contain only a number, found: ${marker||'(empty)'}`,location:entryPath!})}
+              else {
+                const body=/#fn\d+/i.test(sup[1]),note=/#fna\d+/i.test(sup[1])
+                if(body)footnoteBodyCounts.set(marker,(footnoteBodyCounts.get(marker)||0)+1)
+                if(note)footnoteNoteCounts.set(marker,(footnoteNoteCounts.get(marker)||0)+1)
+                const after=rawMarkup.slice((sup.index||0)+sup[0].length).replace(/^\s+/,'')
+                const before=rawMarkup.slice(0,sup.index||0).replace(/\s+$/,'')
+                if(new RegExp(`^${marker}(?!\\d)`).test(after)||new RegExp(`(?<!\\d)${marker}$`).test(before)){adjacentPlainFootnoteDigits++;errors.push({code:'EPUB_ADJACENT_PLAIN_FOOTNOTE_DIGIT',message:`Plain ${marker} sits next to its raised footnote marker`,location:entryPath!})}
+              }
             }
             for(const anchor of Array.from(rawMarkup.matchAll(/<a\b([^>]*\bhref\s*=\s*(["'])((?:https?:\/\/|mailto:)[^"']+)\2[^>]*)>([\s\S]*?)<\/a>/gi))){
               const href=decodeXml(anchor[3]),label=textFromMarkup(anchor[4]).toLocaleLowerCase()
@@ -224,6 +233,12 @@ export function validateArtifact(buffer: Buffer, kind: ArtifactKind, options: Ar
   } catch { errors.push({ code: 'CORRUPT_PACKAGE', message: `${kind.toUpperCase()} is not a readable package` }) }
 
   const joined = allText.join('\n')
+  const footnoteNumbers=new Set([...Array.from(footnoteBodyCounts.keys()),...Array.from(footnoteNoteCounts.keys())])
+  let duplicateFootnoteNumbers=0
+  for(const marker of Array.from(footnoteNumbers)){
+    const body=footnoteBodyCounts.get(marker)||0,note=footnoteNoteCounts.get(marker)||0
+    if(body!==1||note!==1){duplicateFootnoteNumbers++;errors.push({code:'EPUB_FOOTNOTE_NUMBER_COUNT',message:`Footnote ${marker} must appear once in the body and once in its note; found ${body} body marker(s) and ${note} note marker(s)`})}
+  }
   if(doubleEscapedEntity)errors.push({code:'DOUBLE_ESCAPED_ENTITY',message:'Customer-facing markup contains a double-escaped HTML/XML entity'})
   if(/&(?:quot|apos|amp|lt|gt|#\d+|#x[0-9a-f]+);/i.test(joined))errors.push({code:'VISIBLE_ESCAPED_ENTITY',message:'Customer-facing text contains an escaped HTML/XML entity'})
   if(/\[\d{1,4}\]/.test(joined))errors.push({code:'SOURCE_PAGE_MARKER',message:'Customer-facing body text contains a leaked bracketed source page marker'})
@@ -242,7 +257,7 @@ export function validateArtifact(buffer: Buffer, kind: ArtifactKind, options: Ar
     const duplicateContent = duplicateSubstantialParagraphs(paragraphs)[0]
     if (duplicateContent) errors.push({ code: 'DUPLICATE_CONTENT', message: `Substantial duplicate content detected: ${duplicateContent}…` })
   }
-  return { validatorVersion: ARTIFACT_VALIDATOR_VERSION, kind, passed: !errors.length, errors, warnings, metrics: { contentFiles, headings, navigationHeadings, chapterNumbers: numbers, textCharacters: joined.length,invalidSupMarkers,invalidExternalLinkLabels } }
+  return { validatorVersion: ARTIFACT_VALIDATOR_VERSION, kind, passed: !errors.length, errors, warnings, metrics: { contentFiles, headings, navigationHeadings, chapterNumbers: numbers, textCharacters: joined.length,invalidSupMarkers,invalidExternalLinkLabels,duplicateFootnoteNumbers,adjacentPlainFootnoteDigits } }
 }
 
 export function validateExpectedChapterSequence(result: ArtifactValidationResult, expectedNumbers: string[]): ArtifactValidationResult {

@@ -383,6 +383,28 @@ export async function buildFinalSemanticDocx(source:Buffer,document:SemanticDocu
 }
 
 function replaceTextPreservingInline(inner: string, translated: string): string {
+  const superscripts=Array.from(inner.matchAll(/<sup\b[^>]*>[\s\S]*?<\/sup>/gi)).map(match=>({
+    markup:match[0],
+    marker:decodeVisibleEntities(match[0].replace(/<[^>]+>/g,'')).trim(),
+    sourceOffset:decodeVisibleEntities(inner.slice(0,match.index).replace(/<[^>]+>/g,'')).length,
+  })).filter(item=>/^\d+$/.test(item.marker))
+  const sourceVisible=decodeVisibleEntities(inner.replace(/<[^>]+>/g,'')).length||1
+  const bodyMarkers=superscripts.filter(item=>item.sourceOffset>0)
+  const markerPlaceholders=new Map<string,string>()
+  for(const [index,item] of Array.from(bodyMarkers.entries())){
+    const candidates=Array.from(translated.matchAll(new RegExp(`(?<!\\d)${item.marker}(?!\\d)`,'g')))
+    if(!candidates.length)continue
+    const expected=item.sourceOffset/sourceVisible*translated.length
+    const candidate=candidates.reduce((best,current)=>Math.abs((current.index||0)-expected)<Math.abs((best.index||0)-expected)?current:best)
+    const placeholder=`FOOTNOTEMARKER${index}TOKEN`
+    translated=`${translated.slice(0,candidate.index)}${placeholder}${translated.slice((candidate.index||0)+item.marker.length)}`
+    markerPlaceholders.set(placeholder,item.markup)
+  }
+  // A note paragraph already has its raised marker at the start. Reviewed text
+  // from an earlier rebuild may also contain one or more plain copies there.
+  for(const item of superscripts.filter(item=>item.sourceOffset===0)){
+    translated=translated.replace(new RegExp(`^\\s*(?:${item.marker}\\s*)+`),'')
+  }
   const tokens = inner.split(/(<[^>]+>)/g)
   let inSup=false
   const protectedSupIndexes=new Set<number>()
@@ -407,6 +429,10 @@ function replaceTextPreservingInline(inner: string, translated: string): string 
     tokens[tokenIndex] = `${leading}${escapeXml(words.slice(offset,offset+count).join(' '))}${trailing}`; offset += count
   })
   let output=tokens.join('')
+  for(const [placeholder,markup] of Array.from(markerPlaceholders.entries())){
+    output=output.replace(markup,'')
+    output=output.replace(placeholder,markup)
+  }
   for(const link of externalLinks){
     output=output.replace(/<\/a>(?=[A-Za-zÀ-ÖØ-öø-ÿ0-9„“])/gi,'</a> ')
     const escapedHref=link.href.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')
