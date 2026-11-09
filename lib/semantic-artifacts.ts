@@ -486,7 +486,10 @@ export function buildSemanticEpub(source: Buffer, document: SemanticDocumentV2, 
     const entry = zip.getEntry(entryPath); if (!entry) throw new Error(`EPUB source entry missing: ${entryPath}`)
     let index = 0
     const sourceXml=entry.getData().toString('utf8')
-    const semanticBlocks=Array.from(sourceXml.matchAll(/<(h[1-6]|p|li)\b([^>]*)>([\s\S]*?)<\/\1>/gi))
+    const semanticBlockMatches = Array.from(
+      sourceXml.matchAll(/<(h[1-6]|p|li)\b([^>]*)>([\s\S]*?)<\/\1>/gi)
+    ) as RegExpMatchArray[]
+    const semanticBlocks = semanticBlockMatches
       .filter(match=>Boolean(match[3].replace(/<[^>]+>/g,' ').replace(/\s+/g,' ').trim()))
     const anchoredBlocks=semanticBlocks.map(match=>/<a\b[^>]*(?:\bid|\bhref)\s*=/i.test(match[3]))
     let xml = sourceXml.replace(/<(h[1-6]|p|li)\b([^>]*)>([\s\S]*?)<\/\1>/gi, (_full: string, tag: string, attrs: string, inner: string) => {
