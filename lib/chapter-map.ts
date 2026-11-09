@@ -19,7 +19,7 @@ export interface ChapterMapRow {
 export function buildChapterMap(document: SemanticDocumentV2): ChapterMapRow[] {
   const candidates = consolidatedArtifactNodes(document)
     .filter(node => node.type === 'heading')
-    .map(node => {
+    .map((node): ChapterMapRow | null => {
       const sourceTitle=decodeVisibleEntities(node.sourceText).trim()
       const major=sourceTitle.match(/^(CHAPTER\s+(\d+|[IVXLCDM]+)|PART\s+([IVXLCDM]+))\b/i)
       if(!major)return null
