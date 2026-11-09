@@ -132,7 +132,7 @@ export function applyBookWideReplacements(document:SemanticDocumentV2,rules:NonN
   for(const rule of rules){
     const count=nodes.reduce((sum,node)=>sum+((node.translatedText||'').split(rule.before).length-1),0)
     if(!rule.before||!rule.after||count!==rule.expectedCount)throw new Error(`Book-wide replacement count mismatch for "${rule.before}": found ${count}, expected ${rule.expectedCount}`)
-    nodes=nodes.map(node=>({...node,translatedText:node.translatedText?.split(rule.before).join(rule.after)}))
+    nodes=nodes.map(node=>({...node,translatedText:node.translatedText?.split(rule.before).join(rule.after) ?? null}))
   }
   return{...document,nodes}
 }
