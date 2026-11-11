@@ -1,7 +1,8 @@
-export const MODEL_PRICING_VERSION = 'anthropic-2026-08-13'
+export const MODEL_PRICING_VERSION = 'anthropic-2026-11-11'
 export const MODEL_PRICING_SOURCE = 'https://docs.anthropic.com/en/docs/about-claude/pricing'
 
 const USD_PER_MILLION: Record<string, { input: number; output: number }> = {
+  'claude-sonnet-5-5': { input: 2, output: 10 },
   'claude-sonnet-5': { input: 2, output: 10 },
   'claude-opus-5': { input: 5, output: 25 },
 }
