@@ -76,6 +76,9 @@ export async function POST(request: NextRequest) {
         source: 'Website – Language Scorecard',
         marketingConsent: Boolean(existing?.marketing_consent || marketingConsent),
         utmSource: text(body.utmSource) || 'direct',
+        utmMedium: text(body.utmMedium) || 'website',
+        utmCampaign: text(body.utmCampaign) || 'language_scorecard',
+        utmContent: text(body.utmContent),
       })
       marketingSynced = true
     } catch (error) {

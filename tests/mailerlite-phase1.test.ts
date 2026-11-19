@@ -29,6 +29,17 @@ test('scorecard marketing remains optional and its MailerLite result is recovera
   assert.doesNotMatch(route, /if \(marketingConsent\)\s*{\s*try/)
   assert.match(route, /marketingConsent:\s*Boolean/)
   assert.match(route, /MailerLite scorecard sync failed/)
+  assert.match(route, /utmMedium/)
+  assert.match(route, /utmCampaign/)
+  assert.match(route, /utmContent/)
+})
+
+test('MailerLite subscriber sync preserves all UTM attribution fields', () => {
+  const client = read('lib/mailerlite.ts')
+  assert.match(client, /utm_source: input\.utmSource/)
+  assert.match(client, /utm_medium: input\.utmMedium/)
+  assert.match(client, /utm_campaign: input\.utmCampaign/)
+  assert.match(client, /utm_content: input\.utmContent/)
 })
 
 test('scorecard is available immediately and also delivered by follow-up email', () => {

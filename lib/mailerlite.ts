@@ -16,6 +16,9 @@ type BookLinguaSubscriber = {
   lifecycleStatus: 'Subscriber' | 'Lead' | 'Customer'
   marketingConsent: boolean
   utmSource?: string | null
+  utmMedium?: string | null
+  utmCampaign?: string | null
+  utmContent?: string | null
 }
 
 function apiKey() {
@@ -43,7 +46,10 @@ export async function upsertBookLinguaSubscriber(input: BookLinguaSubscriber) {
         genre: input.genre || undefined,
         source_origin: input.source,
         contact_status: input.lifecycleStatus,
-        campaignutm_source: input.utmSource || undefined,
+        utm_source: input.utmSource || undefined,
+        utm_medium: input.utmMedium || undefined,
+        utm_campaign: input.utmCampaign || undefined,
+        utm_content: input.utmContent || undefined,
         httpsmailerlitecom_accepts_marketing: input.marketingConsent ? 1 : 0,
       },
       groups: [input.groupId],
@@ -66,6 +72,9 @@ export function addScorecardSubscriber(input: {
   source: string
   marketingConsent: boolean
   utmSource?: string | null
+  utmMedium?: string | null
+  utmCampaign?: string | null
+  utmContent?: string | null
 }) {
   return upsertBookLinguaSubscriber({
     ...input,
