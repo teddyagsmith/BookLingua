@@ -359,6 +359,9 @@ export const translateBook = inngest.createFunction(
                   const text = response.content.find((block:any) => block.type === 'text')
                   if (!text || text.type !== 'text' || !text.text.trim()) throw new RecoverableSemanticModelOutputError('Semantic model returned no JSON text')
                   const parsed=JSON.parse(text.text.replace(/^```json\s*|\s*```$/g, ''))
+                  if (parsed?.sourceFingerprint !== requestBatch.sourceFingerprint) {
+                    throw new RecoverableSemanticModelOutputError('Model output source fingerprint is stale or incorrect')
+                  }
                   await recordModelTelemetry(getSupabaseAdmin(),{orderId,language,stage,batchId:context.batchId,attempt:attempt+1,requestIdentity:recovery.requestId,
                     provider:'anthropic',modelId:response.model,providerRequestId:response.id,success:true,inputTokens:response.usage.input_tokens,
                     outputTokens:response.usage.output_tokens,cacheStatus:'write'})
