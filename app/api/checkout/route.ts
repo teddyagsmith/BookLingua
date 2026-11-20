@@ -102,6 +102,8 @@ const VOUCHER_CODES: Record<string, { discount: number; type: 'percent' | 'fixed
   'BETA95': { discount: 95, type: 'percent', description: '95% beta tester discount', oncePerEmail: true },
   'TESTDRIVE': { discount: 90, type: 'percent', description: '90% test discount', oncePerEmail: true },
   'X7KQ9M2P': { discount: 100, type: 'percent', description: '100% internal test discount', oncePerEmail: false },
+  'GIFT3M8XK7QP': { discount: 100, type: 'percent', description: 'Complimentary translation', maxUses: 1 },
+  'GIFT9V2RL6WN': { discount: 100, type: 'percent', description: 'Complimentary translation', maxUses: 1 },
 }
 
 async function validateVoucher(code: string, subtotal: number, email?: string): Promise<{ valid: boolean; discountAmount: number; error?: string }> {
@@ -115,6 +117,16 @@ async function validateVoucher(code: string, subtotal: number, email?: string): 
   // Check expiry if set
   if (voucher.expiresAt && new Date(voucher.expiresAt) < new Date()) {
     return { valid: false, discountAmount: 0, error: 'Voucher has expired' }
+  }
+
+  if (voucher.maxUses) {
+    const { count, error } = await getSupabaseAdmin().from('orders')
+      .select('id', { count: 'exact', head: true })
+      .eq('voucher_code', upperCode)
+    if (error) throw error
+    if ((count || 0) >= voucher.maxUses) {
+      return { valid: false, discountAmount: 0, error: 'This voucher has already been used' }
+    }
   }
 
   // Check once-per-email restriction
@@ -283,6 +295,7 @@ export async function POST(request: NextRequest) {
         upsells: selectedUpsells || [],
         special_instructions: specialInstructions || null,
         amount_paid: 0,
+        voucher_code: appliedVoucher,
         status: 'pending',
         ...newOrderPipelineFields(),
       }

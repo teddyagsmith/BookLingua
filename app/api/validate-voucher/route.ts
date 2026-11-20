@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 
 // Voucher codes - must match checkout/route.ts
-const VOUCHER_CODES: Record<string, { discount: number; type: 'percent' | 'fixed'; description: string; expiresAt?: string }> = {
+const VOUCHER_CODES: Record<string, { discount: number; type: 'percent' | 'fixed'; description: string; expiresAt?: string; maxUses?: number }> = {
   'LOVEWITHOUTBORDERS': { discount: 15, type: 'percent', description: '15% off International Translation Day offer', expiresAt: '2026-10-01T00:00:00Z' },
   'LAUNCH20': { discount: 20, type: 'percent', description: '20% off launch discount' },
   'FIRST50': { discount: 50, type: 'fixed', description: '$50 off first order' },
@@ -10,6 +10,8 @@ const VOUCHER_CODES: Record<string, { discount: number; type: 'percent' | 'fixed
   'BETA95': { discount: 95, type: 'percent', description: '95% beta tester discount' },
   'TESTDRIVE': { discount: 95, type: 'percent', description: '95% test discount' },
   'X7KQ9M2P': { discount: 100, type: 'percent', description: '100% internal test discount' },
+  'GIFT3M8XK7QP': { discount: 100, type: 'percent', description: 'Complimentary translation', maxUses: 1 },
+  'GIFT9V2RL6WN': { discount: 100, type: 'percent', description: 'Complimentary translation', maxUses: 1 },
 }
 
 export async function POST(request: NextRequest) {
@@ -25,6 +27,17 @@ export async function POST(request: NextRequest) {
 
     if (voucher.expiresAt && new Date(voucher.expiresAt) < new Date()) {
       return NextResponse.json({ valid: false, error: 'Voucher has expired' })
+    }
+
+    if (voucher.maxUses) {
+      const { getSupabaseAdmin } = await import('@/lib/supabase')
+      const { count, error } = await getSupabaseAdmin().from('orders')
+        .select('id', { count: 'exact', head: true })
+        .eq('voucher_code', upperCode)
+      if (error) throw error
+      if ((count || 0) >= voucher.maxUses) {
+        return NextResponse.json({ valid: false, error: 'This voucher has already been used' })
+      }
     }
     
     // Calculate discount

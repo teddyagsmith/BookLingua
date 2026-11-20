@@ -24,6 +24,7 @@ export interface TranslationBriefV1 {
   revision: number
   approvalSource: 'author_scan' | 'legacy_import' | 'admin'
   items: TranslationBriefItem[]
+  authorGlossary?: string
 }
 
 export function verifiedExplanatoryNotesFromBrief(brief: TranslationBriefV1): Array<{
@@ -75,6 +76,7 @@ export function buildTranslationBrief(input: {
   revision?: number
   approvalSource?: TranslationBriefV1['approvalSource']
   decisions: Array<Record<string, unknown>>
+  authorGlossary?: string | null
 }): TranslationBriefV1 {
   return {
     schemaVersion: TRANSLATION_BRIEF_SCHEMA_VERSION,
@@ -93,6 +95,7 @@ export function buildTranslationBrief(input: {
       targetTerm: decision.targetTerm ? String(decision.targetTerm) : undefined,
       explanatoryNote: decision.explanatoryNote || decision.explanation ? String(decision.explanatoryNote || decision.explanation) : undefined,
     })).filter(item => item.sourceTerm.length > 0),
+    ...(input.authorGlossary?.trim() ? { authorGlossary: input.authorGlossary.trim() } : {}),
   }
 }
 
@@ -109,7 +112,7 @@ export function renderTranslationBriefPrompt(brief: TranslationBriefV1): string 
   return `TRANSLATION BRIEF v${brief.schemaVersion} (${brief.language})
 Brief fingerprint: ${brief.sourceManifestFingerprint}
 Follow these author-approved decisions in this pass without exception:
-${instructions}${explanatoryPolicy}${languageGuidance}`
+${instructions}${brief.authorGlossary ? `\nAUTHOR-SUPPLIED GLOSSARY — apply these terms consistently. Where it gives a target-language equivalent, use it exactly; where it gives a note, follow the note:\n${brief.authorGlossary}\n` : ''}${explanatoryPolicy}${languageGuidance}`
 }
 
 export async function loadTranslationBrief(
@@ -151,6 +154,7 @@ export async function storeTranslationBriefs(input: {
   approvedAt: string
   approvalSource?: TranslationBriefV1['approvalSource']
   decisions: Array<Record<string, unknown>>
+  authorGlossary?: string | null
 }): Promise<void> {
   if (!input.approvedAt) throw new Error('Author approval timestamp is required')
   for (const language of input.languages) {
@@ -181,6 +185,7 @@ export function prepareTranslationBriefRows(input: {
   sourceManifestFingerprint: string
   approvedAt: string
   decisions: Array<Record<string, unknown>>
+  authorGlossary?: string | null
   approvalSource?: TranslationBriefV1['approvalSource']
 }): Array<Record<string, unknown>> {
   if (!input.approvedAt) throw new Error('Author approval timestamp is required')

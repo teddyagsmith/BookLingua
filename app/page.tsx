@@ -242,6 +242,9 @@ export default function Home() {
   const hardenedUploadRef = useRef(false)
   const [uploadComplete, setUploadComplete] = useState(false)
   const [uploadError, setUploadError] = useState('')
+  const [authorGlossaryFile, setAuthorGlossaryFile] = useState<File | null>(null)
+  const [authorGlossaryLoading, setAuthorGlossaryLoading] = useState(false)
+  const [authorGlossaryError, setAuthorGlossaryError] = useState('')
   const [scanFindings, setScanFindings] = useState<any[]>([])
   const [scanQuality, setScanQuality] = useState<any | null>(null)
   const [scanResponses, setScanResponses] = useState<Record<string, string>>({})
@@ -467,6 +470,30 @@ export default function Home() {
       setIsProcessing(false)
     }
   }, [])
+
+  const uploadAuthorGlossary = async (file: File) => {
+    if (!uploadComplete || !sessionIdRef.current || !uploadTokenRef.current) {
+      setAuthorGlossaryError('Please finish uploading your manuscript first.')
+      return
+    }
+    setAuthorGlossaryLoading(true)
+    setAuthorGlossaryError('')
+    try {
+      const form = new FormData()
+      form.append('sessionId', sessionIdRef.current)
+      form.append('uploadToken', uploadTokenRef.current)
+      form.append('file', file)
+      const response = await fetch('/api/upload-glossary', { method: 'POST', body: form })
+      const result = await response.json()
+      if (!response.ok) throw new Error(result.error || 'Glossary upload failed')
+      setAuthorGlossaryFile(file)
+    } catch (error) {
+      setAuthorGlossaryFile(null)
+      setAuthorGlossaryError(error instanceof Error ? error.message : 'Glossary upload failed')
+    } finally {
+      setAuthorGlossaryLoading(false)
+    }
+  }
 
   const runPreTranslationScan = async () => {
     if (!uploadComplete || selectedLanguages.length === 0) return
@@ -1561,6 +1588,37 @@ export default function Home() {
                         {priceCorrection} The uploaded manuscript count is authoritative and the corrected total will be shown before payment.
                       </div>
                     )}
+
+                    <div className="mb-8 rounded-2xl border border-violet-200 bg-violet-50 p-5">
+                      <div className="flex gap-3">
+                        <span className="text-xl" aria-hidden="true">📖</span>
+                        <div className="flex-1">
+                          <h3 className="font-bold text-gray-900">Have a glossary or series bible?</h3>
+                          <p className="mt-1 text-sm leading-6 text-gray-600">
+                            Attach it here and we’ll give its character names, invented terms, place names and preferred translations to your translator. For example: fantasy place names and magical terminology, character titles or nicknames, made-up words, or a series terminology list. This is especially useful for series books.
+                          </p>
+                          <p className="mt-2 text-xs text-gray-500">Optional · TXT, CSV or DOCX · up to 2 MB</p>
+                          <div className="mt-4 flex flex-wrap items-center gap-3">
+                            <label className="inline-flex cursor-pointer items-center rounded-xl border border-brand bg-white px-4 py-2 text-sm font-semibold text-brand transition hover:bg-[#F3F0F8]">
+                              {authorGlossaryLoading ? 'Attaching…' : authorGlossaryFile ? 'Replace glossary' : 'Attach glossary'}
+                              <input
+                                type="file"
+                                accept=".txt,.csv,.docx"
+                                className="sr-only"
+                                disabled={authorGlossaryLoading || !uploadComplete}
+                                onChange={(event) => {
+                                  const file = event.target.files?.[0]
+                                  if (file) void uploadAuthorGlossary(file)
+                                  event.currentTarget.value = ''
+                                }}
+                              />
+                            </label>
+                            {authorGlossaryFile && <span className="text-sm font-medium text-green-700">✓ {authorGlossaryFile.name} attached</span>}
+                          </div>
+                          {authorGlossaryError && <p className="mt-2 text-sm text-red-600">{authorGlossaryError}</p>}
+                        </div>
+                      </div>
+                    </div>
 
                     <div className="grid md:grid-cols-2 gap-6 mb-6">
                       <div>

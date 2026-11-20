@@ -13,6 +13,8 @@ interface TempUploadSource {
   source_manifest?: unknown
   glossary_decisions?: unknown
   glossary_saved_at?: string | null
+  author_glossary_text?: string | null
+  author_glossary_filename?: string | null
 }
 
 export async function linkSourceUploadToOrder(
@@ -35,6 +37,7 @@ export async function linkSourceUploadToOrder(
       sourceManifestFingerprint: manifest.sourceHash,
       approvedAt: tempUpload.glossary_saved_at,
       decisions,
+      authorGlossary: tempUpload.author_glossary_text,
     })
     const { error } = await supabase.rpc('link_hardened_source_to_order', {
       p_order_id: orderId,
