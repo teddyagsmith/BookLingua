@@ -1595,7 +1595,7 @@ export default function Home() {
                         <div className="flex-1">
                           <h3 className="font-bold text-gray-900">Have a glossary or series bible?</h3>
                           <p className="mt-1 text-sm leading-6 text-gray-600">
-                            Attach it here and we’ll give its character names, invented terms, place names and preferred translations to your translator. For example: fantasy place names and magical terminology, character titles or nicknames, made-up words, or a series terminology list. This is especially useful for series books.
+                            Attach it here and we’ll use it to keep character names, invented terms, place names and preferred translations consistent throughout your translation. For example: fantasy place names and magical terminology, character titles or nicknames, made-up words, or a series terminology list. This is especially useful for series books.
                           </p>
                           <p className="mt-2 text-xs text-gray-500">Optional · TXT, CSV or DOCX · up to 2 MB</p>
                           <div className="mt-4 flex flex-wrap items-center gap-3">
