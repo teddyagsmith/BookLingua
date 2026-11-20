@@ -62,6 +62,14 @@ test('internal upload labels are stripped from title fallback',()=>{
   assert.equal(authority.translatedValue,'Recupera tu longevidad')
 })
 
+test('a trailing checkout eBook label does not reject a translated manuscript title',()=>{
+  assert.equal(cleanBookTitle('Archery Mental Mastery eBook'),'Archery Mental Mastery')
+  const doc=document([{sourceText:'Archery Mental Mastery',translatedText:'Dominio Mental del Tiro con Arco'}])
+  const authority=resolveTitleAuthority({document:doc,checkoutTitle:'Archery Mental Mastery eBook',source:epub('Archery Mental Mastery')})
+  assert.equal(authority.sourceKind,'semantic_title_node')
+  assert.equal(authority.translatedValue,'Dominio Mental del Tiro con Arco')
+})
+
 test('manuscript title authority strips upload language labels instead of publishing them',()=>{
   assert.equal(cleanBookTitle('GERMAN Never Look Back'),'Never Look Back')
   const doc=document([{sourceText:'GERMAN Never Look Back',translatedText:'Never Look Back'}],'docx')
