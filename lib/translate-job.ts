@@ -210,12 +210,35 @@ export const translateBook = inngest.createFunction(
         console.error('[BookLingua] Terminal failure without orderId:', error)
         return
       }
-      await recordTerminalFailure({
+      const failureCode = await recordTerminalFailure({
         supabase: getSupabaseAdmin(),
         orderId,
         stage: 'translation_job',
         error,
       })
+      try {
+        const { data: order } = await getSupabaseAdmin()
+          .from('orders')
+          .select('author_name,book_title,languages')
+          .eq('id', orderId)
+          .maybeSingle()
+        const result = await getResend().emails.send({
+          from: 'BookLingua <orders@booklingua.io>',
+          to: process.env.ADMIN_EMAIL!,
+          subject: `Action needed: BookLingua order failed - ${order?.book_title || orderId}`,
+          html: `<h2>BookLingua order failed</h2>
+            <p><strong>Book:</strong> ${order?.book_title || 'Unknown'}</p>
+            <p><strong>Author:</strong> ${order?.author_name || 'Unknown'}</p>
+            <p><strong>Languages:</strong> ${(order?.languages || []).join(', ') || 'Unknown'}</p>
+            <p><strong>Order ID:</strong> ${orderId}</p>
+            <p><strong>Stage:</strong> translation_job</p>
+            <p><strong>Failure code:</strong> ${failureCode}</p>
+            <p>Open the BookLingua admin to inspect and restart the order.</p>`,
+        }, { idempotencyKey: `failure-alert/${orderId}` })
+        if (result.error) console.error('[BookLingua] Failed to send order-failure alert:', result.error)
+      } catch (alertError) {
+        console.error('[BookLingua] Failed to send order-failure alert:', alertError)
+      }
     },
   },
   [{ event: 'book.translate' }, { event: 'book/translate.requested' }],
