@@ -213,8 +213,17 @@ export async function extractCulturalTerms(
           }],
         })
         const raw = response.content[0].type === 'text' ? response.content[0].text : ''
-        const clean = raw.replace(/^```(?:json)?/, '').replace(/```$/, '').trim()
-        const parsed = JSON.parse(clean) as { terms?: Omit<CulturalTerm, 'decision' | 'replacement'>[] }
+        // Models sometimes add a sentence or code fence around the JSON. Parse
+        // the outermost object, and let one bad section fail on its own rather
+        // than discarding the review for the whole manuscript.
+        const start = raw.indexOf('{')
+        const end = raw.lastIndexOf('}')
+        let parsed: { terms?: Omit<CulturalTerm, 'decision' | 'replacement'>[] } = {}
+        try {
+          parsed = start >= 0 && end > start ? JSON.parse(raw.slice(start, end + 1)) : {}
+        } catch (parseError) {
+          console.warn('[CulturalTerms] Could not parse one manuscript section:', parseError)
+        }
         return (parsed.terms || []).map(term => ({
           ...term,
           contexts: Array.isArray(term.contexts) ? term.contexts.filter(Boolean).slice(0, 2) : [],

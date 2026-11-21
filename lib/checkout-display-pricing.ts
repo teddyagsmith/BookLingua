@@ -38,6 +38,8 @@ export function checkoutDisplayPricing(input: {
     subtotal,
     voucherableSubtotal,
     voucherDiscount,
-    finalTotal: Math.max(subtotal - voucherDiscount, 1),
+    // Mirrors /api/checkout: a voucher that covers everything is a free order
+    // (no Stripe); anything else keeps the $1 minimum charge.
+    finalTotal: voucher && subtotal - voucherDiscount < 0.005 ? 0 : Math.max(subtotal - voucherDiscount, 1),
   }
 }

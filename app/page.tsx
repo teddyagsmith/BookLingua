@@ -2350,7 +2350,7 @@ export default function Home() {
                     disabled={isProcessing || !copyrightConfirmed}
                     className="w-full py-4 bg-brand text-white rounded-2xl font-bold text-lg shadow-xl hover:shadow-2xl transition-all mb-4 disabled:opacity-50 disabled:cursor-not-allowed"
                   >
-                    {isProcessing ? 'Processing...' : `Pay $${calculateFinalTotal()} →`}
+                    {isProcessing ? 'Processing...' : Number(calculateFinalTotal()) === 0 ? 'Place free order →' : `Pay $${calculateFinalTotal()} →`}
                   </button>
 
                   <button

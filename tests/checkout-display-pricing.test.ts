@@ -43,3 +43,23 @@ test('fixed voucher recalculates against the current voucherable subtotal', () =
   assert.equal(pricing.voucherDiscount, 50)
   assert.equal(pricing.finalTotal, 78)
 })
+
+test('a 100% voucher shows a free order, matching the server free-order path', () => {
+  const pricing = checkoutDisplayPricing({
+    basePrice: 99,
+    languageCount: 2,
+    selectedUpsells: [],
+    voucher: { type: 'percent', discount: 100 },
+  })
+  assert.equal(pricing.finalTotal, 0)
+})
+
+test('a 100% voucher still charges for non-voucherable add-ons', () => {
+  const pricing = checkoutDisplayPricing({
+    basePrice: 99,
+    languageCount: 2,
+    selectedUpsells: ['launch-pack'],
+    voucher: { type: 'percent', discount: 100 },
+  })
+  assert.equal(pricing.finalTotal, 49)
+})
