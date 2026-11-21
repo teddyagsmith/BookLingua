@@ -17,6 +17,7 @@ import { downloadOriginalBinary, HARDENED_SOURCE_BUCKET, SOURCE_UPLOAD_BUCKET, s
 import { issueUploadIdentity, verifyUploadIdentity } from '@/lib/upload-identity'
 import { HARDENED_V1_ENABLED } from '@/lib/pipeline-capabilities'
 import { assertSupportedSourcePackage } from '@/lib/source-upload-validation'
+import { extractDocxSegments } from '@/lib/extract-segments'
 
 // ---------------------------------------------------------------------------
 // EPUB text extraction
@@ -195,6 +196,7 @@ export async function POST(request: NextRequest) {
     const storagePath = sourceStoragePath(sessionId, fileExtension)
     let textContent = ''
     let wordCount = 0
+    let detectedHeadings: { index: number; level: number; title: string }[] | undefined
 
     if (fileExtension === 'txt') {
       textContent = binary.toString('utf8')
@@ -204,6 +206,10 @@ export async function POST(request: NextRequest) {
       const result = await mammoth.extractRawText({ buffer: binary as any })
       textContent = result.value
       wordCount = countWords(textContent)
+      const extracted = await extractDocxSegments(binary)
+      detectedHeadings = extracted.segments
+        .filter(segment => segment.type === 'heading')
+        .map((segment, index) => ({ index, level: segment.level, title: segment.text }))
 
     } else if (fileExtension === 'epub') {
       // Extract real text and count words
@@ -235,6 +241,7 @@ export async function POST(request: NextRequest) {
       format: sourceFormat,
       filename: fileName,
       wordCount,
+      headings: detectedHeadings,
     })
 
     // Store in temp_uploads for the checkout flow

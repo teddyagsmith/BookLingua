@@ -507,7 +507,10 @@ export default function Home() {
           uploadToken: uploadTokenRef.current,
           genre: selectedGenre,
           languages: selectedLanguages,
-          maxFindings: 8,
+          bookTitle,
+          bookSetting,
+          specialInstructions,
+          maxFindings: 6,
         }),
       })
 
