@@ -87,6 +87,8 @@ export interface SemanticPipelineInput {
   bookWideReplacements?: Array<{ before:string; after:string; expectedCount:number }>
   /** Exact author-approved wording used to make explanation state deterministic. */
   verifiedExplanatoryNotes?: VerifiedExplanatoryNote[]
+  /** Non-terminal explanatory-note fallbacks recorded in pipeline events by the caller. */
+  explanatoryWarnings?: string[]
   /** Narrow rebuild-only cleanup for legacy target brackets absent from the source. */
   repairUnexpectedExplanatoryBrackets?: boolean
   /** Rebuild-only waiver after a prior immutable build has passed reader review. */
@@ -363,7 +365,7 @@ export async function runSemanticPipeline(input: SemanticPipelineInput) {
   assertSourceAwareHeadingDuplicateParity(consolidatedArtifactNodes(sourceDocument), consolidatedArtifactNodes(pass1))
   await persistSemantic(input.supabase, { orderId: input.orderId, language: input.language, buildId, pass: 'pass1', document: pass1, eligibility: eligibility.status })
   const correctedPass2 = applyBookWideReplacements(applyVerifiedEditorialOverrides({ ...pass1, nodes: normalizePassTypography(await runBatchedPass(input, pass1.nodes, 2), input.language) },input.verifiedEditorialOverrides||[]),input.bookWideReplacements||[])
-  const rawPass2 = applyBookWideExplanatoryNotes({source:sourceDocument,target:correctedPass2,brief:input.brief,verified:input.verifiedExplanatoryNotes||[],removeUnexpected:input.repairUnexpectedExplanatoryBrackets})
+  const rawPass2 = applyBookWideExplanatoryNotes({source:sourceDocument,target:correctedPass2,brief:input.brief,verified:input.verifiedExplanatoryNotes||[],removeUnexpected:input.repairUnexpectedExplanatoryBrackets,warnings:input.explanatoryWarnings})
   let titleAuthority = resolveTitleAuthority({ document: rawPass2, checkoutTitle: input.title, source: input.source })
   const verifiedTranslatedTitle=input.verifiedTranslatedTitle?.trim()
   if(titleAuthority.fallbackUsed&&verifiedTranslatedTitle)titleAuthority={
