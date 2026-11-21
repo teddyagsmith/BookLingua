@@ -652,8 +652,6 @@ export default function Home() {
   if (currentView === 'landing') {
     return (
       <div className="min-h-screen bg-cream">
-        {/* Google Font */}
-        <style>{`@import url('https://fonts.googleapis.com/css2?family=EB+Garamond:ital,wght@0,400;0,500;0,600;1,400&display=swap');`}</style>
 
         <EmailSignupPopup />
 
@@ -1475,7 +1473,6 @@ export default function Home() {
   // Upload Flow
   return (
     <div className="min-h-screen bg-cream">
-      <style>{`@import url('https://fonts.googleapis.com/css2?family=EB+Garamond:ital,wght@0,400;0,500;0,600;1,400&display=swap');`}</style>
 
       <nav className="flex items-center justify-between px-8 py-6 max-w-5xl mx-auto">
         <button onClick={() => { setCurrentView('landing'); setCheckoutStep(1); const url = new URL(window.location.href); url.searchParams.delete('start'); url.searchParams.delete('estimateWords'); url.searchParams.delete('languages'); window.history.pushState({}, '', url) }} className="flex items-center gap-3">

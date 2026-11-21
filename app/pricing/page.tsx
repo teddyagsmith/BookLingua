@@ -28,7 +28,6 @@ export default function PricingPage() {
   }
 
   return <div className="min-h-screen bg-cream">
-    <style>{`@import url('https://fonts.googleapis.com/css2?family=EB+Garamond:ital,wght@0,400;0,500;0,600;1,400&display=swap');`}</style>
     <nav className="sticky top-0 z-50 border-b border-[#EBE6F4] bg-cream/95 px-4 py-3 backdrop-blur sm:px-8">
       <div className="mx-auto flex max-w-7xl items-center justify-between gap-3">
         <Link href="/">
