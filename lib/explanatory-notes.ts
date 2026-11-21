@@ -78,7 +78,7 @@ function additionsForNode(sourceText:string,targetText:string):ExplanatorySpan[]
 
 /** Enforce explanatory notes once, book-wide, after all model batches are joined. */
 export function applyBookWideExplanatoryNotes(input:{
-  source:SemanticDocumentV2;target:SemanticDocumentV2;brief:TranslationBriefV1;verified:VerifiedExplanatoryNote[];removeUnexpected?:boolean
+  source:SemanticDocumentV2;target:SemanticDocumentV2;brief:TranslationBriefV1;verified:VerifiedExplanatoryNote[];removeUnexpected?:boolean;warnings?:string[]
 }):SemanticDocumentV2{
   if(input.source.nodes.length!==input.target.nodes.length)throw new Error('Explanatory-note documents differ in node count')
   const selected=selectedItems(input.brief),specs=new Map(input.verified.map(item=>[item.sourceTerm.toLocaleLowerCase(),item]))
@@ -104,8 +104,19 @@ export function applyBookWideExplanatoryNotes(input:{
     const firstIndex=input.source.nodes.findIndex(node=>includesTerm(node.sourceText,item.sourceTerm))
     if(firstIndex<0)throw new Error(`Author-selected explanatory term is absent from source: ${item.sourceTerm}`)
     const node=nodes[firstIndex],target=node.translatedText||'',occurrences=target.split(spec.targetTerm).length-1
-    if(occurrences<1)throw new Error(`Canonical target term is absent from first source node: ${item.sourceTerm}`)
-    node.translatedText=target.replace(spec.targetTerm,`${spec.targetTerm} (${spec.canonicalNote.trim()})`)
+    if(occurrences<1){
+      // Model wording can legitimately differ from the canonical target term.
+      // Keep delivery moving by inserting exactly once at the source-position
+      // equivalent in this first node and leave an auditable pipeline warning.
+      const sourceText=input.source.nodes[firstIndex].sourceText||''
+      const termIndex=sourceText.toLocaleLowerCase().indexOf(item.sourceTerm.toLocaleLowerCase())
+      const sourceWords=sourceText.slice(0,Math.max(0,termIndex)).trim().split(/\s+/).filter(Boolean).length
+      const targetWords=Array.from(target.matchAll(/\S+/g))
+      const anchor=targetWords[Math.min(sourceWords,Math.max(0,targetWords.length-1))]
+      const position=anchor ? anchor.index!+anchor[0].length : target.length
+      node.translatedText=`${target.slice(0,position)} (${spec.canonicalNote.trim()})${target.slice(position)}`.replace(/\s+([,.;:!?])/g,'$1')
+      input.warnings?.push(`EXPLANATORY_NOTE_TARGET_TERM_FALLBACK:${item.sourceTerm}:${node.id}`)
+    }else node.translatedText=target.replace(spec.targetTerm,`${spec.targetTerm} (${spec.canonicalNote.trim()})`)
   }
 
   const output={...input.target,nodes},audit=auditBookWideExplanatoryNotes(input.source,output,input.brief,input.verified)

@@ -9,7 +9,7 @@ import crypto from 'crypto'
 import { extractStyleProfile, storeStyleProfile, loadStylePrompt } from './style-extractor'
 import { extractCulturalTerms, storeCulturalTerms, loadGlossaryPrompt } from './cultural-term-extractor'
 import { recordTerminalFailure } from './pipeline-events'
-import { assertTranslationBriefForSource, loadTranslationBrief, renderTranslationBriefPrompt, translationBriefFingerprint, verifiedExplanatoryNotesFromBrief } from './translation-brief'
+import { assertTranslationBriefForSource, ensureMaterializedExplanatoryWording, loadTranslationBrief, renderTranslationBriefPrompt, translationBriefFingerprint, verifiedExplanatoryNotesFromBrief } from './translation-brief'
 import { HARDENED_V1_ENABLED } from './pipeline-capabilities'
 import { SEMANTIC_V2_ENABLED } from './semantic-document'
 import { deterministicSemanticBuildId, runSemanticPipeline } from './semantic-pipeline'
@@ -317,7 +317,8 @@ export const translateBook = inngest.createFunction(
               if (authoritative === true) return { buildId: currentBuild.id, status: 'pass', cached: true }
             }
           }
-          const brief = await loadTranslationBrief(getSupabaseAdmin(), orderId, language)
+          const loadedBrief = await loadTranslationBrief(getSupabaseAdmin(), orderId, language)
+          const brief = loadedBrief && await ensureMaterializedExplanatoryWording({ supabase: getSupabaseAdmin(), orderId, brief: loadedBrief })
           if (!brief) throw new Error(`Approved translation brief missing for semantic-v2 ${language}`)
           const notes = {
             schemaVersion: '1.0' as const,
@@ -363,11 +364,13 @@ export const translateBook = inngest.createFunction(
               success:true,inputTokens:0,outputTokens:0,cacheStatus:'hit'})
             launchPack = Buffer.from(JSON.stringify(cached.pack))
           }
+          const explanatoryWarnings: string[] = []
           const result = await runSemanticPipeline({
             supabase: getSupabaseAdmin(), orderId, language, sourceFormat: format, source,
             title: order.book_title, authorName: order.author_name, brief, notes, buildId: deterministicSemanticBuildId(orderId,language,crypto.createHash('sha256').update(source).digest('hex'),brief.revision), allowReviewedStructure: order.semantic_structure_approved === true,
             launchPack, dualFormat: (order.upsells || []).includes('dual-format'), genre: order.genre || undefined,
             verifiedExplanatoryNotes: verifiedExplanatoryNotesFromBrief(brief),
+            explanatoryWarnings,
             repairUnexpectedExplanatoryBrackets: String(order.special_instructions || '').includes('[REPAIR_UNEXPECTED_EXPLANATORY_BRACKETS]'),
             translate: async (batch, context) => {
               const stage=context.pass===1?'translation':'editorial';const requestIdentity=`${orderId}:${language}:${stage}:${context.batchId}`
@@ -399,6 +402,10 @@ export const translateBook = inngest.createFunction(
               })
             },
           })
+          for (const warning of explanatoryWarnings) {
+            const { error: warningError } = await getSupabaseAdmin().from('pipeline_events').insert({ order_id: orderId, language, stage: 'explanatory_note', status: 'passed', level: 'warning', safe_message: warning })
+            if (warningError) throw new Error(`Failed to record explanatory-note warning: ${warningError.message}`)
+          }
           return { buildId: result.buildId, status: result.manifest.status }
         })
       }

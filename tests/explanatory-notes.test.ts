@@ -43,6 +43,15 @@ test('a canonical note cannot be attached where its source term is absent',()=>{
   assert.throws(()=>applyBookWideExplanatoryNotes({source,target,brief:{...brief,items:[brief.items[1]]},verified:[verified[1]],removeUnexpected:false}),/Target explanatory addition absent in source/)
 })
 
+test('missing model target wording falls back at the first source-node position and records a warning',()=>{
+  const source=document([['She loved her high school library.','']])
+  const target=document([['She loved her high school library.','Sie liebte ihre amerikanische Schule.']])
+  const warnings:string[]=[]
+  const output=applyBookWideExplanatoryNotes({source,target,brief:{...brief,items:[brief.items[0]]},verified:[{sourceTerm:'high school',targetTerm:'Highschool',canonicalNote:'Highschool: die amerikanische Oberstufe'}],warnings})
+  assert.equal((output.nodes[0].translatedText!.match(/Highschool: die amerikanische Oberstufe/g)||[]).length,1)
+  assert.deepEqual(warnings,['EXPLANATORY_NOTE_TARGET_TERM_FALLBACK:high school:node-0'])
+})
+
 test('a repeated selected term in its first source node receives one explanation',()=>{
   const source=document([['The FDA expects FDA approval.','']])
   const target=document([['The FDA expects FDA approval.','Die FDA erwartet eine FDA-Zulassung.']])

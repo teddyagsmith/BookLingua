@@ -53,7 +53,18 @@ test('author-approved explanatory wording is wired into the deterministic book-w
   }])
 })
 
-test('an incomplete author-selected explanation fails before translation work starts',()=>{
-  const brief=buildTranslationBrief({language:'de',sourceManifestFingerprint:'source',approvedAt:'2026-10-29T00:00:00.000Z',decisions:[{term:'FDA',decision:'footnote'}]})
+test('a manually malformed legacy explanatory brief still fails validation',()=>{
+  const brief={...buildTranslationBrief({language:'de',sourceManifestFingerprint:'source',approvedAt:'2026-10-29T00:00:00.000Z',decisions:[{term:'FDA',decision:'footnote'}]}),items:[{id:'legacy',sourceTerm:'FDA',authorDecision:'footnote',targetInstruction:'Explain once.'}]}
   assert.throws(()=>verifiedExplanatoryNotesFromBrief(brief),/lacks canonical target wording: FDA/)
+})
+
+test('scanner footnote choices without wording are materialised deterministically for German and Spanish',()=>{
+  for (const [language,targetTerm,canonicalNote] of [
+    ['de','Highschool','Highschool: die amerikanische Oberstufe'],
+    ['es-es','instituto','Instituto: escuela secundaria estadounidense'],
+  ]) {
+    const brief=buildTranslationBrief({language,sourceManifestFingerprint:'source',approvedAt:'2026-11-21T00:00:00.000Z',decisions:[{term:'high school',decision:'footnote'}]})
+    assert.deepEqual(verifiedExplanatoryNotesFromBrief(brief),[{sourceTerm:'high school',targetTerm,canonicalNote}])
+    assert.match(brief.items[0].targetInstruction,new RegExp(targetTerm))
+  }
 })

@@ -1,6 +1,6 @@
 import { SupabaseClient } from '@supabase/supabase-js'
 import { createHash } from 'crypto'
-import { GERMAN_HIGHSCHOOL_GUIDANCE } from './german-terminology'
+import { GERMAN_HIGHSCHOOL_GUIDANCE, normalizeGermanTerminology } from './german-terminology'
 
 export const TRANSLATION_BRIEF_SCHEMA_VERSION = '1.0'
 
@@ -25,6 +25,49 @@ export interface TranslationBriefV1 {
   approvalSource: 'author_scan' | 'legacy_import' | 'admin'
   items: TranslationBriefItem[]
   authorGlossary?: string
+}
+
+type CanonicalExplanatoryWording = { targetTerm: string; explanatoryNote: string }
+
+/**
+ * Scanner choices predate the deterministic explanatory-note contract and do
+ * not contain target-language wording. Materialise it here, per language,
+ * before the semantic pipeline sees the brief. The resulting brief is stored
+ * and fingerprinted, so rebuilds never depend on a fresh model response.
+ */
+function generatedExplanatoryWording(language: string, sourceTerm: string): CanonicalExplanatoryWording {
+  const normalizedSource = sourceTerm.trim()
+  if (/^high school$/i.test(normalizedSource)) {
+    if (language === 'de') {
+      const targetTerm = normalizeGermanTerminology('Highschool')
+      return { targetTerm, explanatoryNote: 'Highschool: die amerikanische Oberstufe' }
+    }
+    if (language === 'es-es') return { targetTerm: 'instituto', explanatoryNote: 'Instituto: escuela secundaria estadounidense' }
+    if (language === 'es-la') return { targetTerm: 'preparatoria', explanatoryNote: 'Preparatoria: escuela secundaria estadounidense' }
+  }
+  if (language === 'de') return { targetTerm: normalizeGermanTerminology(normalizedSource), explanatoryNote: `${normalizedSource}: kultureller Begriff aus den USA` }
+  if (language.startsWith('es')) return { targetTerm: normalizedSource, explanatoryNote: `${normalizedSource}: término cultural estadounidense` }
+  return { targetTerm: normalizedSource, explanatoryNote: `${normalizedSource}: cultural term from the source context` }
+}
+
+function isExplanatoryDecision(item: Pick<TranslationBriefItem, 'authorDecision'>): boolean {
+  return item.authorDecision === 'footnote' || item.authorDecision === 'convert_with_note'
+}
+
+export function materializeExplanatoryWording(brief: TranslationBriefV1): TranslationBriefV1 {
+  let changed = false
+  const items = brief.items.map(item => {
+    if (!isExplanatoryDecision(item) || (item.targetTerm?.trim() && item.explanatoryNote?.trim())) return item
+    const generated = generatedExplanatoryWording(brief.language, item.sourceTerm)
+    changed = true
+    return {
+      ...item,
+      targetTerm: generated.targetTerm,
+      explanatoryNote: generated.explanatoryNote,
+      targetInstruction: `Use exactly "${generated.targetTerm}" and add "${generated.explanatoryNote}" once at the first source occurrence only.`,
+    }
+  })
+  return changed ? { ...brief, items } : brief
 }
 
 export function verifiedExplanatoryNotesFromBrief(brief: TranslationBriefV1): Array<{
@@ -78,7 +121,7 @@ export function buildTranslationBrief(input: {
   decisions: Array<Record<string, unknown>>
   authorGlossary?: string | null
 }): TranslationBriefV1 {
-  return {
+  const brief: TranslationBriefV1 = {
     schemaVersion: TRANSLATION_BRIEF_SCHEMA_VERSION,
     language: input.language,
     sourceManifestFingerprint: input.sourceManifestFingerprint,
@@ -97,6 +140,7 @@ export function buildTranslationBrief(input: {
     })).filter(item => item.sourceTerm.length > 0),
     ...(input.authorGlossary?.trim() ? { authorGlossary: input.authorGlossary.trim() } : {}),
   }
+  return materializeExplanatoryWording(brief)
 }
 
 export function renderTranslationBriefPrompt(brief: TranslationBriefV1): string {
@@ -138,6 +182,30 @@ export async function loadTranslationBrief(
   if (brief.revision !== data.revision) throw new Error('Translation brief revision mismatch')
   if (translationBriefFingerprint(brief) !== data.content_fingerprint) throw new Error('Translation brief content fingerprint mismatch')
   return brief
+}
+
+/** Persist a one-time deterministic upgrade for briefs written before canonical explanatory wording existed. */
+export async function ensureMaterializedExplanatoryWording(input: {
+  supabase: SupabaseClient
+  orderId: string
+  brief: TranslationBriefV1
+}): Promise<TranslationBriefV1> {
+  const materialized = materializeExplanatoryWording(input.brief)
+  if (materialized === input.brief) return input.brief
+  const upgraded = { ...materialized, revision: input.brief.revision + 1 }
+  const { error } = await input.supabase.from('translation_briefs').insert({
+    order_id: input.orderId,
+    language: upgraded.language,
+    schema_version: upgraded.schemaVersion,
+    revision: upgraded.revision,
+    source_manifest_fingerprint: upgraded.sourceManifestFingerprint,
+    content_fingerprint: translationBriefFingerprint(upgraded),
+    approved_at: upgraded.approvedAt,
+    approval_source: upgraded.approvalSource,
+    brief: upgraded,
+  })
+  if (error) throw new Error(`Failed to persist canonical explanatory wording: ${error.message}`)
+  return upgraded
 }
 
 export function assertTranslationBriefForSource(brief: TranslationBriefV1, language: string, sourceHash: string): void {
