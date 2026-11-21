@@ -1,7 +1,7 @@
 import {NextRequest,NextResponse} from 'next/server'
 import JSZip from 'jszip'
 import {getSupabaseAdmin} from '@/lib/supabase'
-import {verifyCustomerPortalToken} from '@/lib/download-token'
+import {verifyCustomerPortalToken,verifyReviewPortalToken} from '@/lib/download-token'
 import {customerBundleFilename,customerContentDisposition,customerLanguageName,customerVisibleArtifacts} from '@/lib/customer-delivery'
 import {extractAuthoritativeTranslatedTitle,renderCustomerLaunchPackDocx,renderCustomerTranslationNotesDocx,renderCustomerUploadGuideDocx} from '@/lib/customer-delivery-docx'
 import {selectManifestArtifact,verifyStoredArtifact} from '@/lib/hardened-artifact'
@@ -32,10 +32,12 @@ async function loadVerifiedArtifact(orderId:string,language:string,buildId:strin
 
 export async function GET(request:NextRequest,{params}:{params:{orderId:string}}){
   const token=request.nextUrl.searchParams.get('token')||''
-  if(!verifyCustomerPortalToken(params.orderId,token))return NextResponse.json({error:'Invalid or missing download token'},{status:403})
+  const reviewScope=request.nextUrl.searchParams.get('scope')==='review'
+  if(reviewScope?!verifyReviewPortalToken(params.orderId,token):!verifyCustomerPortalToken(params.orderId,token))return NextResponse.json({error:'Invalid or missing download token'},{status:403})
   const db=getSupabaseAdmin()
   const {data:order}=await db.from('orders').select('id,book_title,languages,status').eq('id',params.orderId).maybeSingle()
-  if(!order||!['delivery_pending','completed'].includes(order.status))return NextResponse.json({error:'Files are not approved for customer delivery'},{status:403})
+  const allowedStatuses=reviewScope?['ready_for_review','reader_review_pending','delivery_pending','completed']:['delivery_pending','completed']
+  if(!order||!allowedStatuses.includes(order.status))return NextResponse.json({error:reviewScope?'Files are not ready for internal review':'Files are not approved for customer delivery'},{status:403})
   try{
     const zip=new JSZip()
     zip.file('BookLingua - How to Use Your Translations + Upload Guide.docx',await renderCustomerUploadGuideDocx())
