@@ -39,6 +39,15 @@ export default function RootLayout({
   return (
     <html lang="en">
       <head>
+        {/* Loaded once here. Per-page <style>{`@import ...`}</style> tags were
+            HTML-escaped on the server (url(&#x27;...&#x27;)), which 404'd the
+            font and caused React hydration errors (#418/#423/#425). */}
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
+        <link
+          rel="stylesheet"
+          href="https://fonts.googleapis.com/css2?family=EB+Garamond:ital,wght@0,400;0,500;0,600;1,400&display=swap"
+        />
         <Script
           src="https://analytics.ahrefs.com/analytics.js"
           data-key="Q6qxU43SYraWgkC2LWz2DQ"

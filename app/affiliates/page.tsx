@@ -56,7 +56,6 @@ function ApplyButton({ label = 'Apply to become an affiliate', inverse = false }
 export default function AffiliatesPage() {
   return (
     <main className="min-h-screen overflow-hidden bg-cream text-gray-900">
-      <style>{`@import url('https://fonts.googleapis.com/css2?family=EB+Garamond:ital,wght@0,400;0,500;0,600;1,400&display=swap');`}</style>
 
       <nav className="relative z-20 mx-auto flex max-w-7xl items-center justify-between px-5 py-4 sm:px-8">
         <Link href="/" aria-label="BookLingua home">

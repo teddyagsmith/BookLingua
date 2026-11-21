@@ -103,7 +103,6 @@ export default function CaseStudyMockup() {
 
   return (
     <div className="min-h-screen bg-cream text-gray-900">
-      <style>{`@import url('https://fonts.googleapis.com/css2?family=EB+Garamond:ital,wght@0,400;0,500;0,600;1,400&display=swap');`}</style>
 
       <nav className="mx-auto flex max-w-7xl items-center justify-between px-6 py-5">
         <Link href="/" className="font-bold text-brand-dark">← BookLingua</Link>

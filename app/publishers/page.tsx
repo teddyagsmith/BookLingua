@@ -21,7 +21,6 @@ const Logo = ({ size = 'md' }: { size?: 'sm' | 'md' | 'lg' }) => {
 export default function PublishersPage() {
   return (
     <div className="min-h-screen bg-cream">
-      <style>{`@import url('https://fonts.googleapis.com/css2?family=EB+Garamond:ital,wght@0,400;0,500;0,600;1,400&display=swap');`}</style>
 
       {/* Nav */}
       <nav className="relative z-50 flex items-center justify-between px-4 sm:px-8 py-6 max-w-7xl mx-auto">

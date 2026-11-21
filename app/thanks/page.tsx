@@ -27,7 +27,6 @@ export default function ThanksPage() {
 
   return (
     <main className="relative min-h-screen overflow-hidden bg-cream px-5 py-8">
-      <style>{`@import url('https://fonts.googleapis.com/css2?family=EB+Garamond:wght@500;600&display=swap');`}</style>
 
       <div className="absolute left-[-8rem] top-[-8rem] h-80 w-80 rounded-full bg-amber-200/40 blur-3xl" />
       <div className="absolute bottom-[-8rem] right-[-8rem] h-96 w-96 rounded-full bg-brand-light/80 blur-3xl" />
