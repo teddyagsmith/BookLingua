@@ -52,6 +52,13 @@ test('missing model target wording falls back at the first source-node position 
   assert.deepEqual(warnings,['EXPLANATORY_NOTE_TARGET_TERM_FALLBACK:high school:node-0'])
 })
 
+test('model-written explanations for an author-selected term are normalized before the canonical note is inserted',()=>{
+  const source=document([['She loved her high school library.','']])
+  const target=document([['She loved her high school library.','Sie liebte ihre Highschool (eine amerikanische Schule).']])
+  const output=applyBookWideExplanatoryNotes({source,target,brief:{...brief,items:[brief.items[0]]},verified:[{sourceTerm:'high school',targetTerm:'Highschool',canonicalNote:'Highschool: die amerikanische Oberstufe'}]})
+  assert.equal(output.nodes[0].translatedText,'Sie liebte ihre Highschool (Highschool: die amerikanische Oberstufe).')
+})
+
 test('a repeated selected term in its first source node receives one explanation',()=>{
   const source=document([['The FDA expects FDA approval.','']])
   const target=document([['The FDA expects FDA approval.','Die FDA erwartet eine FDA-Zulassung.']])
