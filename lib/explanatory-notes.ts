@@ -95,7 +95,12 @@ export function applyBookWideExplanatoryNotes(input:{
     if(sourceNode.id!==node.id)throw new Error(`Explanatory-note semantic identity mismatch at ${node.id}`)
     const additions=additionsForNode(sourceNode.sourceText,node.translatedText||'')
     if(!additions.length)return{...node}
-    if(!input.removeUnexpected)throw new Error(`Target explanatory addition absent in source at ${node.id}: ${additions.map(item=>item.style).join(', ')}`)
+    // An author-selected term may have acquired a model-written explanatory
+    // bracket. Normalize it away before inserting the one canonical note below;
+    // unselected additions remain fail-closed unless an explicit repair run asks
+    // to clean them up.
+    const selectedSourceTerm=selected.some(item=>includesTerm(sourceNode.sourceText,item.sourceTerm))
+    if(!input.removeUnexpected&&!selectedSourceTerm)throw new Error(`Target explanatory addition absent in source at ${node.id}: ${additions.map(item=>item.style).join(', ')}`)
     return{...node,translatedText:removeAddedExplanations(node.translatedText||'',additions)}
   })
 
