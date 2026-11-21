@@ -369,9 +369,10 @@ export async function POST(request: NextRequest) {
       console.warn('[scan-text] Cultural terms extraction failed:', err)
     }
 
-    // Turn contextual candidates into author decisions. The old keyword/acronym
-    // scanner is intentionally not used: it created generic questions without
-    // knowing the manuscript, author notes, setting, or glossary.
+    // Contextual candidates from the author-brief review. The deterministic
+    // keyword scan below still runs: it is the only source of the
+    // "add brief explanation" (footnote) decision for terms such as
+    // "high school" or "DMV", which the explanatory-note pipeline depends on.
     const culturalFindings: Finding[] = culturalTerms.map((term): Finding => ({
       type: 'cultural_specific',
       original: term.term,
@@ -384,7 +385,15 @@ export async function POST(request: NextRequest) {
       ],
       defaultOption: 'translator',
     }))
-    return NextResponse.json({ findings: culturalFindings.slice(0, maxFindings), quality })
+    const keywordFindings = keywordScan(textToScan, languages || ['de'])
+    const merged: Finding[] = [...keywordFindings]
+    for (const finding of culturalFindings) {
+      const key = finding.original.trim().toLowerCase()
+      if (!merged.some(existing => existing.original.trim().toLowerCase() === key)) merged.push(finding)
+    }
+    // Keyword findings carry the explanatory-note option, so they come first;
+    // contextual findings fill the remaining slots.
+    return NextResponse.json({ findings: merged.slice(0, Math.max(maxFindings, keywordFindings.length)), quality })
 
   } catch (error) {
     console.error('Scan text error:', error)

@@ -55,7 +55,7 @@ export async function POST(request: NextRequest) {
       type: voucher.type,
       description: voucher.description,
       discountAmount: discountAmount.toFixed(2),
-      newTotal: Math.max(subtotal - discountAmount, 1).toFixed(2),
+      newTotal: (subtotal - discountAmount < 0.005 ? 0 : Math.max(subtotal - discountAmount, 1)).toFixed(2),
     })
   } catch (error) {
     return NextResponse.json({ valid: false, error: 'Failed to validate voucher' }, { status: 500 })
