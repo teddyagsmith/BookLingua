@@ -27,8 +27,9 @@ export type TermDecision =
 export interface CulturalTerm {
   term: string           // The original term as it appears in the text
   category: TermCategory
-  example: string        // A short sentence from the book showing it in context
-  suggestion: string     // What we'd do by default if the author doesn't decide
+  contexts: string[]     // One or two short passages from the actual manuscript
+  whyItMatters: string   // The translation choice this changes
+  recommendation: string // A translator's recommended default
   decision?: TermDecision
   replacement?: string   // If decision === 'replace', what to use instead
 }
@@ -54,11 +55,19 @@ export interface GlossaryEntry {
   replacement?: string   // Only present when decision === 'replace'
 }
 
+export interface TranslationReviewContext {
+  title?: string
+  genre?: string
+  setting?: string
+  authorNotes?: string
+  authorGlossary?: string
+}
+
 // ─── Extraction prompt ───────────────────────────────────────────────────────
 
-const EXTRACTION_PROMPT = `You are preparing a terminology glossary for a book translation.
+const EXTRACTION_PROMPT = `You are a literary translator preparing an author-facing translation brief for a book.
 
-Analyse the following book excerpt and identify words and phrases that genuinely need special handling — things a translator must make a conscious decision about. ONLY flag a term if it meets at least one of these criteria:
+Analyse this manuscript section in the context of the AUTHOR BRIEF. Identify only decisions an author should make before translation - not generic dictionary words. A term must be important, ambiguous, or constrained by the author's stated intent.
 
 1. INVENTED PROPER NOUN — a character name, place name, organisation, or term the author created that does not exist in standard dictionaries (e.g. "Katniss", "Hogwarts", "the Binding", "Glimmerwood")
 2. SERIES TERMINOLOGY — a word or phrase used in a specific, defined way throughout this book or series that differs from its everyday meaning (e.g. "the Fade" meaning a specific magical state, not fading light)
@@ -89,13 +98,16 @@ Examples of what TO flag:
 
 For each flagged term, provide:
 - category: one of food_drink, place_name, dialect_slang, cultural_reference, proper_noun, idiom, title_honorific
-- example: a short sentence from the text (under 120 chars) showing how it's used
-- suggestion: what we'd do by default — e.g. 'keep in English', 'translate to [equivalent]', 'use local equivalent'
+- contexts: one or two exact short passages from the manuscript (each under 180 characters)
+- whyItMatters: a concise explanation of the translation decision
+- recommendation: what a professional translator would do by default, given the author brief and target language
 
-Limit to the 20 most translation-significant terms. If there are fewer, return fewer. If there are none, return an empty array.
+Do not ask the author to decide something their notes or glossary already settle. Do not invent passages, names or facts. Return at most 8 high-value candidates from this section.
 
 Source language: {sourceLanguage}
 Target languages: {targetLanguages}
+AUTHOR BRIEF:
+{authorBrief}
 
 Respond in JSON only, no preamble:
 {{
@@ -103,37 +115,78 @@ Respond in JSON only, no preamble:
     {{
       "term": "the exact term as it appears",
       "category": "food_drink | place_name | dialect_slang | cultural_reference | proper_noun | idiom | title_honorific",
-      "example": "short sentence showing it in context (under 120 chars)",
-      "suggestion": "what we'd do by default — e.g. 'keep in English', 'translate to [equivalent]', 'use local equivalent'"
+      "contexts": ["first exact passage", "second exact passage if useful"],
+      "whyItMatters": "why this choice affects the translation",
+      "recommendation": "recommended translation approach"
     }}
   ]
 }}
 `
+
+function renderAuthorBrief(context: TranslationReviewContext): string {
+  const fields = [
+    ['Title', context.title],
+    ['Genre', context.genre],
+    ['Setting / period', context.setting],
+    ['Author notes', context.authorNotes],
+    ['Author glossary or series bible', context.authorGlossary],
+  ].filter(([, value]) => Boolean(value && value.trim()))
+  return fields.length
+    ? fields.map(([label, value]) => `${label}: ${value}`).join('\n')
+    : 'No author brief supplied. Infer only what the manuscript supports.'
+}
+
+export function splitManuscriptForReview(sourceText: string, maxWords = 12000): string[] {
+  const words = sourceText.trim().split(/\s+/).filter(Boolean)
+  const chunks: string[] = []
+  for (let start = 0; start < words.length; start += maxWords) {
+    chunks.push(words.slice(start, start + maxWords).join(' '))
+  }
+  return chunks
+}
+
+export function prioritiseReviewTerms(terms: CulturalTerm[], limit = 6): CulturalTerm[] {
+  const frequency = new Map<string, number>()
+  for (const term of terms) {
+    const key = term.term.trim().toLocaleLowerCase()
+    frequency.set(key, (frequency.get(key) || 0) + 1)
+  }
+
+  const chosen = new Map<string, CulturalTerm>()
+  for (const term of terms) {
+    const key = term.term.trim().toLocaleLowerCase()
+    const current = chosen.get(key)
+    if (!current || term.contexts.length > current.contexts.length) chosen.set(key, term)
+  }
+  return Array.from(chosen.values())
+    .sort((left, right) => (frequency.get(right.term.toLocaleLowerCase()) || 0) - (frequency.get(left.term.toLocaleLowerCase()) || 0))
+    .slice(0, limit)
+}
 
 // ─── Main extractor ──────────────────────────────────────────────────────────
 
 /**
  * Extract culturally specific terms from source text.
  *
- * Samples the first 8,000 words (enough to cover the opening chapters
- * where an author's voice and local colour are most concentrated).
- * Running on the full book would be slow and find mostly duplicates.
+ * Reviews the whole manuscript in 12,000-word sections. This keeps each model
+ * call within a reliable context window while ensuring late-book names, terms,
+ * and recurring institutions are not silently missed.
  */
 export async function extractCulturalTerms(
   sourceText: string,
   sourceLanguage: string = 'English',
   targetLanguages: string[] = [],
   anthropicApiKey?: string,
+  context: TranslationReviewContext = {},
 ): Promise<CulturalTermResult> {
   const client = new Anthropic({
     apiKey: anthropicApiKey || process.env.ANTHROPIC_API_KEY,
   })
 
-  // Sample: first 8,000 words
-  const words = sourceText.split(/\s+/)
-  const sample = words.slice(0, 8000).join(' ')
+  const chunks = splitManuscriptForReview(sourceText)
+  const totalWords = sourceText.trim().split(/\s+/).filter(Boolean).length
 
-  if (sample.trim().length < 200) {
+  if (totalWords < 200) {
     return { terms: [], hasTerms: false, summary: 'Text too short to analyse.' }
   }
 
@@ -142,56 +195,43 @@ export async function extractCulturalTerms(
     : 'multiple languages'
 
   try {
-    const response = await client.messages.create({
-      model: BOOKLINGUA_MODEL_CONFIG.normal,
-      max_tokens: 2000,
-      messages: [{
-        role: 'user',
-        content: EXTRACTION_PROMPT
-          .replace('{sourceLanguage}', sourceLanguage)
-          .replace('{targetLanguages}', targetLangStr)
-          + '\n\nSOURCE TEXT:\n' + sample,
-      }],
-    })
-
-    const raw = response.content[0].type === 'text' ? response.content[0].text : ''
-    const clean = raw.replace(/^```(?:json)?/, '').replace(/```$/, '').trim()
-    const parsed = JSON.parse(clean) as { terms: Omit<CulturalTerm, 'decision' | 'replacement'>[] }
-
-    const terms: CulturalTerm[] = (parsed.terms || []).map(t => ({
-      ...t,
-      decision: undefined,
-      replacement: undefined,
-    }))
-
-    // Case-insensitive deduplication: merge entries like "sat", "Sat", "SAT".
-    // Prefer the capitalised/proper-noun form when the same word appears both
-    // as a common word and as a proper noun in different places.
-    const deduped: CulturalTerm[] = []
-    const seen = new Map<string, CulturalTerm>()
-    for (const term of terms) {
-      const key = term.term.toLowerCase()
-      const existing = seen.get(key)
-      if (!existing) {
-        seen.set(key, term)
-      } else {
-        const existingIsProper = /^[A-Z]/.test(existing.term)
-        const newIsProper = /^[A-Z]/.test(term.term)
-        if (newIsProper && !existingIsProper) {
-          seen.set(key, {
-            ...term,
-            example: `${term.example} (also seen as '${existing.term}' in common usage)`,
-          })
-        }
-      }
+    const candidateTerms: CulturalTerm[] = []
+    // Process a few sections concurrently without flooding the provider.
+    for (let start = 0; start < chunks.length; start += 3) {
+      const batch = chunks.slice(start, start + 3)
+      const results = await Promise.all(batch.map(async (chunk) => {
+        const response = await client.messages.create({
+          model: BOOKLINGUA_MODEL_CONFIG.normal,
+          max_tokens: 1400,
+          messages: [{
+            role: 'user',
+            content: EXTRACTION_PROMPT
+              .replace('{sourceLanguage}', sourceLanguage)
+              .replace('{targetLanguages}', targetLangStr)
+              .replace('{authorBrief}', renderAuthorBrief(context))
+              + '\n\nMANUSCRIPT SECTION:\n' + chunk,
+          }],
+        })
+        const raw = response.content[0].type === 'text' ? response.content[0].text : ''
+        const clean = raw.replace(/^```(?:json)?/, '').replace(/```$/, '').trim()
+        const parsed = JSON.parse(clean) as { terms?: Omit<CulturalTerm, 'decision' | 'replacement'>[] }
+        return (parsed.terms || []).map(term => ({
+          ...term,
+          contexts: Array.isArray(term.contexts) ? term.contexts.filter(Boolean).slice(0, 2) : [],
+          decision: undefined,
+          replacement: undefined,
+        }))
+      }))
+      candidateTerms.push(...results.flat())
     }
-    deduped.push(...Array.from(seen.values()))
 
-    const summary = deduped.length === 0
-      ? 'No culturally specific terms found — translation can proceed without author input.'
-      : `Found ${deduped.length} term${deduped.length !== 1 ? 's' : ''} that need your input before translation starts.`
+    const prioritised = prioritiseReviewTerms(candidateTerms, 6)
 
-    return { terms: deduped, hasTerms: deduped.length > 0, summary }
+    const summary = prioritised.length === 0
+      ? 'No high-impact translation decisions found. Your author notes and glossary will still be used.'
+      : `Found ${prioritised.length} high-impact translation decision${prioritised.length !== 1 ? 's' : ''} from the full manuscript.`
+
+    return { terms: prioritised, hasTerms: prioritised.length > 0, summary }
 
   } catch (e) {
     console.warn('[CulturalTerms] Extraction failed (non-fatal):', e)

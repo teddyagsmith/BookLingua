@@ -36,6 +36,7 @@ export function buildSourceManifest(input: {
   format: SourceFormat
   filename: string
   wordCount: number
+  headings?: SourceManifestHeading[]
   generatedAt?: string
 }): SourceManifestV1 {
   const blocks = input.extractedText
@@ -43,11 +44,12 @@ export function buildSourceManifest(input: {
     .map(block => block.trim())
     .filter(Boolean)
 
-  const headings = blocks.flatMap((block, index) => {
+  const markdownHeadings = blocks.flatMap((block, index) => {
     const match = block.match(/^(#{1,6})\s+(.+)$/)
     return match ? [{ index, level: match[1].length, title: match[2].trim() }] : []
   })
 
+  const headings = input.headings?.length ? input.headings : markdownHeadings
   const chapterCount = headings.filter(heading => heading.level === 1).length
   const hasStructuredHeadings = headings.length > 0
   const parserStatus: ParserStatus = input.format === 'txt'

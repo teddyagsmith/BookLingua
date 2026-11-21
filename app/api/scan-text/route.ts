@@ -2,13 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { verifyUploadIdentity } from '@/lib/upload-identity'
 import { HARDENED_V1_ENABLED } from '@/lib/pipeline-capabilities'
 import { getSupabaseAdmin } from '@/lib/supabase'
-import Anthropic from '@anthropic-ai/sdk'
 import { extractCulturalTerms } from '@/lib/cultural-term-extractor'
-import { BOOKLINGUA_MODEL_CONFIG } from '@/lib/model-config'
-
-const anthropic = new Anthropic({
-  apiKey: process.env.ANTHROPIC_API_KEY,
-})
 
 // Known country-specific terms to flag
 const US_TERMS = [
@@ -21,7 +15,7 @@ const US_TERMS = [
   'CVS', 'Walgreens', 'Rite Aid',
   'FTC', 'SEC', 'EPA', 'FDA', 'OSHA',
   'SSN', 'EIN', 'Chapter 7', 'Chapter 11', 'Chapter 13',
-  'pay stub', 'paycheck', 'withholding', 'federal tax',
+  'pay stub', 'paycheck', 'federal tax',
 ]
 
 const UK_TERMS = [
@@ -90,8 +84,12 @@ function getLangName(code: string): string {
 
 // Simple word boundary check — no regex escaping needed
 function findTerm(text: string, term: string): number {
-  const tl = text.toLowerCase()
-  const trl = term.toLowerCase()
+  // Acronyms such as SAT, ACT and SWAT must be uppercase in the manuscript.
+  // Treating them case-insensitively produced nonsense prompts for ordinary
+  // words such as "sat", "act" and "swat".
+  const isAcronym = /^[A-Z][A-Z0-9-]*$/.test(term)
+  const tl = isAcronym ? text : text.toLowerCase()
+  const trl = isAcronym ? term : term.toLowerCase()
   let idx = 0
   while (idx < tl.length) {
     const found = tl.indexOf(trl, idx)
@@ -249,16 +247,24 @@ function keywordScan(text: string, languages: string[]): Finding[] {
 
 export async function POST(request: NextRequest) {
   try {
-    const { sessionId, uploadToken, text, genre, languages, maxFindings = 8 } = await request.json()
+    const { sessionId, uploadToken, text, genre, languages, maxFindings = 6, bookTitle, bookSetting, specialInstructions } = await request.json()
     if (HARDENED_V1_ENABLED && sessionId && !verifyUploadIdentity(sessionId, uploadToken)) return NextResponse.json({ error: 'Invalid upload identity' }, { status: 403 })
 
     let textToScan = ''
+    let sourceManifest: Record<string, unknown> | null = null
+    let authorContext = {
+      title: typeof bookTitle === 'string' ? bookTitle : '',
+      genre: typeof genre === 'string' ? genre : '',
+      setting: typeof bookSetting === 'string' ? bookSetting : '',
+      authorNotes: typeof specialInstructions === 'string' ? specialInstructions : '',
+      authorGlossary: '',
+    }
 
     // If sessionId provided, fetch from database (handles all formats)
     if (sessionId) {
       const { data, error } = await getSupabaseAdmin()
         .from('temp_uploads')
-        .select('content, file_format')
+        .select('content, file_format, source_manifest, author_glossary_text')
         .eq('session_id', sessionId)
         .order('created_at', { ascending: false })
         .limit(1)
@@ -269,6 +275,9 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ findings: [] })
       }
 
+      sourceManifest = data.source_manifest && typeof data.source_manifest === 'object'
+        ? data.source_manifest as Record<string, unknown>
+        : null
       if (data.file_format === '.docx') {
         // DOCX content is JSON with { text, binary }
         try {
@@ -279,6 +288,10 @@ export async function POST(request: NextRequest) {
         }
       } else {
         textToScan = data.content || ''
+      }
+      authorContext = {
+        ...authorContext,
+        authorGlossary: data.author_glossary_text || '',
       }
     } else if (text) {
       textToScan = text
@@ -333,7 +346,13 @@ export async function POST(request: NextRequest) {
     // Phase 1: Cultural terms extraction (stored by sessionId for pre-payment review)
     let culturalTerms: any[] = []
     try {
-      const culturalResult = await extractCulturalTerms(textToScan, 'English', languages || ['de'])
+      const culturalResult = await extractCulturalTerms(
+        textToScan,
+        'English',
+        languages || ['de'],
+        undefined,
+        authorContext,
+      )
       culturalTerms = culturalResult.terms
 
       if (sessionId && culturalResult.hasTerms) {
@@ -350,71 +369,22 @@ export async function POST(request: NextRequest) {
       console.warn('[scan-text] Cultural terms extraction failed:', err)
     }
 
-    // Phase 2: Fast keyword scan
-    const keywordFindings = keywordScan(textToScan, languages || ['de'])
-
-    // Phase 2: AI scan for proper names and fantasy elements
-    let aiFindings: Finding[] = []
-    const targetLangName = getLangName(languages?.[0] || 'de')
-
-    try {
-      const sampleText = textToScan.length > 3000 ? textToScan.slice(0, 3000) + '...' : textToScan
-      const response = await anthropic.messages.create({
-        model: BOOKLINGUA_MODEL_CONFIG.normal,
-        max_tokens: 1000,
-        system: `You are a pre-translation content scanner for BookLingua. Scan text for proper names and fantasy elements that need author guidance. Be concise.`,
-        messages: [{
-          role: 'user',
-          content: `Scan for: (1) character names or place names that may need translation decisions, (2) fantasy/invented terms if genre is fantasy/sci-fi.
-
-Genre: ${genre || 'unknown'}
-Target language: ${targetLangName}
-
-TEXT:
-${sampleText}
-
-Return ONLY a JSON array (max 3 items). Each item: {"type":"proper_name"|"fantasy_element","original":"term","question":"ask author","options":[{"label":"...","value":"keep|translate|adapt","description":"..."}],"defaultOption":"keep"}
-
-If nothing notable, return [].`
-        }]
-      })
-
-      const aiText = response.content[0].type === 'text' ? response.content[0].text : ''
-      const jsonMatch = aiText.match(/\[[\s\S]*?\]/)
-      if (jsonMatch) {
-        aiFindings = JSON.parse(jsonMatch[0])
-      }
-    } catch (err) {
-      console.warn('[scan-text] AI scan failed, using keyword-only:', err)
-    }
-
-    // Transform cultural terms into scanner findings so the same review UI can handle them
+    // Turn contextual candidates into author decisions. The old keyword/acronym
+    // scanner is intentionally not used: it created generic questions without
+    // knowing the manuscript, author notes, setting, or glossary.
     const culturalFindings: Finding[] = culturalTerms.map((term): Finding => ({
       type: 'cultural_specific',
       original: term.term,
-      context: term.exampleSentence,
-      question: `Your text mentions "${term.term}" — a ${term.category} reference. How should we handle it?`,
+      context: (term.contexts || []).join(' / '),
+      question: `${term.whyItMatters} Recommended: ${term.recommendation}`,
       options: [
-        { label: 'Keep in English', value: 'keep', description: `Keep "${term.term}" in English and explain briefly in the target language if needed` },
-        { label: 'Use suggested translation', value: 'adapt', description: `Translate/adapt as: "${term.defaultSuggestion}"` },
-        { label: 'Let translator decide', value: 'translator', description: 'Let BookLingua choose the best local equivalent based on context' },
+        { label: 'Use the recommendation', value: 'translator', description: term.recommendation },
+        { label: 'Keep as written', value: 'keep', description: `Keep "${term.term}" exactly as written throughout` },
+        { label: 'Let the translator decide', value: 'translate', description: 'Translate naturally, preserving the intended meaning and voice' },
       ],
       defaultOption: 'translator',
     }))
-
-    // Merge, deduplicate, prioritise country/cultural-specific
-    const allFindings = [...keywordFindings, ...culturalFindings]
-    for (const ai of aiFindings) {
-      const dup = allFindings.find(f => f.original.toLowerCase() === ai.original.toLowerCase())
-      if (!dup) allFindings.push(ai)
-    }
-
-    const prioritized = [
-      ...allFindings.filter(f => f.type === 'country_specific' || f.type === 'cultural_specific'),
-      ...allFindings.filter(f => f.type !== 'country_specific' && f.type !== 'cultural_specific'),
-    ]
-
-    return NextResponse.json({ findings: prioritized.slice(0, maxFindings), quality })
+    return NextResponse.json({ findings: culturalFindings.slice(0, maxFindings), quality })
 
   } catch (error) {
     console.error('Scan text error:', error)

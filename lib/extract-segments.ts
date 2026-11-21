@@ -338,10 +338,8 @@ export function assessQuality(segments: Segment[]): QualityReport {
     issues.push(`${Math.round((longParagraphs / paragraphs.length) * 100)}% of paragraphs are extremely long — possible merged content`)
   }
 
-  // Issue: No proper styles AND very few headings (manually formatted mess)
-  if (!hasProperStyles && headings.length < 3 && segments.length > 100) {
-    issues.push('Document has no heading styles and few detected headings — structure may be unreliable')
-  }
+  // Lack of Word heading styles is common in otherwise usable manuscripts.
+  // It is shown as metadata, but must not double-count as a fatal quality issue.
 
   // Issue: Unusual character distribution (garbled text)
   const totalText = segments.map(s => s.text).join('')
@@ -359,15 +357,12 @@ export function assessQuality(segments: Segment[]): QualityReport {
   // Calculate score
   let score = 100
   score -= issues.length * 15
-  if (!hasProperStyles) score -= 10
-  if (headings.length === 0) score -= 20
+  if (headings.length === 0) score -= 15
   score = Math.max(0, Math.min(100, score))
 
   // Determine status
   let status: QualityReport['status'] = 'clean'
-  if (score < 50 || issues.length >= 3) {
-    status = 'unprocessable'
-  } else if (score < 75 || issues.length >= 1) {
+  if (score < 75 || issues.length >= 1) {
     status = 'needs_review'
   }
 
