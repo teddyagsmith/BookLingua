@@ -12,7 +12,7 @@ import { validateArtifact } from './artifact-validation-v2'
 import { storeImmutableArtifact } from './artifact-store'
 import { resolvePackageGate } from './package-gate'
 import { deriveEditorialQaChangelog, deriveEditorialTranslationNotes, renderTranslationNotes, TranslationNotesV1, validateCustomerTranslationNotes, validateTranslationNotes } from './translation-notes'
-import { applyTitleAuthority, resolveTitleAuthority } from './authoritative-title'
+import { applyGeneratedTitleAuthority, applyTitleAuthority, resolveTitleAuthority } from './authoritative-title'
 import { TranslationBriefV1, assertTranslationBriefForSource, translationBriefFingerprint } from './translation-brief'
 import { ArtifactType } from './package-manifest'
 import { UPLOAD_GUIDE_ASSET_PATH, UPLOAD_GUIDE_SHA256 } from './upload-guide'
@@ -111,6 +111,7 @@ export interface SemanticPipelineInput {
   editorialModel?: string
   maxBatchOutputWords?: number
   maxBatchConcurrency?: number
+  generateTranslatedTitle?: (input: { sourceTitle: string; language: string }) => Promise<string>
 }
 
 export function applyVerifiedEditorialOverrides(document:SemanticDocumentV2,overrides:NonNullable<SemanticPipelineInput['verifiedEditorialOverrides']>):SemanticDocumentV2{
@@ -372,7 +373,10 @@ export async function runSemanticPipeline(input: SemanticPipelineInput) {
     ...titleAuthority,translatedValue:verifiedTranslatedTitle,effectiveValue:verifiedTranslatedTitle,
     confidence:'verified',fallbackUsed:false,warning:undefined,
   }
-  if(titleAuthority.fallbackUsed||!titleAuthority.translatedValue){
+  if(!titleAuthority.translatedValue&&input.generateTranslatedTitle){
+    titleAuthority=applyGeneratedTitleAuthority(titleAuthority,await input.generateTranslatedTitle({sourceTitle:titleAuthority.sourceValue,language:input.language}))
+  }
+  if(!titleAuthority.translatedValue){
     const errors=[titleAuthority.warning||{code:'TITLE_TRANSLATION_UNAVAILABLE',message:'A verified translated title is required'}]
     await validationReport(input.supabase,{orderId:input.orderId,language:input.language,buildId,stage:'title_authority',passed:false,errors,metrics:{titleAuthority}})
     throw new Error(`Title authority validation failed: ${errors[0].message}`)

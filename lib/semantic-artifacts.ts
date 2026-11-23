@@ -347,15 +347,19 @@ export async function buildSemanticDocxPreservingSource(source:Buffer,document:S
   if(document.sourceFormat!=='docx')throw new Error('Source-preserving DOCX output requires a DOCX semantic source')
   const zip:any=new AdmZip(source),entry=zip.getEntry('word/document.xml');if(!entry)throw new Error('DOCX document.xml missing')
   let nodeIndex=0
-  const normalize=(value:string)=>value.normalize('NFKC').replace(/\s+/g,' ').trim()
-  const xml=entry.getData().toString('utf8').replace(/<w:p\b([^>]*)>([\s\S]*?)<\/w:p>/g,(full:string,attrs:string,inner:string)=>{
+  // Ignore pictographs only while matching: the original run remains untouched.
+  const normalize=(value:string)=>value.normalize('NFKC').replace(/[\u2600-\u27bf]/g,'').replace(/\s+/g,' ').trim()
+  // Text boxes often hold a visual TOC duplicate that the semantic parser omits.
+  const sourceXml=entry.getData().toString('utf8')
+  const matchableXml=sourceXml.replace(/<w:txbxContent\b[^>]*>[\s\S]*?<\/w:txbxContent>/g,(block:string)=>block.replace(/<\/?w:p\b/g,(tag:string)=>tag.replace('w:p','bl:p')))
+  const xml=matchableXml.replace(/<w:p\b([^>]*)>([\s\S]*?)<\/w:p>/g,(full:string,attrs:string,inner:string)=>{
     const sourceText=normalize(Array.from(inner.matchAll(/<w:t\b[^>]*>([\s\S]*?)<\/w:t>/g)).map(match=>decodeXml(match[1])).join(''))
     if(!sourceText)return full
     const node=document.nodes[nodeIndex]
     if(!node||normalize(node.sourceText)!==sourceText)throw new Error(`DOCX source presentation does not align at semantic node ${nodeIndex+1}`)
     nodeIndex++
     return `<w:p${attrs}>${applySemanticParagraphStyle(replaceDocxParagraphText(inner,node.translatedText!),node)}</w:p>`
-  })
+  }).replace(/<\/?bl:p\b/g,(tag:string)=>tag.replace('bl:p','w:p'))
   if(nodeIndex!==document.nodes.length)throw new Error('DOCX source presentation has incomplete semantic coverage')
   zip.updateFile('word/document.xml',Buffer.from(xml))
   const stylesEntry=zip.getEntry('word/styles.xml')
@@ -373,13 +377,31 @@ export async function buildSemanticDocxPreservingSource(source:Buffer,document:S
 }
 
 export async function buildFinalSemanticDocx(source:Buffer,document:SemanticDocumentV2,title:string):Promise<Buffer>{
+  let finalDocx:Buffer|undefined
   if(document.sourceFormat==='docx'&&document.parserConfidence>=0.6){
-    try{return await buildSemanticDocxPreservingSource(source,document)}catch(error){
+    try{finalDocx=await buildSemanticDocxPreservingSource(source,document)}catch(error){
       if(document.parserConfidence>=0.85)throw error
     }
   }
+  if(finalDocx)return finalDocx
   const emphasis = document.sourceFormat === 'epub' ? epubEmphasisByLocation(source) : undefined
-  return buildSemanticDocx(document,title,'final',emphasis)
+  const clean=await buildSemanticDocx(document,title,'final',emphasis)
+  if(document.sourceFormat==='docx')assertDocxPresentationParity(source,clean)
+  return clean
+}
+
+type DocxPresentationMetrics={images:number;bold:number;italics:number}
+function docxPresentationMetrics(buffer:Buffer):DocxPresentationMetrics{
+  const zip:any=new AdmZip(buffer),document=zip.getEntry('word/document.xml')?.getData().toString('utf8')||''
+  const rels=zip.getEntry('word/_rels/document.xml.rels')?.getData().toString('utf8')||''
+  const media=zip.getEntries().filter((entry:any)=>/^word\/media\//i.test(entry.entryName)).length
+  return {images:Math.max(media,(document.match(/<a:blip\b[^>]*\br:embed=/g)||[]).length,(rels.match(/relationships\/image/gi)||[]).length),bold:(document.match(/<w:b(?:\s[^>]*)?\/?>(?:<\/w:b>)?/g)||[]).length,italics:(document.match(/<w:i(?:\s[^>]*)?\/?>(?:<\/w:i>)?/g)||[]).length}
+}
+/** Reject a clean fallback that silently strips meaningful DOCX presentation. */
+export function assertDocxPresentationParity(source:Buffer,finalDocx:Buffer):void{
+  const before=docxPresentationMetrics(source),after=docxPresentationMetrics(finalDocx)
+  const losses=(Object.keys(before) as Array<keyof DocxPresentationMetrics>).filter(key=>after[key]<before[key])
+  if(losses.length)throw new Error(`Final DOCX lost source presentation: ${losses.map(key=>`${key} ${before[key]}→${after[key]}`).join(', ')}`)
 }
 
 function replaceTextPreservingInline(inner: string, translated: string): string {

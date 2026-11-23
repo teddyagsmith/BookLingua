@@ -372,6 +372,22 @@ export const translateBook = inngest.createFunction(
             verifiedExplanatoryNotes: verifiedExplanatoryNotesFromBrief(brief),
             explanatoryWarnings,
             repairUnexpectedExplanatoryBrackets: String(order.special_instructions || '').includes('[REPAIR_UNEXPECTED_EXPLANATORY_BRACKETS]'),
+            // Metadata-only books have no translated title node. Generate a
+            // review-only title; semantic-pipeline records it as generated.
+            generateTranslatedTitle: async ({ sourceTitle, language: titleLanguage }) => {
+              const response = await anthropic.messages.create({
+                model: BOOKLINGUA_MODEL_CONFIG.translation, max_tokens: 160,
+                system: 'Return only the translated book title as plain text. Do not add labels, quotation marks, explanation, markdown, or a trailing period.',
+                messages: [{ role: 'user', content: `Translate this book title into ${LANGUAGE_NAMES[titleLanguage] || titleLanguage}, preserving proper names and series branding where appropriate:\n${sourceTitle}` }],
+              })
+              const text = response.content.find((block: any) => block.type === 'text')
+              const generated = text && text.type === 'text' ? text.text.replace(/^['"“”]|['"“”]$/g, '').trim() : ''
+              if (!generated || generated.length > 280 || /\n/.test(generated)) throw new Error('Title generation returned an invalid title')
+              await recordModelTelemetry(getSupabaseAdmin(), { orderId, language: titleLanguage, stage: 'title_generation', attempt: attempt + 1,
+                requestIdentity: `${orderId}:${titleLanguage}:generated-title`, provider: 'anthropic', modelId: response.model, providerRequestId: response.id,
+                success: true, inputTokens: response.usage.input_tokens, outputTokens: response.usage.output_tokens, cacheStatus: 'write' })
+              return generated
+            },
             translate: async (batch, context) => {
               const stage=context.pass===1?'translation':'editorial';const requestIdentity=`${orderId}:${language}:${stage}:${context.batchId}`
               return translateWithDeterministicJsonRecovery(batch, requestIdentity, async (requestBatch, recovery) => {
