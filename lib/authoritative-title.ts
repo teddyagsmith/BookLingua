@@ -8,10 +8,18 @@ export interface TitleAuthority {
   sourceValue: string
   translatedValue?: string
   effectiveValue: string
-  confidence: 'verified' | 'preserved'
+  confidence: 'verified' | 'generated' | 'preserved'
   fallbackUsed: boolean
   semanticNodeId?: string
-  warning?: { code: 'TITLE_TRANSLATION_UNAVAILABLE'; message: string }
+  warning?: { code: 'TITLE_TRANSLATION_UNAVAILABLE' | 'TITLE_TRANSLATION_GENERATED_FOR_REVIEW'; message: string }
+}
+
+/** A generated title is review-only, never verified authority. */
+export function applyGeneratedTitleAuthority(authority:TitleAuthority, translatedTitle:string):TitleAuthority{
+  const generated=translatedTitle.trim()
+  if(!generated)throw new Error('Generated translated title is empty')
+  return {...authority,translatedValue:generated,effectiveValue:generated,confidence:'generated',fallbackUsed:true,
+    warning:{code:'TITLE_TRANSLATION_GENERATED_FOR_REVIEW',message:'No verified translated title authority was available; a generated title was used and requires Teddy review before delivery.'}}
 }
 
 function decodeXml(value:string):string{

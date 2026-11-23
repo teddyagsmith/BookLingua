@@ -175,6 +175,9 @@ test('hardened email paths use deterministic provider idempotency keys', () => {
 test('real semantic job wires Launch Pack and dual-format entitlements', () => {
   const job=fs.readFileSync(path.join(process.cwd(),'lib/translate-job.ts'),'utf8'); const pipeline=fs.readFileSync(path.join(process.cwd(),'lib/semantic-pipeline.ts'),'utf8')
   assert.match(job,/toCanonicalLaunchPack/); assert.match(job,/launchPack, dualFormat:/); assert.match(pipeline,/buildSemanticEpubFromDocument/)
+  assert.match(job,/semantic-\$\{language\}-pass-\$\{context\.pass\}-batch-\$\{context\.batchIndex\}/)
+  assert.match(job,/response\.stop_reason === 'max_tokens'/)
+  assert.match(pipeline,/runBatch\?:/)
 })
 
 test('translation runs are serialized per paid order before any model work', () => {

@@ -12,7 +12,7 @@ import { validateArtifact } from './artifact-validation-v2'
 import { storeImmutableArtifact } from './artifact-store'
 import { resolvePackageGate } from './package-gate'
 import { deriveEditorialQaChangelog, deriveEditorialTranslationNotes, renderTranslationNotes, TranslationNotesV1, validateCustomerTranslationNotes, validateTranslationNotes } from './translation-notes'
-import { applyTitleAuthority, resolveTitleAuthority } from './authoritative-title'
+import { applyGeneratedTitleAuthority, applyTitleAuthority, resolveTitleAuthority } from './authoritative-title'
 import { TranslationBriefV1, assertTranslationBriefForSource, translationBriefFingerprint } from './translation-brief'
 import { ArtifactType } from './package-manifest'
 import { UPLOAD_GUIDE_ASSET_PATH, UPLOAD_GUIDE_SHA256 } from './upload-guide'
@@ -111,6 +111,9 @@ export interface SemanticPipelineInput {
   editorialModel?: string
   maxBatchOutputWords?: number
   maxBatchConcurrency?: number
+  /** Optional durable-workflow boundary around one provider batch. */
+  runBatch?: (context:{pass:1|2;batchIndex:number;batchCount:number;batchId:string}, operation:()=>Promise<NodeTranslationOutput>)=>Promise<NodeTranslationOutput>
+  generateTranslatedTitle?: (input: { sourceTitle: string; language: string }) => Promise<string>
 }
 
 export function applyVerifiedEditorialOverrides(document:SemanticDocumentV2,overrides:NonNullable<SemanticPipelineInput['verifiedEditorialOverrides']>):SemanticDocumentV2{
@@ -246,8 +249,11 @@ async function cachedTranslation(input: SemanticPipelineInput, batch: NodeTransl
     return validateAndMergeNodeOutput(authoritativeNodes, JSON.parse(existing.content), batch.sourceFingerprint)
   }
   const readerRegister = resolveReaderRegister({ brief: input.brief, genre: input.genre, language: input.language })
-  const output = await input.translate(batch,{pass,language:input.language,brief:input.brief,genre:input.genre,
+  const operation=()=>input.translate(batch,{pass,language:input.language,brief:input.brief,genre:input.genre,
     readerRegister,readerRegisterPrompt:readerRegisterPromptLine(input.language,readerRegister),batchId,batchIndex,batchCount})
+  const output = input.runBatch
+    ? await input.runBatch({pass,batchIndex,batchCount,batchId},operation)
+    : await operation()
   const validated = validateAndMergeNodeOutput(authoritativeNodes, output, batch.sourceFingerprint)
   const { error } = await input.supabase.from('translation_chunks').upsert({ order_id:input.orderId,lang_code:input.language,chunk_index:batchIndex,pass:`semantic-pass${pass}`,content:JSON.stringify(output),pipeline_version:'semantic-v2',schema_version:batch.schemaVersion,structure_fingerprint:batchId,model_provider:modelProvider,model_id:modelId,model_stage:modelStage },{onConflict:'order_id,lang_code,chunk_index,pass,pipeline_version,schema_version,structure_fingerprint,model_id'})
   if (error) throw new Error(`Semantic cache persistence failed: ${error.message}`)
@@ -372,7 +378,10 @@ export async function runSemanticPipeline(input: SemanticPipelineInput) {
     ...titleAuthority,translatedValue:verifiedTranslatedTitle,effectiveValue:verifiedTranslatedTitle,
     confidence:'verified',fallbackUsed:false,warning:undefined,
   }
-  if(titleAuthority.fallbackUsed||!titleAuthority.translatedValue){
+  if(!titleAuthority.translatedValue&&input.generateTranslatedTitle){
+    titleAuthority=applyGeneratedTitleAuthority(titleAuthority,await input.generateTranslatedTitle({sourceTitle:titleAuthority.sourceValue,language:input.language}))
+  }
+  if(!titleAuthority.translatedValue){
     const errors=[titleAuthority.warning||{code:'TITLE_TRANSLATION_UNAVAILABLE',message:'A verified translated title is required'}]
     await validationReport(input.supabase,{orderId:input.orderId,language:input.language,buildId,stage:'title_authority',passed:false,errors,metrics:{titleAuthority}})
     throw new Error(`Title authority validation failed: ${errors[0].message}`)

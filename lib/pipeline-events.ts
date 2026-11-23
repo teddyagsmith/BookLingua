@@ -20,7 +20,9 @@ export function safePipelineError(error: unknown): string {
   if (/source.*(missing|hash|retrieve|binary)/i.test(raw)) return 'SOURCE_INTEGRITY_FAILURE'
   if (/quality gate|refusal|too short/i.test(raw)) return 'TRANSLATION_QUALITY_FAILURE'
   if (/validation|artifact|package/i.test(raw)) return 'PACKAGE_VALIDATION_FAILURE'
-  if (/timeout|timed out/i.test(raw)) return 'PROVIDER_TIMEOUT'
+  if (/timeout|timed out|deadline exceeded|function execution exceeded/i.test(raw)) return 'PIPELINE_TIMEOUT'
+  if (/max_tokens|maximum tokens|output truncated|model_output_truncated/i.test(raw)) return 'MODEL_OUTPUT_TRUNCATED'
+  if (/model_json_invalid|invalid json|unexpected end of json|json.*(invalid|truncated)/i.test(raw)) return 'MODEL_JSON_INVALID'
   return 'PIPELINE_EXECUTION_FAILURE'
 }
 
