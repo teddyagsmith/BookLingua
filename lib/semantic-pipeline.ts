@@ -112,7 +112,7 @@ export interface SemanticPipelineInput {
   maxBatchOutputWords?: number
   maxBatchConcurrency?: number
   /** Optional durable-workflow boundary around one provider batch. */
-  runBatch?: <T>(context:{pass:1|2;batchIndex:number;batchCount:number;batchId:string}, operation:()=>Promise<T>)=>Promise<T>
+  runBatch?: (context:{pass:1|2;batchIndex:number;batchCount:number;batchId:string}, operation:()=>Promise<NodeTranslationOutput>)=>Promise<NodeTranslationOutput>
   generateTranslatedTitle?: (input: { sourceTitle: string; language: string }) => Promise<string>
 }
 
