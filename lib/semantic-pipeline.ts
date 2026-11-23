@@ -111,6 +111,8 @@ export interface SemanticPipelineInput {
   editorialModel?: string
   maxBatchOutputWords?: number
   maxBatchConcurrency?: number
+  /** Optional durable-workflow boundary around one provider batch. */
+  runBatch?: <T>(context:{pass:1|2;batchIndex:number;batchCount:number;batchId:string}, operation:()=>Promise<T>)=>Promise<T>
   generateTranslatedTitle?: (input: { sourceTitle: string; language: string }) => Promise<string>
 }
 
@@ -247,8 +249,11 @@ async function cachedTranslation(input: SemanticPipelineInput, batch: NodeTransl
     return validateAndMergeNodeOutput(authoritativeNodes, JSON.parse(existing.content), batch.sourceFingerprint)
   }
   const readerRegister = resolveReaderRegister({ brief: input.brief, genre: input.genre, language: input.language })
-  const output = await input.translate(batch,{pass,language:input.language,brief:input.brief,genre:input.genre,
+  const operation=()=>input.translate(batch,{pass,language:input.language,brief:input.brief,genre:input.genre,
     readerRegister,readerRegisterPrompt:readerRegisterPromptLine(input.language,readerRegister),batchId,batchIndex,batchCount})
+  const output = input.runBatch
+    ? await input.runBatch({pass,batchIndex,batchCount,batchId},operation)
+    : await operation()
   const validated = validateAndMergeNodeOutput(authoritativeNodes, output, batch.sourceFingerprint)
   const { error } = await input.supabase.from('translation_chunks').upsert({ order_id:input.orderId,lang_code:input.language,chunk_index:batchIndex,pass:`semantic-pass${pass}`,content:JSON.stringify(output),pipeline_version:'semantic-v2',schema_version:batch.schemaVersion,structure_fingerprint:batchId,model_provider:modelProvider,model_id:modelId,model_stage:modelStage },{onConflict:'order_id,lang_code,chunk_index,pass,pipeline_version,schema_version,structure_fingerprint,model_id'})
   if (error) throw new Error(`Semantic cache persistence failed: ${error.message}`)

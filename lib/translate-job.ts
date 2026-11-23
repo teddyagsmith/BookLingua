@@ -303,7 +303,7 @@ export const translateBook = inngest.createFunction(
       const source = originalBuffer || Buffer.from(fileContent, 'utf8')
       const format = String(order.file_format || '.txt').replace(/^\./, '') as 'epub' | 'docx' | 'txt'
       for (const language of languages) {
-        await step.run(`semantic-v2-${language}`, async () => {
+        {
           const { data: currentBuild, error: currentBuildError } = await getSupabaseAdmin().from('order_language_builds')
             .select('id').eq('order_id', orderId).eq('language', language).eq('is_current', true).maybeSingle()
           if (currentBuildError) throw new Error(`Completed semantic build lookup failed: ${currentBuildError.message}`)
@@ -372,6 +372,10 @@ export const translateBook = inngest.createFunction(
             verifiedExplanatoryNotes: verifiedExplanatoryNotesFromBrief(brief),
             explanatoryWarnings,
             repairUnexpectedExplanatoryBrackets: String(order.special_instructions || '').includes('[REPAIR_UNEXPECTED_EXPLANATORY_BRACKETS]'),
+            // Each provider batch becomes its own durable Inngest step. A
+            // long-book retry resumes from translation_chunks rather than
+            // replaying a whole language inside one 800-second invocation.
+            runBatch: async (context, operation) => step.run(`semantic-${language}-pass-${context.pass}-batch-${context.batchIndex}`, operation),
             // Metadata-only books have no translated title node. Generate a
             // review-only title; semantic-pipeline records it as generated.
             generateTranslatedTitle: async ({ sourceTitle, language: titleLanguage }) => {
@@ -398,6 +402,7 @@ export const translateBook = inngest.createFunction(
                     system: context.pass === 1 ? translationSystemPrompt(context.readerRegisterPrompt) : editorialSystemPrompt(LANGUAGE_NAMES[context.language] || context.language, context.genre, context.readerRegisterPrompt),
                     messages: [{ role: 'user', content: `${renderTranslationBriefPrompt(context.brief)}\n${context.pass === 1 ? 'Translation pass' : 'Editorial pass'}; target language ${context.language}.\n${JSON.stringify(requestBatch)}` }],
                   })
+                  if (response.stop_reason === 'max_tokens') throw new RecoverableSemanticModelOutputError('MODEL_OUTPUT_TRUNCATED: provider stopped at max_tokens')
                   const text = response.content.find((block:any) => block.type === 'text')
                   if (!text || text.type !== 'text' || !text.text.trim()) throw new RecoverableSemanticModelOutputError('Semantic model returned no JSON text')
                   const parsed=JSON.parse(text.text.replace(/^```json\s*|\s*```$/g, ''))
@@ -423,7 +428,7 @@ export const translateBook = inngest.createFunction(
             if (warningError) throw new Error(`Failed to record explanatory-note warning: ${warningError.message}`)
           }
           return { buildId: result.buildId, status: result.manifest.status }
-        })
+        }
       }
       const finalization = await step.run('semantic-v2-finalize', async () => finalizeSemanticOrder({
         supabase: getSupabaseAdmin(), orderId, bookTitle: order.book_title, languages,

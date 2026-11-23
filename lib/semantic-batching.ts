@@ -2,7 +2,9 @@ import { createHash } from 'crypto'
 import { SemanticNodeV2 } from './semantic-document'
 
 export const SEMANTIC_BATCH_POLICY_VERSION = 'semantic-batch-v1'
-export const DEFAULT_MAX_EXPECTED_OUTPUT_WORDS = 700
+// JSON node envelopes and target-language expansion make 700 source words
+// routinely exceed a model's output limit. Keep a batch comfortably below it.
+export const DEFAULT_MAX_EXPECTED_OUTPUT_WORDS = 400
 
 export interface SemanticBatch {
   index: number

@@ -16,3 +16,9 @@ test('safe failure messages are concise and redact inline credentials', () => {
   assert.equal(message.includes('\n'), false)
   assert.ok(message.length <= 500)
 })
+
+test('timeouts and model truncation retain actionable safe causes', () => {
+  assert.equal(safePipelineError(new Error('Function execution exceeded its timeout')), 'PIPELINE_TIMEOUT')
+  assert.equal(safePipelineError(new Error('MODEL_OUTPUT_TRUNCATED: provider stopped at max_tokens')), 'MODEL_OUTPUT_TRUNCATED')
+  assert.equal(safePipelineError(new SyntaxError('Unexpected end of JSON input')), 'MODEL_JSON_INVALID')
+})
