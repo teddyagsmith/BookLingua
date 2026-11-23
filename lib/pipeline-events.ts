@@ -19,6 +19,7 @@ export function safePipelineError(error: unknown): string {
   if (/brief.*(missing|mismatch|approved|source)/i.test(raw)) return 'TRANSLATION_BRIEF_INVALID'
   if (/source.*(missing|hash|retrieve|binary)/i.test(raw)) return 'SOURCE_INTEGRITY_FAILURE'
   if (/quality gate|refusal|too short/i.test(raw)) return 'TRANSLATION_QUALITY_FAILURE'
+  if (/target explanatory addition absent|explanatory.note.*(absent|unrequested|contract)/i.test(raw)) return 'EXPLANATORY_NOTE_CONTRACT_FAILURE'
   if (/validation|artifact|package/i.test(raw)) return 'PACKAGE_VALIDATION_FAILURE'
   if (/timeout|timed out|deadline exceeded|function execution exceeded/i.test(raw)) return 'PIPELINE_TIMEOUT'
   if (/max_tokens|maximum tokens|output truncated|model_output_truncated/i.test(raw)) return 'MODEL_OUTPUT_TRUNCATED'

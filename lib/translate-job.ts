@@ -314,7 +314,7 @@ export const translateBook = inngest.createFunction(
             if (completed) {
               const { data: authoritative, error: authorityError } = await getSupabaseAdmin().rpc('is_authoritative_package_manifest', { p_manifest_id: completed.id })
               if (authorityError) throw new Error(`Completed semantic package authority check failed: ${authorityError.message}`)
-              if (authoritative === true) return { buildId: currentBuild.id, status: 'pass', cached: true }
+              if (authoritative === true) continue
             }
           }
           const loadedBrief = await loadTranslationBrief(getSupabaseAdmin(), orderId, language)
@@ -427,7 +427,9 @@ export const translateBook = inngest.createFunction(
             const { error: warningError } = await getSupabaseAdmin().from('pipeline_events').insert({ order_id: orderId, language, stage: 'explanatory_note', status: 'passed', level: 'warning', safe_message: warning })
             if (warningError) throw new Error(`Failed to record explanatory-note warning: ${warningError.message}`)
           }
-          return { buildId: result.buildId, status: result.manifest.status }
+          // Process every language before the aggregate finalization below.
+          // Returning here skipped finalization and any later language.
+          continue
         }
       }
       const finalization = await step.run('semantic-v2-finalize', async () => finalizeSemanticOrder({

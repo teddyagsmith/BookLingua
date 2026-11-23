@@ -37,10 +37,13 @@ test('selected explanations appear once at first source occurrence and unselecte
   assert.equal(audit.bracketAdditionsWithoutSource,2)
 })
 
-test('a canonical note cannot be attached where its source term is absent',()=>{
+test('unrequested explanatory additions are removed instead of stranding a completed book',()=>{
   const source=document([['Search DMV records.',''],['Was a gun license required?','']])
   const target=document([['Search DMV records.','Die DMV.'],['Was a gun license required?','Eine Lizenz (US-amerikanische Kraftfahrzeugbehörde).']])
-  assert.throws(()=>applyBookWideExplanatoryNotes({source,target,brief:{...brief,items:[brief.items[1]]},verified:[verified[1]],removeUnexpected:false}),/Target explanatory addition absent in source/)
+  const warnings:string[]=[]
+  const output=applyBookWideExplanatoryNotes({source,target,brief:{...brief,items:[brief.items[1]]},verified:[verified[1]],removeUnexpected:false,warnings})
+  assert.equal(output.nodes[1].translatedText,'Eine Lizenz.')
+  assert.deepEqual(warnings,['UNREQUESTED_EXPLANATORY_ADDITION_REMOVED:node-1:bracket'])
 })
 
 test('missing model target wording falls back at the first source-node position and records a warning',()=>{

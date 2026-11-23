@@ -185,6 +185,15 @@ test('translation runs are serialized per paid order before any model work', () 
   assert.match(job,/concurrency:\s*\{\s*limit:\s*1,\s*key:\s*'event\.data\.orderId'\s*\}/)
 })
 
+test('semantic job finalizes only after every language has completed or reused its package', () => {
+  const job=fs.readFileSync(path.join(process.cwd(),'lib/translate-job.ts'),'utf8')
+  const finalization=job.indexOf("step.run('semantic-v2-finalize'")
+  const perLanguage=job.indexOf("for (const language of languages)")
+  assert.ok(perLanguage > 0 && finalization > perLanguage)
+  assert.match(job,/if \(authoritative === true\) continue/)
+  assert.match(job,/Process every language before the aggregate finalization[\s\S]*continue/)
+})
+
 test('manually managed orders can complete without contacting internal reviewers', () => {
   const job=fs.readFileSync(path.join(process.cwd(),'lib/translate-job.ts'),'utf8')
   const finalization=fs.readFileSync(path.join(process.cwd(),'lib/semantic-finalization.ts'),'utf8')
