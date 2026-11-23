@@ -193,6 +193,18 @@ test('chapter map is one-to-one and emits CSV and DOCX', async () => {
   assert.ok((await renderChapterMapDocx(rows)).length > 0)
 })
 
+test('chapter map retains unnumbered structural DOCX headings', () => {
+  const document:any={schemaVersion:'2.0',sourceHash:'hash',sourceFormat:'docx',parserConfidence:1,nodes:[
+    {id:'h1',chapterId:'chapter-0001',type:'heading',headingLevel:1,sourceChapterNumber:null,sourceText:'Mental Preparation',translatedText:'Preparación mental',order:0,sourceLocation:'docx:block:0'},
+    {id:'h2',chapterId:'chapter-0001',type:'heading',headingLevel:2,sourceChapterNumber:null,sourceText:'Exercise: Goal Setting',translatedText:'Ejercicio: establecer objetivos',order:1,sourceLocation:'docx:block:1'},
+  ]}
+  const rows=buildChapterMap(document)
+  assert.deepEqual(rows.map(row=>[row.sourceChapterNumber,row.sourceTitle,row.translatedTitle]),[
+    [null,'Mental Preparation','Preparación mental'],
+    [null,'Exercise: Goal Setting','Ejercicio: establecer objetivos'],
+  ])
+})
+
 test('split chapter headings become one EPUB nav, DOCX TOC, and Chapter Map entry',async()=>{
   const zip:any=new (AdmZip as any)(undefined,{noSort:true})
   zip.addFile('mimetype',Buffer.from('application/epub+zip'));zip.getEntry('mimetype').header.method=0

@@ -22,8 +22,11 @@ export function buildChapterMap(document: SemanticDocumentV2): ChapterMapRow[] {
     .map((node): ChapterMapRow | null => {
       const sourceTitle=decodeVisibleEntities(node.sourceText).trim()
       const major=sourceTitle.match(/^(CHAPTER\s+(\d+|[IVXLCDM]+)|PART\s+([IVXLCDM]+))\b/i)
-      if(!major)return null
-      const chapterNumber=major[2]||`Part ${major[3].toUpperCase()}`
+      // Many nonfiction DOCX exports use meaningful section headings rather
+      // than "Chapter N". They are still the book's structural map and must
+      // appear in the customer Chapter Map. Numbered chapter/part labels keep
+      // their legacy number; other headings intentionally leave it blank.
+      const chapterNumber=node.sourceChapterNumber||major?.[2]||(major?.[3]?`Part ${major[3].toUpperCase()}`:null)
       return ({
       chapterId: node.id,
       headingLevel: node.headingLevel || 1,
