@@ -157,7 +157,8 @@ export function deriveEditorialTranslationNotes(input: {
   }
   const limit = Math.max(1, Math.min(input.limit || 12, 20))
   const decisions: TranslationNoteEntry[] = []
-  if (input.authoritativeTitle&&input.authoritativeTitle.source.normalize('NFKC')!==input.authoritativeTitle.target.normalize('NFKC')) decisions.push({
+  const deliveredTitle=Boolean(input.authoritativeTitle&&pass2HasExactWording(input.pass2.nodes,input.authoritativeTitle.target))
+  if (input.authoritativeTitle&&deliveredTitle&&input.authoritativeTitle.source.normalize('NFKC')!==input.authoritativeTitle.target.normalize('NFKC')) decisions.push({
     source: input.authoritativeTitle.source,
     target: input.authoritativeTitle.target,
     reason: 'The translated title follows the manuscript-authoritative title decision used consistently across the delivered files.',
@@ -182,6 +183,11 @@ export function deriveEditorialTranslationNotes(input: {
       // source-linked editorial decisions above belong in customer Notes.
     ],
   }
+}
+
+function pass2HasExactWording(nodes:Array<{translatedText?:string|null}>, wording:string):boolean{
+  const target=normalizedExact(wording)
+  return Boolean(target)&&nodes.some(node=>normalizedExact(node.translatedText||'').includes(target))
 }
 
 /** Full Pass 1 → Pass 2 history is internal evidence and must never be rendered to customers. */
