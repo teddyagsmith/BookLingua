@@ -11,7 +11,7 @@ import { validateArtifact } from './artifact-validation-v2'
 import { storeImmutableArtifact } from './artifact-store'
 import { resolvePackageGate } from './package-gate'
 import { deriveEditorialTranslationNotes, renderTranslationNotes, TranslationNotesV1, validateTranslationNotes } from './translation-notes'
-import { applyTitleAuthority, resolveTitleAuthority } from './authoritative-title'
+import { applyGeneratedTitleAuthority, applyTitleAuthority, resolveTitleAuthority } from './authoritative-title'
 import { TranslationBriefV1, assertTranslationBriefForSource, translationBriefFingerprint } from './translation-brief'
 import { ArtifactType } from './package-manifest'
 import { UPLOAD_GUIDE_ASSET_PATH, UPLOAD_GUIDE_SHA256 } from './upload-guide'
@@ -51,6 +51,7 @@ export interface SemanticPipelineInput {
   editorialModel?: string
   maxBatchOutputWords?: number
   maxBatchConcurrency?: number
+  generateTranslatedTitle?: (input: { sourceTitle: string; language: string }) => Promise<string>
 }
 
 export function deterministicSemanticBuildId(orderId: string, language: string, sourceHash: string, briefRevision: number): string {
@@ -205,8 +206,11 @@ export async function runSemanticPipeline(input: SemanticPipelineInput) {
   assertSourceAwareHeadingDuplicateParity(sourceDocument.nodes, pass1.nodes)
   await persistSemantic(input.supabase, { orderId: input.orderId, language: input.language, buildId, pass: 'pass1', document: pass1, eligibility: eligibility.status })
   const rawPass2 = { ...pass1, nodes: await runBatchedPass(input, pass1.nodes, 2) }
-  const titleAuthority = resolveTitleAuthority({ document: rawPass2, checkoutTitle: input.title, source: input.source })
-  if(titleAuthority.fallbackUsed||!titleAuthority.translatedValue){
+  let titleAuthority = resolveTitleAuthority({ document: rawPass2, checkoutTitle: input.title, source: input.source })
+  if(!titleAuthority.translatedValue&&input.generateTranslatedTitle){
+    titleAuthority=applyGeneratedTitleAuthority(titleAuthority,await input.generateTranslatedTitle({sourceTitle:titleAuthority.sourceValue,language:input.language}))
+  }
+  if(!titleAuthority.translatedValue){
     const errors=[titleAuthority.warning||{code:'TITLE_TRANSLATION_UNAVAILABLE',message:'A verified translated title is required'}]
     await validationReport(input.supabase,{orderId:input.orderId,language:input.language,buildId,stage:'title_authority',passed:false,errors,metrics:{titleAuthority}})
     throw new Error(`Title authority validation failed: ${errors[0].message}`)

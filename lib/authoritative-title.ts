@@ -8,10 +8,28 @@ export interface TitleAuthority {
   sourceValue: string
   translatedValue?: string
   effectiveValue: string
-  confidence: 'verified' | 'preserved'
+  confidence: 'verified' | 'generated' | 'preserved'
   fallbackUsed: boolean
   semanticNodeId?: string
-  warning?: { code: 'TITLE_TRANSLATION_UNAVAILABLE'; message: string }
+  warning?: { code: 'TITLE_TRANSLATION_UNAVAILABLE' | 'TITLE_TRANSLATION_GENERATED_FOR_REVIEW'; message: string }
+}
+
+/**
+ * A generated title is deliberately never treated as verified authority.  It is
+ * usable to build a complete review package, but the provenance remains in the
+ * validation report so a human reviewer must approve it before delivery.
+ */
+export function applyGeneratedTitleAuthority(authority:TitleAuthority, translatedTitle:string):TitleAuthority{
+  const generated=translatedTitle.trim()
+  if(!generated)throw new Error('Generated translated title is empty')
+  return {
+    ...authority,
+    translatedValue:generated,
+    effectiveValue:generated,
+    confidence:'generated',
+    fallbackUsed:true,
+    warning:{code:'TITLE_TRANSLATION_GENERATED_FOR_REVIEW',message:'No verified translated title authority was available; a generated title was used and requires Teddy review before delivery.'},
+  }
 }
 
 function decodeXml(value:string):string{
@@ -23,7 +41,10 @@ function normalize(value:string):string{
 }
 
 export function cleanBookTitle(value:string):string{
-  return decodeXml(value).replace(/^\s*(?:updated\s+)?(?:e-?book|ebook|final|revised|latest)(?:\s+(?:file|version|edition))?\s*[-_:–—]*\s*/i,'').trim()||decodeXml(value)
+  const decoded=decodeXml(value)
+  const withoutPrefix=decoded.replace(/^\s*(?:updated\s+)?(?:e-?book|ebook|final|revised|latest)(?:\s+(?:file|version|edition))?\s*[-_:–—]*\s*/i,'').trim()
+  const withoutLabel=withoutPrefix.replace(/\s+(?:e-?book|ebook|final|revised|latest)(?:\s+(?:file|version|edition))?\s*$/i,'').trim()
+  return withoutLabel||decoded
 }
 
 function subtitleBase(value:string):string|null{
@@ -32,7 +53,11 @@ function subtitleBase(value:string):string|null{
 }
 
 function isVerifiedSemanticTitle(sourceText:string,checkoutTitle:string):boolean{
-  const source=normalize(sourceText),checkout=normalize(checkoutTitle)
+  // Checkout filenames/titles routinely retain a trailing "eBook" label while
+  // the manuscript title page does not.  Compare the canonical checkout title,
+  // otherwise a valid translated title node is incorrectly rejected and the
+  // entire semantic package fails at the title-authority gate.
+  const source=normalize(sourceText),checkout=normalize(cleanBookTitle(checkoutTitle))
   if(!source||!checkout)return false
   if(source===checkout)return true
   const base=subtitleBase(sourceText)

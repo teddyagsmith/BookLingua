@@ -359,6 +359,24 @@ export const translateBook = inngest.createFunction(
             supabase: getSupabaseAdmin(), orderId, language, sourceFormat: format, source,
             title: order.book_title, authorName: order.author_name, brief, notes, buildId: deterministicSemanticBuildId(orderId,language,crypto.createHash('sha256').update(source).digest('hex'),brief.revision), allowReviewedStructure: order.semantic_structure_approved === true,
             launchPack, dualFormat: (order.upsells || []).includes('dual-format'),
+            // Metadata-only books have no translated title node to validate.  A
+            // small, separate generation keeps the package moving to *human*
+            // review; semantic-pipeline records it as generated, never verified.
+            generateTranslatedTitle: async ({ sourceTitle, language: titleLanguage }) => {
+              const response = await anthropic.messages.create({
+                model: BOOKLINGUA_MODEL_CONFIG.translation,
+                max_tokens: 160,
+                system: 'Return only the translated book title as plain text. Do not add labels, quotation marks, explanation, markdown, or a trailing period.',
+                messages: [{ role: 'user', content: `Translate this book title into ${LANGUAGE_NAMES[titleLanguage] || titleLanguage}, preserving proper names and series branding where appropriate:\n${sourceTitle}` }],
+              })
+              const text = response.content.find((block: any) => block.type === 'text')
+              const generated = text && text.type === 'text' ? text.text.replace(/^['"“”]|['"“”]$/g, '').trim() : ''
+              if (!generated || generated.length > 280 || /\n/.test(generated)) throw new Error('Title generation returned an invalid title')
+              await recordModelTelemetry(getSupabaseAdmin(), { orderId, language: titleLanguage, stage: 'title_generation', attempt: attempt + 1,
+                requestIdentity: `${orderId}:${titleLanguage}:generated-title`, provider: 'anthropic', modelId: response.model, providerRequestId: response.id,
+                success: true, inputTokens: response.usage.input_tokens, outputTokens: response.usage.output_tokens, cacheStatus: 'write' })
+              return generated
+            },
             translate: async (batch, context) => {
               const stage=context.pass===1?'translation':'editorial';const requestIdentity=`${orderId}:${language}:${stage}:${context.batchId}`
               return translateWithDeterministicJsonRecovery(batch, requestIdentity, async (requestBatch, recovery) => {
@@ -366,7 +384,9 @@ export const translateBook = inngest.createFunction(
                 try{
                   response = await anthropic.messages.create({
                     model: BOOKLINGUA_MODEL_CONFIG.translation, max_tokens: 8192,
-                    system: 'Return only valid JSON matching the supplied schema. Preserve every node id and order exactly. Translate all textual node values; never omit or add nodes.',
+                    system: `Return only valid JSON matching the supplied schema. Preserve every node id and order exactly. Translate all textual node values; never omit or add nodes.
+
+Apply the translation brief to every node as a document-wide style contract. Maintain one consistent reader-address register across all batches unless the source deliberately changes the relationship or the brief explicitly requires a change. Check idioms, sayings, jokes, comparisons, and figurative language for a natural target-language equivalent. Preserve the author's intended meaning, humour, energy, and deliberate rough edges; do not mechanically translate a source-language idiom, but do not rewrite merely clunky source prose into something more elegant than the original.`,
                     messages: [{ role: 'user', content: `${renderTranslationBriefPrompt(context.brief)}\nPass ${context.pass}; target language ${context.language}.\n${JSON.stringify(requestBatch)}` }],
                   })
                   const text = response.content.find((block:any) => block.type === 'text')

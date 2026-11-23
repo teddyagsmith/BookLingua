@@ -2,9 +2,9 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import AdmZip from 'adm-zip'
 import { Document, HeadingLevel, Packer, Paragraph, TextRun } from 'docx'
-import { applyTitleAuthority, cleanBookTitle, resolveTitleAuthority } from '../lib/authoritative-title'
+import { applyGeneratedTitleAuthority, applyTitleAuthority, cleanBookTitle, resolveTitleAuthority } from '../lib/authoritative-title'
 import { assessSourceFormatting } from '../lib/formatting-policy'
-import { buildFinalSemanticDocx, buildSemanticDocxPreservingSource, buildSemanticEpub, buildSemanticReviewDocx, wordLevelDiff } from '../lib/semantic-artifacts'
+import { assertDocxPresentationParity, buildFinalSemanticDocx, buildSemanticDocxPreservingSource, buildSemanticEpub, buildSemanticReviewDocx, wordLevelDiff } from '../lib/semantic-artifacts'
 import { deriveEditorialTranslationNotes, validateTranslationNotes } from '../lib/translation-notes'
 import { parseSemanticDocx, parseSemanticTxt } from '../lib/semantic-parser'
 
@@ -40,8 +40,24 @@ test('metadata-only EPUB preserves its title and never treats first H1 Chapter 1
   assert.match(opf,/<dc:title>Bride of the Hollow King<\/dc:title>/);assert.doesNotMatch(opf,/<dc:title>Chapitre 1<\/dc:title>/)
 })
 
+test('an unavailable title can be generated for flagged human review',()=>{
+  const authority=resolveTitleAuthority({document:document([{sourceText:'Chapter 1',translatedText:'Kapitel 1'}]),checkoutTitle:'Bride of the Hollow King',source:epub('Bride of the Hollow King')})
+  const generated=applyGeneratedTitleAuthority(authority,'Die Braut des hohlen Königs')
+  assert.equal(generated.confidence,'generated')
+  assert.equal(generated.translatedValue,'Die Braut des hohlen Königs')
+  assert.equal(generated.warning?.code,'TITLE_TRANSLATION_GENERATED_FOR_REVIEW')
+})
+
 test('internal upload labels are stripped from title fallback',()=>{
   assert.equal(cleanBookTitle('Updated eBook Reclaim Your Longevity'),'Reclaim Your Longevity')
+  assert.equal(cleanBookTitle('Archery Mental Mastery eBook'),'Archery Mental Mastery')
+})
+
+test('a trailing checkout eBook label does not reject a translated manuscript title',()=>{
+  const doc=document([{sourceText:'Archery Mental Mastery',translatedText:'Dominio Mental del Tiro con Arco'}])
+  const authority=resolveTitleAuthority({document:doc,checkoutTitle:'Archery Mental Mastery eBook',source:epub('Archery Mental Mastery')})
+  assert.equal(authority.sourceKind,'semantic_title_node')
+  assert.equal(authority.translatedValue,'Dominio Mental del Tiro con Arco')
 })
 
 test('safe title matching accepts subtitle, punctuation and apostrophe variation without fuzzy heading guesses',()=>{
@@ -104,6 +120,12 @@ test('well-structured DOCX retains its source presentation while weak text uses 
   assert.match(xml,/663399/);assert.match(xml,/w:i/);assert.match(xml,/Chapitre/)
   const weak=parseSemanticTxt('Plain body only.','txt-source');weak.nodes[0].translatedText='Corps simple.'
   assert.ok((await buildFinalSemanticDocx(Buffer.from('Plain body only.'),weak,'Simple')).length>0)
+})
+
+test('final DOCX fails rather than silently dropping source images or emphasis', async()=>{
+  const source=Buffer.from(await Packer.toBuffer(new Document({sections:[{children:[new Paragraph({children:[new TextRun({text:'Bold',bold:true}),new TextRun({text:' and italic',italics:true})]})]}]})))
+  const stripped=Buffer.from(await Packer.toBuffer(new Document({sections:[{children:[new Paragraph('Plain translation')]}]})))
+  assert.throws(()=>assertDocxPresentationParity(source,stripped),/bold .*italics/)
 })
 
 test('translation notes are derived from real editorial changes and remain schema-valid', () => {

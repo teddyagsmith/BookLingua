@@ -44,6 +44,11 @@ function semanticStyles() {
     paragraphStyles: [
       { id: 'Title', name: 'Title', basedOn: 'Normal', next: 'Normal', run: { font: BOOKLINGUA_CLEAN_BOOK_STYLE.bodyFont, size: BOOKLINGUA_CLEAN_BOOK_STYLE.titleSizeHalfPoints, bold: true }, paragraph: { alignment: AlignmentType.CENTER, spacing: { after: 480 } } },
       { id: 'Heading1', name: 'Heading 1', basedOn: 'Normal', next: 'Normal', run: { font: BOOKLINGUA_CLEAN_BOOK_STYLE.chapterHeadingFont, size: BOOKLINGUA_CLEAN_BOOK_STYLE.chapterHeadingSizeHalfPoints, bold: true }, paragraph: { alignment: AlignmentType.CENTER, spacing: { before: 360, after: 360 } } },
+      { id: 'Heading2', name: 'Heading 2', basedOn: 'Normal', next: 'Normal', run: { font: BOOKLINGUA_CLEAN_BOOK_STYLE.chapterHeadingFont, size: 30, bold: true }, paragraph: { spacing: { before: 300, after: 180 } } },
+      { id: 'Heading3', name: 'Heading 3', basedOn: 'Normal', next: 'Normal', run: { font: BOOKLINGUA_CLEAN_BOOK_STYLE.chapterHeadingFont, size: 26, bold: true }, paragraph: { spacing: { before: 240, after: 160 } } },
+      { id: 'Heading4', name: 'Heading 4', basedOn: 'Normal', next: 'Normal', run: { font: BOOKLINGUA_CLEAN_BOOK_STYLE.chapterHeadingFont, size: 24, bold: true }, paragraph: { spacing: { before: 200, after: 140 } } },
+      { id: 'Heading5', name: 'Heading 5', basedOn: 'Normal', next: 'Normal', run: { font: BOOKLINGUA_CLEAN_BOOK_STYLE.chapterHeadingFont, size: 22, bold: true }, paragraph: { spacing: { before: 180, after: 120 } } },
+      { id: 'Heading6', name: 'Heading 6', basedOn: 'Normal', next: 'Normal', run: { font: BOOKLINGUA_CLEAN_BOOK_STYLE.chapterHeadingFont, size: 22, bold: true }, paragraph: { spacing: { before: 160, after: 100 } } },
     ],
   }
 }
@@ -257,15 +262,24 @@ export async function buildSemanticDocxPreservingSource(source:Buffer,document:S
   if(document.sourceFormat!=='docx')throw new Error('Source-preserving DOCX output requires a DOCX semantic source')
   const zip:any=new AdmZip(source),entry=zip.getEntry('word/document.xml');if(!entry)throw new Error('DOCX document.xml missing')
   let nodeIndex=0
-  const normalize=(value:string)=>value.normalize('NFKC').replace(/\s+/g,' ').trim()
-  const xml=entry.getData().toString('utf8').replace(/<w:p\b([^>]*)>([\s\S]*?)<\/w:p>/g,(full:string,attrs:string,inner:string)=>{
+  // Mammoth exposes legacy symbol runs (for example ☺) as text, whereas the
+  // OOXML paragraph text extractor sees only w:t.  Ignore pictographs *only*
+  // while matching source nodes so they do not force a destructive clean
+  // fallback; the original run itself remains untouched in the output XML.
+  const normalize=(value:string)=>value.normalize('NFKC').replace(/[\u2600-\u27bf]/g,'').replace(/\s+/g,' ').trim()
+  // Text boxes frequently contain a visual TOC duplicate. Mammoth deliberately
+  // omits those nested paragraphs, so exclude them from the body-node walk.
+  // Keep the XML untouched otherwise; only the matcher sees neutral tag names.
+  const sourceXml=entry.getData().toString('utf8')
+  const matchableXml=sourceXml.replace(/<w:txbxContent\b[^>]*>[\s\S]*?<\/w:txbxContent>/g,(block:string)=>block.replace(/<\/?w:p\b/g,(tag:string)=>tag.replace('w:p','bl:p')))
+  const xml=matchableXml.replace(/<w:p\b([^>]*)>([\s\S]*?)<\/w:p>/g,(full:string,attrs:string,inner:string)=>{
     const sourceText=normalize(Array.from(inner.matchAll(/<w:t\b[^>]*>([\s\S]*?)<\/w:t>/g)).map(match=>decodeXml(match[1])).join(''))
     if(!sourceText)return full
     const node=document.nodes[nodeIndex]
     if(!node||normalize(node.sourceText)!==sourceText)throw new Error(`DOCX source presentation does not align at semantic node ${nodeIndex+1}`)
     nodeIndex++
     return `<w:p${attrs}>${applySemanticParagraphStyle(replaceDocxParagraphText(inner,node.translatedText!),node)}</w:p>`
-  })
+  }).replace(/<\/?bl:p\b/g,(tag:string)=>tag.replace('bl:p','w:p'))
   if(nodeIndex!==document.nodes.length)throw new Error('DOCX source presentation has incomplete semantic coverage')
   zip.updateFile('word/document.xml',Buffer.from(xml))
   const stylesEntry=zip.getEntry('word/styles.xml')
@@ -278,13 +292,39 @@ export async function buildSemanticDocxPreservingSource(source:Buffer,document:S
   return deterministicDocx(zip.toBuffer())
 }
 
+type DocxPresentationMetrics={images:number;bold:number;italics:number}
+
+function docxPresentationMetrics(buffer:Buffer):DocxPresentationMetrics{
+  const zip:any=new AdmZip(buffer)
+  const document=zip.getEntry('word/document.xml')?.getData().toString('utf8')||''
+  const rels=zip.getEntry('word/_rels/document.xml.rels')?.getData().toString('utf8')||''
+  const media=zip.getEntries().filter((entry:any)=>/^word\/media\//i.test(entry.entryName)).length
+  // Count actual run properties, not styles: presentation retained in a style
+  // definition does not prove it survived in the manuscript body.
+  return {
+    images:Math.max(media,(document.match(/<a:blip\b[^>]*\br:embed=/g)||[]).length,(rels.match(/relationships\/image/gi)||[]).length),
+    bold:(document.match(/<w:b(?:\s[^>]*)?\/?>(?:<\/w:b>)?/g)||[]).length,
+    italics:(document.match(/<w:i(?:\s[^>]*)?\/?>(?:<\/w:i>)?/g)||[]).length,
+  }
+}
+
+/** Reject a clean fallback that silently strips meaningful DOCX presentation. */
+export function assertDocxPresentationParity(source:Buffer,finalDocx:Buffer):void{
+  const before=docxPresentationMetrics(source),after=docxPresentationMetrics(finalDocx)
+  const losses=(Object.keys(before) as Array<keyof DocxPresentationMetrics>).filter(key=>after[key]<before[key])
+  if(losses.length)throw new Error(`Final DOCX lost source presentation: ${losses.map(key=>`${key} ${before[key]}→${after[key]}`).join(', ')}`)
+}
+
 export async function buildFinalSemanticDocx(source:Buffer,document:SemanticDocumentV2,title:string):Promise<Buffer>{
+  let finalDocx:Buffer
   if(document.sourceFormat==='docx'&&document.parserConfidence>=0.6){
-    try{return await buildSemanticDocxPreservingSource(source,document)}catch(error){
+    try{finalDocx=await buildSemanticDocxPreservingSource(source,document)}catch(error){
       if(document.parserConfidence>=0.85)throw error
     }
   }
-  return buildSemanticDocx(document,title,'final')
+  if(!finalDocx!)finalDocx=await buildSemanticDocx(document,title,'final')
+  if(document.sourceFormat==='docx')assertDocxPresentationParity(source,finalDocx)
+  return finalDocx
 }
 
 function replaceTextPreservingInline(inner: string, translated: string): string {
