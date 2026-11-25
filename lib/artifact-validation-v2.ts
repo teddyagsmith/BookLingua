@@ -180,7 +180,17 @@ export function validateArtifact(buffer: Buffer, kind: ArtifactKind, options: Ar
           const normalizedContent=new Set(headings.map(normalizeNavigationLabel))
           const normalizedAdjacentContent=new Set(headings.slice(0,-1).map((value,index)=>normalizeNavigationLabel(`${value} ${headings[index+1]}`)))
           const contentNumbers=new Set(chapterNumbers(headings))
-          const localizedLandmarks:Record<string,Set<string>>={'pt-br':new Set(['capa','sumário']),'de':new Set(['umschlag','titelseite','impressum','kostenlose ressourcen für sie','anmerkung des autors und haftungsausschluss','inhaltsverzeichnis']),'fr':new Set(['couverture','table des matières']),'es-es':new Set(['portada','índice'])}
+          // These reader-facing front-matter entries need not have a matching
+          // visible spine heading.  The EPUB renderer localises them, so the
+          // validation rule must recognise the complete per-language set.
+          const localizedLandmarks:Record<string,Set<string>>={
+            'pt-br':new Set(['capa','página de rosto','página de direitos autorais','sumário']),
+            'pt-pt':new Set(['capa','página de rosto','página de direitos de autor','índice']),
+            de:new Set(['umschlag','titelseite','impressum','kostenlose ressourcen für sie','anmerkung des autors und haftungsausschluss','inhaltsverzeichnis']),
+            fr:new Set(['couverture','page de titre','page de droits d’auteur','table des matières']),
+            'es-es':new Set(['portada','página de título','página de derechos de autor','índice']),
+            'es-latam':new Set(['portada','página de título','página de derechos de autor','índice']),
+          }
           const landmarks=localizedLandmarks[options.expectedLanguage||'']||new Set<string>()
           const numberedNavigation=chapterNumbers(navigationHeadings)
           // Some publisher EPUBs link "Chapter N" in nav to a content heading that
