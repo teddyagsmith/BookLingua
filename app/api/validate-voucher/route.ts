@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from 'next/server'
 // Voucher codes - must match checkout/route.ts
 const VOUCHER_CODES: Record<string, { discount: number; type: 'percent' | 'fixed'; description: string; expiresAt?: string; maxUses?: number }> = {
   'LOVEWITHOUTBORDERS': { discount: 15, type: 'percent', description: '15% off International Translation Day offer', expiresAt: '2026-10-01T00:00:00Z' },
+  'BLACKFRIDAY26': { discount: 25, type: 'percent', description: '25% off Black Friday 2026', expiresAt: '2026-12-02T00:00:00Z' },
   'LAUNCH20': { discount: 20, type: 'percent', description: '20% off launch discount' },
   'FIRST50': { discount: 50, type: 'fixed', description: '$50 off first order' },
   'FRIEND10': { discount: 10, type: 'percent', description: '10% friend referral' },
