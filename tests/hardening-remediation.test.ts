@@ -185,6 +185,14 @@ test('translation runs are serialized per paid order before any model work', () 
   assert.match(job,/concurrency:\s*\{\s*limit:\s*1,\s*key:\s*'event\.data\.orderId'\s*\}/)
 })
 
+test('a restarted translation clears its terminal timestamp and is processing before source work', () => {
+  const job=fs.readFileSync(path.join(process.cwd(),'lib/translate-job.ts'),'utf8')
+  const reset=job.indexOf("step.run('mark-order-processing'")
+  const sourceLookup=job.indexOf(".eq('type', 'original')")
+  assert.ok(reset > 0 && sourceLookup > reset)
+  assert.match(job,/update\(\{ status: 'processing', failed_at: null \}\)/)
+})
+
 test('semantic job finalizes only after every language has completed or reused its package', () => {
   const job=fs.readFileSync(path.join(process.cwd(),'lib/translate-job.ts'),'utf8')
   const finalization=job.indexOf("step.run('semantic-v2-finalize'")
