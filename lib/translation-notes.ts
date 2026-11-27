@@ -47,9 +47,12 @@ export function validateTranslationNotes(notes: TranslationNotesV1, options:{req
     const normalized=entries.map(entry=>entry.reason.normalize('NFKC').toLocaleLowerCase().replace(/\s+/g,' ').trim())
     if(new Set(normalized).size!==normalized.length)errors.push('Translation-note reasons must be unique')
     for(const entry of entries){
+      const sourceWords=(entry.source.match(/[\p{L}\p{N}]+(?:['’][\p{L}\p{N}]+)?/gu)||[]).length
+      if(sourceWords>25)errors.push(`Translation-note decision quotes too much source text (${sourceWords} words; maximum 25): ${entry.source.slice(0,60)}`)
       const identical=entry.source.normalize('NFKC').trim()===entry.target.normalize('NFKC').trim()
       if(identical&&!/retained unchanged|kept unchanged/i.test(entry.reason))errors.push(`Translation-note unchanged wording lacks an explicit retention reason: ${entry.source.slice(0,60)}`)
       if(entry.reason.trim().length<35)errors.push(`Translation-note reason is not specific enough: ${entry.source.slice(0,60)}`)
+      if(/(?:romantic tension.*consent cues|character voice and relationship register)/i.test(entry.reason))errors.push(`Translation-note reason is a stock template rather than a book-specific decision: ${entry.source.slice(0,60)}`)
       if(/…|\.\.\./.test(entry.reason))errors.push(`Translation-note reason contains truncated text: ${entry.source.slice(0,60)}`)
       if(/\.\s+(?:The editorial review|This edit|It also)\b/.test(entry.reason))errors.push(`Translation-note reason contains an appended generic sentence: ${entry.source.slice(0,60)}`)
     }
