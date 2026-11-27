@@ -142,6 +142,31 @@ test('EPUB rebuild turns reviewed plain footnote numbers into the sole raised ma
   assert.doesNotMatch(xml,/<\/sup>\s*3\b/)
 })
 
+test('EPUB rebuild preserves a one-letter drop cap without splitting the translated word', () => {
+  const zip:any=new AdmZip(epubFixture())
+  zip.updateFile('OEBPS/10.xhtml',Buffer.from('<html><body><p><big>M</big>DMA is a treatment.</p></body></html>'))
+  const document=parseSemanticEpub(zip.toBuffer(),'drop-cap-hash')
+  document.nodes.forEach(node=>{node.translatedText=node.sourceText})
+  document.nodes[0].translatedText='La MDMA es un tratamiento.'
+  const output:any=new AdmZip(buildSemanticEpub(zip.toBuffer(),document))
+  const xml=output.getEntry('OEBPS/10.xhtml').getData().toString()
+  assert.match(xml,/<big>L<\/big>a MDMA es un tratamiento\./)
+  assert.doesNotMatch(xml,/<big>La<\/big>/)
+})
+
+test('EPUB metadata normalises internal Latin American Spanish to BCP-47 es-419', () => {
+  const source:any=new AdmZip(epubFixture())
+  source.updateFile('OEBPS/content.opf',Buffer.from('<package><metadata xmlns:dc="http://purl.org/dc/elements/1.1/"><dc:language>en</dc:language></metadata><manifest><item id="c10" href="10.xhtml" media-type="application/xhtml+xml"/><item id="c11" href="11.xhtml" media-type="application/xhtml+xml"/></manifest><spine><itemref idref="c10"/><itemref idref="c11"/></spine></package>'))
+  const input=source.toBuffer(),document=parseSemanticEpub(input,'es-419-hash')
+  document.nodes.forEach(node=>{node.translatedText=`ES ${node.sourceText}`})
+  const output:any=new AdmZip(buildSemanticEpub(input,document,undefined,'es-latam','Author'))
+  const opf=output.getEntry('OEBPS/content.opf').getData().toString()
+  const chapter=output.getEntry('OEBPS/10.xhtml').getData().toString()
+  assert.match(opf,/<dc:language>es-419<\/dc:language>/)
+  assert.match(chapter,/lang="es-419"/)
+  assert.doesNotMatch(`${opf}\n${chapter}`,/es-latam/)
+})
+
 test('EPUB rebuild ignores parser-omitted empty layout blocks', () => {
   const source:any=new AdmZip(epubFixture())
   source.updateFile('OEBPS/10.xhtml',Buffer.from('<html><body><h1>Chapter 10</h1><p>Ten body.</p><p><span> </span></p></body></html>'))

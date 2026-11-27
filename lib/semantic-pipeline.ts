@@ -154,7 +154,7 @@ export function applyBookWideReplacements(document:SemanticDocumentV2,rules:NonN
  * output from identical inputs, and without this the completed package short-circuits
  * and the customer's files never change.
  */
-export const PIPELINE_OUTPUT_VERSION = 'output-v14-source-page-marker-cleanup'
+export const PIPELINE_OUTPUT_VERSION = 'output-v15-epub-language-and-dropcap-gate'
  
  export const SEMANTIC_PROMPT_SIGNATURE = `${TRANSLATION_PROMPT_VERSION}+${EDITORIAL_PROMPT_VERSION}+${PIPELINE_OUTPUT_VERSION}`
 export const SEMANTIC_BUILD_POLICY_VERSION = 'semantic-v2-review-diff-spacing-v10'
@@ -211,16 +211,28 @@ async function storeValidated(input: SemanticPipelineInput, buildId: string, typ
   // deterministic build ID binds them to the exact source/brief/language, and
   // avoids regenerating container formats after a later stage fails.
   const { data: existing, error: existingError } = await input.supabase.from('artifacts')
-    .select('id,artifact_type,filename,storage_bucket,storage_path,sha256,size_bytes,schema_version,validation_status,validation_report_id')
+    .select('id,artifact_type,filename,storage_bucket,storage_path,sha256,size_bytes,schema_version,validation_status,validation_report_id,validation_reports(passed,metrics)')
     .eq('order_id', input.orderId).eq('language', input.language).eq('build_id', buildId)
     .eq('artifact_type', type).maybeSingle()
   if (existingError) throw new Error(`Artifact cache lookup failed: ${existingError.message}`)
-  if (existing) return {
+  if (existing) {
+    // A pre-EPUBCheck immutable artifact is not safe to reuse. New output
+    // versions force a clean build, while retrying a current build remains
+    // permitted only when its authoritative report proves a zero-error check.
+    if (kind === 'epub') {
+      const report:any = Array.isArray((existing as any).validation_reports) ? (existing as any).validation_reports[0] : (existing as any).validation_reports
+      const epubCheck = report?.metrics?.epubCheck
+      if (existing.validation_status !== 'pass' || report?.passed !== true || epubCheck?.valid !== true || epubCheck?.errors !== 0) {
+        throw new Error('Cached EPUB has no authoritative zero-error EPUBCheck result; rebuild required')
+      }
+    }
+    return {
     id: existing.id, buildId, type: existing.artifact_type, required: true,
     filename: existing.filename, storageBucket: existing.storage_bucket,
     storagePath: existing.storage_path, sha256: existing.sha256,
     sizeBytes: Number(existing.size_bytes), schemaVersion: existing.schema_version || undefined,
     validationStatus: existing.validation_status, validationReportId: existing.validation_report_id || undefined,
+    }
   }
   const result = kind ? validateArtifact(buffer, kind, { semanticDuplicateParityValidated, semanticHeadingDuplicateParityValidated: semanticDuplicateParityValidated, expectedLanguage: input.language,expectedCreator }) : { passed: buffer.length > 0, errors: buffer.length ? [] : [{ code: 'EMPTY', message: 'Artifact empty' }], metrics: {} }
   if(kind==='epub'){
