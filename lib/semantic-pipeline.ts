@@ -157,7 +157,10 @@ export function applyBookWideReplacements(document:SemanticDocumentV2,rules:NonN
 export const PIPELINE_OUTPUT_VERSION = 'output-v15-epub-language-and-dropcap-gate'
  
  export const SEMANTIC_PROMPT_SIGNATURE = `${TRANSLATION_PROMPT_VERSION}+${EDITORIAL_PROMPT_VERSION}+${PIPELINE_OUTPUT_VERSION}`
-export const SEMANTIC_BUILD_POLICY_VERSION = 'semantic-v2-review-diff-spacing-v10'
+// Any deterministic artifact-generation change must advance this version so a
+// restart cannot reuse a package produced before the new validation/rebuild
+// policy existed.
+export const SEMANTIC_BUILD_POLICY_VERSION = 'semantic-v2-epub-and-notes-v11'
 
 export function readerRegisterNarrationText(nodes:SemanticDocumentV2['nodes']):string{
   const genericLabels=/^(?:note|exercise|example|warning|tip|step|question|answer|summary|remember)$/i
