@@ -16,6 +16,9 @@ export interface ArtifactValidationResult {
 export interface ArtifactValidationOptions {
   semanticDuplicateParityValidated?: boolean
   semanticHeadingDuplicateParityValidated?: boolean
+  // Camel-cased names and brands in the approved source are not missing
+  // spaces. Only transitions added during reconstruction should be flagged.
+  baselineGluedWordCount?: number
   expectedLanguage?: string
   expectedCreator?: string
 }
@@ -256,8 +259,10 @@ export function validateArtifact(buffer: Buffer, kind: ArtifactKind, options: Ar
   if (VISIBLE_MARKDOWN_HEADING.test(joined)) errors.push({ code: 'VISIBLE_MARKDOWN', message: 'Markdown heading syntax is visible' })
   if (/\b(?:book|manuscript|document)\s+WORD\b/i.test(joined)) errors.push({ code: 'PLACEHOLDER_TITLE', message: 'Internal filename/project placeholder is visible in customer-facing content' })
   const gluedWords = joined.match(/[a-zà-ÿ][A-ZÀ-Þ]/g) || []
-  if (gluedWords.length > 60) errors.push({ code: 'GLUED_WORDS', message: `Unusually high number of possible missing-space boundaries: ${gluedWords.length}` })
-  else if (gluedWords.length > 25) warnings.push({ code: 'GLUED_WORDS_REVIEW', message: `Possible missing-space boundaries require baseline review: ${gluedWords.length}` })
+  const baselineGluedWords = Math.max(0, options.baselineGluedWordCount || 0)
+  const addedGluedWords = Math.max(0, gluedWords.length - baselineGluedWords)
+  if (addedGluedWords > 60) errors.push({ code: 'GLUED_WORDS', message: `Unusually high number of possible missing-space boundaries added during reconstruction: ${addedGluedWords} (total ${gluedWords.length}, baseline ${baselineGluedWords})` })
+  else if (addedGluedWords > 25) warnings.push({ code: 'GLUED_WORDS_REVIEW', message: `Possible missing-space boundaries added during reconstruction require review: ${addedGluedWords} (total ${gluedWords.length}, baseline ${baselineGluedWords})` })
   const normalizedHeadings = headings.map(h => h.toLowerCase().replace(/\s+/g, ' ').trim())
   const duplicateHeading = normalizedHeadings.find((h, i) => normalizedHeadings.indexOf(h) !== i)
   if (duplicateHeading && !options.semanticHeadingDuplicateParityValidated) errors.push({ code: 'DUPLICATE_HEADING', message: `Duplicate major heading: ${duplicateHeading}` })

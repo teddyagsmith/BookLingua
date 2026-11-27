@@ -121,6 +121,17 @@ test('DOCX missing declared document relationship fails', () => {
   assert.ok(validateArtifact(zip.toBuffer(), 'docx').errors.some(e => e.code === 'DOCX_RELATIONSHIPS'))
 })
 
+test('source-aware glued-word baseline permits inherited camel-cased names but rejects new joins', async () => {
+  const inherited = 'MacLeod '.repeat(80)
+  const baseline = (inherited.match(/[a-zà-ÿ][A-ZÀ-Þ]/g) || []).length
+  const inheritedOnly = await syntheticDocx([{ heading: 'Chapter 1', body: inherited }])
+  assert.ok(validateArtifact(inheritedOnly, 'docx').errors.some(error => error.code === 'GLUED_WORDS'))
+  assert.equal(validateArtifact(inheritedOnly, 'docx', { baselineGluedWordCount: baseline }).errors.some(error => error.code === 'GLUED_WORDS'), false)
+
+  const introducedJoins = await syntheticDocx([{ heading: 'Chapter 1', body: `${inherited}${'wordNext '.repeat(61)}` }])
+  assert.ok(validateArtifact(introducedJoins, 'docx', { baselineGluedWordCount: baseline }).errors.some(error => error.code === 'GLUED_WORDS'))
+})
+
 test('missing and duplicate chapter numbers hard-fail', () => {
   const missing = validateExpectedChapterSequence(validateArtifact(syntheticEpub([
     { heading: 'Chapter 10', body: 'Ten.' },
