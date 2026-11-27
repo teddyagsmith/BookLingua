@@ -405,6 +405,16 @@ export function assertDocxPresentationParity(source:Buffer,finalDocx:Buffer):voi
 }
 
 function replaceTextPreservingInline(inner: string, translated: string): string {
+  // Publisher EPUBs commonly render a drop cap as a single letter in <big>
+  // followed immediately by the remainder of the word. Never assign a whole
+  // translated word to that inline node: doing so produces <big>La</big>MDMA
+  // and then the generic inline-spacing cleanup corrupts the word boundary.
+  const dropCap = inner.match(/^\s*<big\b([^>]*)>([A-Za-zÀ-ÖØ-öø-ÿ])<\/big>(?=[A-Za-zÀ-ÖØ-öø-ÿ])/i)
+  if (dropCap) {
+    const leading = translated.match(/^\s*/)?.[0] || ''
+    const visible = translated.slice(leading.length)
+    if (visible) return `${leading}<big${dropCap[1]}>${escapeXml(visible.charAt(0))}</big>${escapeXml(visible.slice(1))}`
+  }
   const superscripts=Array.from(inner.matchAll(/<sup\b[^>]*>[\s\S]*?<\/sup>/gi)).map(match=>({
     markup:match[0],
     marker:decodeVisibleEntities(match[0].replace(/<[^>]+>/g,'')).trim(),
@@ -467,7 +477,7 @@ function replaceTextPreservingInline(inner: string, translated: string): string 
     output=parts.join('')
   }
   return output
-    .replace(/<\/(?:a|b|strong|i|em|big|span)>(?=[A-Za-zÀ-ÖØ-öø-ÿ0-9„“])/gi,match=>`${match} `)
+    .replace(/<\/(?:a|b|strong|i|em|span)>(?=[A-Za-zÀ-ÖØ-öø-ÿ0-9„“])/gi,match=>`${match} `)
     .replace(/([A-Za-zÀ-ÖØ-öø-ÿ0-9”])(?=<(?:a|b|strong|i|em|big|span)\b)/gi,'$1 ')
 }
 
@@ -475,6 +485,10 @@ function editionIdentifier(seed:string,language:string):string{
   const hex=createHash('sha256').update(`${seed}:${language}`).digest('hex').slice(0,32).split('')
   hex[12]='5';hex[16]=((parseInt(hex[16],16)&3)|8).toString(16)
   return `urn:uuid:${hex.slice(0,8).join('')}-${hex.slice(8,12).join('')}-${hex.slice(12,16).join('')}-${hex.slice(16,20).join('')}-${hex.slice(20).join('')}`
+}
+
+function epubLanguageTag(language:string):string{
+  return ({'es-latam':'es-419','es-es':'es-ES','pt-br':'pt-BR','pt-pt':'pt-PT'} as Record<string,string>)[language]||language
 }
 
 function setEpubDocumentLanguage(xml:string,language:string):string{
@@ -494,10 +508,12 @@ export function buildSemanticEpub(source: Buffer, document: SemanticDocumentV2, 
   assertTranslated(document)
   if (document.sourceFormat !== 'epub') throw new Error('EPUB output requires an EPUB semantic source')
   const zip: any = new AdmZip(source)
-  const consolidated=consolidatedArtifactNodes(document)
-  const consolidatedByFirstId=new Map(consolidated.map(node=>[node.id,node]))
-  const retainedIds=new Set(consolidated.map(node=>node.id))
-  const removedHeadingKeys=new Set(document.nodes.filter(node=>!retainedIds.has(node.id)).map(node=>decodeVisibleEntities(node.sourceText).normalize('NFKC').toLocaleLowerCase().replace(/\s+/g,' ').trim()))
+  const epubLanguage=language?epubLanguageTag(language):undefined
+  // EPUB is a source-preserving format.  Consolidation is useful when making a
+  // clean DOCX, but it must never be used here: publisher files can put a
+  // chapter number and its anchored title in adjacent blocks.  Removing or
+  // merging either loses fragment targets and produces invalid navigation.
+  const retainedIds=new Set(document.nodes.map(node=>node.id))
   const byPath = new Map<string, SemanticNodeV2[]>()
   for (const node of document.nodes) {
     const split = node.sourceLocation.match(/^(.*):block:(\d+)$/)
@@ -513,45 +529,36 @@ export function buildSemanticEpub(source: Buffer, document: SemanticDocumentV2, 
     ) as RegExpMatchArray[]
     const semanticBlocks = semanticBlockMatches
       .filter(match=>Boolean(match[3].replace(/<[^>]+>/g,' ').replace(/\s+/g,' ').trim()))
-    const anchoredBlocks=semanticBlocks.map(match=>/<a\b[^>]*(?:\bid|\bhref)\s*=/i.test(match[3]))
     let xml = sourceXml.replace(/<(h[1-6]|p|li)\b([^>]*)>([\s\S]*?)<\/\1>/gi, (_full: string, tag: string, attrs: string, inner: string) => {
       // The canonical parser deliberately omits empty/markup-only blocks. The
       // rebuilder must apply the identical selection rule or its source-location
       // indexes diverge on real EPUBs containing empty layout paragraphs.
       if (!inner.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim()) return _full
-      const blockIndex=index
       const node = nodes[index++]
       if (!node) throw new Error(`EPUB semantic block count changed: ${entryPath}`)
-      const anchorProtected=anchoredBlocks[blockIndex]
-      if(!retainedIds.has(node.id)&&!anchorProtected)return ''
-      const artifactNode=(anchoredBlocks[blockIndex+1]||anchorProtected)?node:(consolidatedByFirstId.get(node.id)||node)
       const outputTag=node.type==='heading'?`h${Math.max(1,Math.min(6,node.headingLevel||1))}`:tag
-      return `<${outputTag}${attrs}>${replaceTextPreservingInline(inner,artifactNode.translatedText!)}</${outputTag}>`
+      return `<${outputTag}${attrs}>${replaceTextPreservingInline(inner,node.translatedText!)}</${outputTag}>`
     })
-    if(language)xml=setEpubDocumentLanguage(xml,language)
+    if(epubLanguage)xml=setEpubDocumentLanguage(xml,epubLanguage)
     if (index !== nodes.length) throw new Error(`EPUB semantic block count changed: ${entryPath}`)
     zip.updateFile(entryPath, Buffer.from(xml))
   }
-  if(language)for(const entry of zip.getEntries().filter((e:any)=>/\.xhtml?$/i.test(e.entryName))){
-    zip.updateFile(entry.entryName,Buffer.from(setEpubDocumentLanguage(entry.getData().toString('utf8'),language)))
+  if(epubLanguage)for(const entry of zip.getEntries().filter((e:any)=>/\.xhtml?$/i.test(e.entryName))){
+    zip.updateFile(entry.entryName,Buffer.from(setEpubDocumentLanguage(entry.getData().toString('utf8'),epubLanguage)))
   }
-  const headingMap = new Map(consolidated.filter(n => n.type === 'heading').map(n => [n.sourceText.trim(), n.translatedText!]))
+  const headingMap = new Map(document.nodes.filter(n => n.type === 'heading').map(n => [n.sourceText.trim(), n.translatedText!]))
   for (const entry of zip.getEntries().filter((e: any) => /(?:nav|toc|\.ncx$)/i.test(e.entryName))) {
     let xml = entry.getData().toString('utf8')
-    const entryContainsRemovedHeading=(block:string)=>Array.from(block.matchAll(/<(?:a|text)\b[^>]*>([\s\S]*?)<\/(?:a|text)>/gi)).some(match=>removedHeadingKeys.has(decodeVisibleEntities(match[1].replace(/<[^>]+>/g,' ')).normalize('NFKC').toLocaleLowerCase().replace(/\s+/g,' ').trim()))
-    xml=xml.replace(/<navPoint\b[^>]*>[\s\S]*?<\/navPoint>/gi,(block:string)=>entryContainsRemovedHeading(block)?'':block)
-    xml=xml.replace(/<li\b[^>]*>[\s\S]*?<\/li>/gi,(block:string)=>entryContainsRemovedHeading(block)?'':block)
     for (const [sourceText, translatedText] of Array.from(headingMap.entries())) xml = xml.split(`>${sourceText}<`).join(`>${escapeXml(translatedText)}<`)
-    const normalizedHeadings=new Map(consolidated.map(node=>[normalizedEpubHeadingLabel(node.sourceText),node.translatedText!]))
+    const normalizedHeadings=new Map(document.nodes.map(node=>[normalizedEpubHeadingLabel(node.sourceText),node.translatedText!]))
     for(const node of document.nodes.filter(item=>item.type==='heading'&&retainedIds.has(item.id))){
-      const artifactNode=consolidatedByFirstId.get(node.id)
-      if(artifactNode&&artifactNode.sourceText!==node.sourceText)normalizedHeadings.set(decodeVisibleEntities(node.sourceText).normalize('NFKC').toLocaleLowerCase().replace(/\s+/g,' ').trim(),artifactNode.translatedText!)
+      normalizedHeadings.set(decodeVisibleEntities(node.sourceText).normalize('NFKC').toLocaleLowerCase().replace(/\s+/g,' ').trim(),node.translatedText!)
     }
     // TOC rows are translated in their own semantic nodes and can otherwise
     // choose a synonym that differs from the canonical chapter heading. Bind
     // every source-equivalent TOC translation back to the actual translated
     // heading so navigation and content cannot drift apart.
-    const canonicalHeadings=new Map(consolidated.filter(node=>node.type==='heading').map(node=>[normalizedEpubHeadingLabel(node.sourceText),node.translatedText!]))
+    const canonicalHeadings=new Map(document.nodes.filter(node=>node.type==='heading').map(node=>[normalizedEpubHeadingLabel(node.sourceText),node.translatedText!]))
     for(const node of document.nodes){
       const canonical=canonicalHeadings.get(normalizedEpubHeadingLabel(node.sourceText))
       if(canonical&&node.translatedText)normalizedHeadings.set(normalizedEpubHeadingLabel(node.translatedText),canonical)
@@ -575,6 +582,15 @@ export function buildSemanticEpub(source: Buffer, document: SemanticDocumentV2, 
         const escapedFragment=fragment.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')
         linked=target.match(new RegExp(`<h[1-6]\\b[^>]*\\bid=["']${escapedFragment}["'][^>]*>([\\s\\S]*?)<\\/h[1-6]>`,'i'))?.[1]
         linked ||= target.match(new RegExp(`<h[1-6]\\b[^>]*>([\\s\\S]*?<a\\b[^>]*\\bid=["']${escapedFragment}["'][^>]*>[\\s\\S]*?)<\\/h[1-6]>`,'i'))?.[1]
+        // Many publisher EPUBs use styled paragraphs for chapter openings.
+        // The anchor is often an empty <a id="chapterN"> at the start of the
+        // title paragraph, so only looking for h1–h6 silently replaces every
+        // TOC label with an unrelated heading from the file.
+        if(!linked){
+          const blocks: RegExpMatchArray[]=Array.from(target.matchAll(/<(h[1-6]|p|li)\b([^>]*)>([\s\S]*?)<\/\1>/gi))
+          const block=blocks.find(match=>new RegExp(`\\bid=["']${escapedFragment}["']`,'i').test(`${match[2]} ${match[3]}`))
+          linked=block?.[3]
+        }
       }
       // Split part headings in publisher EPUBs often put the anchor inside a
       // paragraph that gets consolidated into the page's first semantic h1.
@@ -614,12 +630,12 @@ export function buildSemanticEpub(source: Buffer, document: SemanticDocumentV2, 
   if (titleAuthority?.translatedValue || language) for (const entry of zip.getEntries().filter((e: any) => /\.opf$/i.test(e.entryName))) {
     let xml = entry.getData().toString('utf8')
     if(titleAuthority?.translatedValue)xml=xml.replace(/<dc:title(?:\s[^>]*)?>[\s\S]*?<\/dc:title>/i, (match: string) => match.replace(/>[^<]*</, `>${escapeXml(titleAuthority.translatedValue!)}<`))
-    if(language){
-      xml=/<dc:language(?:\s[^>]*)?>/i.test(xml)?xml.replace(/<dc:language(?:\s[^>]*)?>[\s\S]*?<\/dc:language>/gi,`<dc:language>${escapeXml(language)}</dc:language>`):xml.replace(/<metadata\b([^>]*)>/i,`<metadata$1><dc:language>${escapeXml(language)}</dc:language>`)
-      xml=xml.replace(/<meta\b([^>]*property=["']dcterms:language["'][^>]*)>[\s\S]*?<\/meta>/gi,`<meta$1>${escapeXml(language)}</meta>`)
+    if(epubLanguage){
+      xml=/<dc:language(?:\s[^>]*)?>/i.test(xml)?xml.replace(/<dc:language(?:\s[^>]*)?>[\s\S]*?<\/dc:language>/gi,`<dc:language>${escapeXml(epubLanguage)}</dc:language>`):xml.replace(/<metadata\b([^>]*)>/i,`<metadata$1><dc:language>${escapeXml(epubLanguage)}</dc:language>`)
+      xml=xml.replace(/<meta\b([^>]*property=["']dcterms:language["'][^>]*)>[\s\S]*?<\/meta>/gi,`<meta$1>${escapeXml(epubLanguage)}</meta>`)
       const creator=resolveBookAuthor(document,authorName)
       if(creator)xml=/<dc:creator(?:\s[^>]*)?>/i.test(xml)?xml.replace(/<dc:creator(?:\s[^>]*)?>[\s\S]*?<\/dc:creator>/gi,`<dc:creator>${escapeXml(creator)}</dc:creator>`):xml.replace(/<metadata\b([^>]*)>/i,`<metadata$1><dc:creator>${escapeXml(creator)}</dc:creator>`)
-      const identifier=editionIdentifier(editionSeed||document.sourceHash,language)
+      const identifier=editionIdentifier(editionSeed||document.sourceHash,epubLanguage)
       packageIdentifier=identifier
       xml=/<dc:identifier(?:\s[^>]*)?>/i.test(xml)?xml.replace(/<dc:identifier(?:\s[^>]*)?>[\s\S]*?<\/dc:identifier>/i,(match:string)=>match.replace(/>[^<]*</,`>${identifier}<`)):xml.replace(/<metadata\b([^>]*)>/i,`<metadata$1><dc:identifier id="bookid">${identifier}</dc:identifier>`)
     }
@@ -630,9 +646,9 @@ export function buildSemanticEpub(source: Buffer, document: SemanticDocumentV2, 
     }
     zip.updateFile(entry.entryName, Buffer.from(xml))
   }
-  if(language)for(const entry of zip.getEntries().filter((e:any)=>/\.ncx$/i.test(e.entryName))){
+  if(epubLanguage)for(const entry of zip.getEntries().filter((e:any)=>/\.ncx$/i.test(e.entryName))){
     let xml=entry.getData().toString('utf8')
-    xml=xml.replace(/<ncx\b([^>]*)>/i,(_full:string,attrs:string)=>`<ncx${/\bxml:lang\s*=/i.test(attrs)?attrs.replace(/\bxml:lang\s*=\s*(["'])[^"']*\1/i,`xml:lang="${escapeXml(language)}"`):`${attrs} xml:lang="${escapeXml(language)}"`}>`)
+    xml=xml.replace(/<ncx\b([^>]*)>/i,(_full:string,attrs:string)=>`<ncx${/\bxml:lang\s*=/i.test(attrs)?attrs.replace(/\bxml:lang\s*=\s*(["'])[^"']*\1/i,`xml:lang="${escapeXml(epubLanguage)}"`):`${attrs} xml:lang="${escapeXml(epubLanguage)}"`}>`)
     if(packageIdentifier)xml=/<meta\b[^>]*name=["']dtb:uid["'][^>]*\/?\s*>/i.test(xml)
       ?xml.replace(/<meta\b[^>]*name=["']dtb:uid["'][^>]*\/?\s*>/i,`<meta name="dtb:uid" content="${packageIdentifier}"/>`)
       :xml

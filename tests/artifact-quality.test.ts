@@ -287,6 +287,16 @@ test('customer Notes fail closed on German draft sources, missing final wording,
   assert.ok(errors.some(error=>/not an exact delivered substring/.test(error)))
 })
 
+test('translation notes reject long source quotes and stock template reasons',()=>{
+  const notes:any={schemaVersion:'1.0',language:'es-419',approach:'Specific decisions.',sections:[{id:'decisions',title:'Decisions',entries:[{
+    source:'This is a deliberately long source quotation with more than twenty five individual words so the quality gate proves that notes remain concise, useful, and decision focused for the author.',
+    target:'Decisión concisa.',reason:'This preserves romantic tension and consent cues while retaining the author’s voice.',
+  }]}]}
+  const errors=validateTranslationNotes(notes,{requireSpecificReasons:true}).join('; ')
+  assert.match(errors,/quotes too much source text/)
+  assert.match(errors,/stock template/)
+})
+
 test('required German held-order customer Notes selections are source-linked and exact-final-linked',()=>{
   const ashes:any={schemaVersion:'1.0',language:'de',approach:'English to German.',sections:[{id:'decisions',title:'Decisions',entries:[
     {source:'Enjoy your holiday in sunny Slovakia',target:'Genießen Sie Ihren Urlaub in der sonnigen Slowakei',reason:'German uses the feminine country construction while preserving the dry announcement.'},

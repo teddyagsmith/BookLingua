@@ -37,6 +37,7 @@ function getResend() {
 
 const LANGUAGE_NAMES: Record<string, string> = {
   'es-es': 'Spanish (Spain)',
+  'es-latam': 'Spanish (Latin America)',
   'es-419': 'Spanish (Latin America)',
   'fr': 'French',
   'de': 'German',
@@ -47,7 +48,8 @@ const LANGUAGE_NAMES: Record<string, string> = {
 
 const LANGUAGE_SETTINGS: Record<string, string> = {
   'es-es': `Spanish (Spain) — address the reader in the register given in the system prompt, and never switch. Use Spanish punctuation rules (space before : ; ? !). Prefer European Spanish vocabulary and idioms.`,
-  'es-419': `Spanish (Latin America) — address the reader in the register given in the system prompt, and never switch. Use Spanish punctuation rules (space before : ; ? !). Prefer Latin American vocabulary and idioms.`,
+  'es-latam': `Spanish (Latin America) — address the reader in the register given in the system prompt, and never switch. Prefer Latin American vocabulary and idioms. Use standard Spanish punctuation with opening ¿ and ¡ where required; do not insert French-style spaces before : ; ? or !.`,
+  'es-419': `Spanish (Latin America) — address the reader in the register given in the system prompt, and never switch. Prefer Latin American vocabulary and idioms. Use standard Spanish punctuation with opening ¿ and ¡ where required; do not insert French-style spaces before : ; ? or !.`,
   'fr': `French (France) — address the reader in the register given in the system prompt, and never switch. Use French punctuation rules (space before : ; ? !).`,
   'de': `German — address the reader in the register given in the system prompt, and never switch. Use German punctuation rules.`,
   'pt-pt': `Portuguese (Portugal) — address the reader in the register given in the system prompt, and never switch. Use Portuguese punctuation rules.`,

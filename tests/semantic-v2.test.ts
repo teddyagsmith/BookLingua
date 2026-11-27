@@ -142,6 +142,31 @@ test('EPUB rebuild turns reviewed plain footnote numbers into the sole raised ma
   assert.doesNotMatch(xml,/<\/sup>\s*3\b/)
 })
 
+test('EPUB rebuild preserves a one-letter drop cap without splitting the translated word', () => {
+  const zip:any=new AdmZip(epubFixture())
+  zip.updateFile('OEBPS/10.xhtml',Buffer.from('<html><body><p><big>M</big>DMA is a treatment.</p></body></html>'))
+  const document=parseSemanticEpub(zip.toBuffer(),'drop-cap-hash')
+  document.nodes.forEach(node=>{node.translatedText=node.sourceText})
+  document.nodes[0].translatedText='La MDMA es un tratamiento.'
+  const output:any=new AdmZip(buildSemanticEpub(zip.toBuffer(),document))
+  const xml=output.getEntry('OEBPS/10.xhtml').getData().toString()
+  assert.match(xml,/<big>L<\/big>a MDMA es un tratamiento\./)
+  assert.doesNotMatch(xml,/<big>La<\/big>/)
+})
+
+test('EPUB metadata normalises internal Latin American Spanish to BCP-47 es-419', () => {
+  const source:any=new AdmZip(epubFixture())
+  source.updateFile('OEBPS/content.opf',Buffer.from('<package><metadata xmlns:dc="http://purl.org/dc/elements/1.1/"><dc:language>en</dc:language></metadata><manifest><item id="c10" href="10.xhtml" media-type="application/xhtml+xml"/><item id="c11" href="11.xhtml" media-type="application/xhtml+xml"/></manifest><spine><itemref idref="c10"/><itemref idref="c11"/></spine></package>'))
+  const input=source.toBuffer(),document=parseSemanticEpub(input,'es-419-hash')
+  document.nodes.forEach(node=>{node.translatedText=`ES ${node.sourceText}`})
+  const output:any=new AdmZip(buildSemanticEpub(input,document,undefined,'es-latam','Author'))
+  const opf=output.getEntry('OEBPS/content.opf').getData().toString()
+  const chapter=output.getEntry('OEBPS/10.xhtml').getData().toString()
+  assert.match(opf,/<dc:language>es-419<\/dc:language>/)
+  assert.match(chapter,/lang="es-419"/)
+  assert.doesNotMatch(`${opf}\n${chapter}`,/es-latam/)
+})
+
 test('EPUB rebuild ignores parser-omitted empty layout blocks', () => {
   const source:any=new AdmZip(epubFixture())
   source.updateFile('OEBPS/10.xhtml',Buffer.from('<html><body><h1>Chapter 10</h1><p>Ten body.</p><p><span> </span></p></body></html>'))
@@ -205,12 +230,12 @@ test('chapter map retains unnumbered structural DOCX headings', () => {
   ])
 })
 
-test('split chapter headings become one EPUB nav, DOCX TOC, and Chapter Map entry',async()=>{
+test('split chapter headings stay separate in EPUB but consolidate for DOCX TOC and Chapter Map',async()=>{
   const zip:any=new (AdmZip as any)(undefined,{noSort:true})
   zip.addFile('mimetype',Buffer.from('application/epub+zip'));zip.getEntry('mimetype').header.method=0
   zip.addFile('META-INF/container.xml',Buffer.from('<container><rootfiles><rootfile full-path="OPS/book.opf"/></rootfiles></container>'))
   zip.addFile('OPS/book.opf',Buffer.from('<package><metadata xmlns:dc="http://purl.org/dc/elements/1.1/"><dc:title>Book</dc:title><dc:language>en</dc:language><dc:creator>Wrong Customer</dc:creator><dc:identifier>old</dc:identifier></metadata><manifest><item id="b" href="b.xhtml" media-type="application/xhtml+xml"/><item id="n" href="nav.xhtml" media-type="application/xhtml+xml" properties="nav"/></manifest><spine><itemref idref="b"/></spine></package>'))
-  zip.addFile('OPS/b.xhtml',Buffer.from('<html><body><p>About the Author</p><p>Cari Rhys-Owen</p><p>Table of Contents</p><p>Chapter 1:</p><p>Understanding</p><h1>Chapter 1:</h1><p>Understanding</p><h1>Your Body\'s Natural Aging Systems</h1><p>Body.</p></body></html>'))
+  zip.addFile('OPS/b.xhtml',Buffer.from('<html><body><p>About the Author</p><p>Cari Rhys-Owen</p><p>Table of Contents</p><p>Chapter 1:</p><p>Understanding</p><h1 id="c1">Chapter 1:</h1><p id="c2">Understanding</p><h1 id="c3">Your Body\'s Natural Aging Systems</h1><p>Body.</p></body></html>'))
   zip.addFile('OPS/nav.xhtml',Buffer.from('<html><body><nav><ol><li><a href="b.xhtml#c1">Chapter 1:</a></li><li><a href="b.xhtml#c2">Understanding</a></li><li><a href="b.xhtml#c3">Your Body\'s Natural Aging Systems</a></li></ol></nav></body></html>'))
   const source=zip.toBuffer(),doc=parseSemanticEpub(source,'split');doc.nodes.forEach(node=>{node.translatedText=({
     'About the Author':'Über die Autorin','Table of Contents':'Inhaltsverzeichnis','Chapter 1:':'Kapitel 1:','Understanding':'Verständnis der',"Your Body's Natural Aging Systems":'natürlichen Alterungssysteme Ihres Körpers'
@@ -220,10 +245,27 @@ test('split chapter headings become one EPUB nav, DOCX TOC, and Chapter Map entr
   assert.equal(resolveBookAuthor(doc,'Tina Vaughan / Cari Rhys-Owen'),'Tina Vaughan / Cari Rhys-Owen')
   const epub=buildSemanticEpub(source,doc,{sourceKind:'epub_metadata',sourceValue:'Book',translatedValue:'Buch',effectiveValue:'Buch',confidence:'verified',fallbackUsed:false},'de','Tina Vaughan / Cari Rhys-Owen','edition')
   const output:any=new AdmZip(epub),nav=output.getEntry('OPS/nav.xhtml').getData().toString(),opf=output.getEntry('OPS/book.opf').getData().toString(),body=output.getEntry('OPS/b.xhtml').getData().toString()
-  assert.equal((nav.match(/<li\b/g)||[]).length,1);assert.match(nav,/Kapitel 1: Verständnis der natürlichen Alterungssysteme Ihres Körpers/)
-  assert.equal((body.match(/<h1\b/g)||[]).length,1);assert.match(opf,/<dc:creator>Tina Vaughan \/ Cari Rhys-Owen<\/dc:creator>/)
+  assert.equal((nav.match(/<li\b/g)||[]).length,3);assert.match(nav,/Kapitel 1:/);assert.match(nav,/Verständnis der/)
+  assert.equal((body.match(/<h1\b/g)||[]).length,2);assert.match(opf,/<dc:creator>Tina Vaughan \/ Cari Rhys-Owen<\/dc:creator>/)
   const docx:any=new AdmZip(await buildSemanticDocx(doc,'Buch','final')),xml=docx.getEntry('word/document.xml').getData().toString()
   assert.equal((xml.match(/Kapitel 1:/g)||[]).length,2);assert.match(xml,/Kapitel 1: Verständnis der natürlichen Alterungssysteme Ihres Körpers/)
+})
+
+test('EPUB navigation uses the anchored styled chapter title and keeps opening blocks separate',()=>{
+  const zip:any=new (AdmZip as any)(undefined,{noSort:true})
+  zip.addFile('mimetype',Buffer.from('application/epub+zip'));zip.getEntry('mimetype').header.method=0
+  zip.addFile('META-INF/container.xml',Buffer.from('<container><rootfiles><rootfile full-path="OPS/book.opf"/></rootfiles></container>'))
+  zip.addFile('OPS/book.opf',Buffer.from('<package><manifest><item id="c" href="chapter.xhtml" media-type="application/xhtml+xml"/><item id="n" href="toc.html" media-type="application/xhtml+xml" properties="nav"/></manifest><spine><itemref idref="c"/></spine></package>'))
+  zip.addFile('OPS/chapter.xhtml',Buffer.from('<html><body><p class="chn">CHAPTER 5</p><p class="chna"><a id="chapter5"></a><b>MDMA Vs. Other Psychedelic Therapy</b></p><p>Body.</p></body></html>'))
+  zip.addFile('OPS/toc.html',Buffer.from('<html><body><nav><ol><li><a href="chapter.xhtml#chapter5">5. MDMA Vs. Other Psychedelic Therapy</a></li></ol></nav></body></html>'))
+  const source=zip.toBuffer(),document=parseSemanticEpub(source,'anchored-chapter')
+  document.nodes.forEach(node=>{node.translatedText=({'CHAPTER 5':'CAPÍTULO 5','MDMA Vs. Other Psychedelic Therapy':'MDMA vs. otras terapias psicodélicas','Body.':'Cuerpo.'} as Record<string,string>)[node.sourceText]||node.sourceText})
+  const output:any=new AdmZip(buildSemanticEpub(source,document,undefined,'es-latam'))
+  const chapter=output.getEntry('OPS/chapter.xhtml').getData().toString(),toc=output.getEntry('OPS/toc.html').getData().toString()
+  assert.match(chapter,/<p class="chn">CAPÍTULO 5<\/p>/)
+  assert.match(chapter,/<p class="chna"><a id="chapter5"><\/a><b>MDMA vs\. otras terapias psicodélicas<\/b><\/p>/)
+  assert.match(toc,/>5\. MDMA vs\. otras terapias psicodélicas<\/a>/)
+  assert.doesNotMatch(toc,/CAPÍTULO 5<\/a>/)
 })
 
 test('EPUB customer gate blocks wrong metadata, untranslated nav, and missing content headings',()=>{
