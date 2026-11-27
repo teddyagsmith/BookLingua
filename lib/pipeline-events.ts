@@ -44,6 +44,38 @@ export async function recordPipelineEvent(
   if (error) console.error('[PipelineEvent] Unable to persist event:', error.message)
 }
 
+/**
+ * The hosted RPC uses a deterministic terminal-event id. Older hosted copies
+ * of that RPC keep the first row on conflict, leaving the dashboard with a
+ * stale timestamp and reason after a retry. Refresh the durable terminal row
+ * from the application too, so every terminal failure is observable even
+ * before the database migration has caught up.
+ */
+export async function refreshTerminalFailureEvent(input: {
+  supabase: SupabaseClient
+  orderId: string
+  stage: string
+  safeMessage: string
+  failedAt: string
+}): Promise<void> {
+  const { data: event, error: lookupError } = await input.supabase.from('pipeline_events')
+    .select('id')
+    .eq('order_id', input.orderId)
+    .eq('stage', input.stage)
+    .eq('status', 'failed')
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle()
+  if (lookupError || !event) throw new Error(`Terminal failure event lookup failed: ${lookupError?.message || 'no event recorded'}`)
+
+  const { error: refreshError } = await input.supabase.from('pipeline_events').update({
+    safe_message: input.safeMessage,
+    details: { adminAlertRequired: true, failedAt: input.failedAt },
+    created_at: input.failedAt,
+  }).eq('id', event.id)
+  if (refreshError) throw new Error(`Terminal failure event refresh failed: ${refreshError.message}`)
+}
+
 export async function recordTerminalFailure(input: {
   supabase: SupabaseClient
   orderId: string
@@ -68,6 +100,13 @@ export async function recordTerminalFailure(input: {
       p_order_id: input.orderId, p_stage: input.stage, p_safe_error: safeMessage, p_failed_at: failedAt,
     })
     if (cleanupError) throw new Error(`Terminal build cleanup/audit failed: ${cleanupError.message}`)
+    await refreshTerminalFailureEvent({
+      supabase: input.supabase,
+      orderId: input.orderId,
+      stage: input.stage,
+      safeMessage,
+      failedAt,
+    })
   } else {
     await recordPipelineEvent(input.supabase, {
       orderId: input.orderId, language: input.language, stage: input.stage,
