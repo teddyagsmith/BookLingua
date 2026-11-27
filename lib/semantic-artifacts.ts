@@ -587,7 +587,8 @@ export function buildSemanticEpub(source: Buffer, document: SemanticDocumentV2, 
         // title paragraph, so only looking for h1–h6 silently replaces every
         // TOC label with an unrelated heading from the file.
         if(!linked){
-          const block=Array.from(target.matchAll(/<(h[1-6]|p|li)\b([^>]*)>([\s\S]*?)<\/\1>/gi)).find(match=>new RegExp(`\\bid=["']${escapedFragment}["']`,'i').test(`${match[2]} ${match[3]}`))
+          const blocks: RegExpMatchArray[]=Array.from(target.matchAll(/<(h[1-6]|p|li)\b([^>]*)>([\s\S]*?)<\/\1>/gi))
+          const block=blocks.find(match=>new RegExp(`\\bid=["']${escapedFragment}["']`,'i').test(`${match[2]} ${match[3]}`))
           linked=block?.[3]
         }
       }
