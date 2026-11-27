@@ -47,7 +47,10 @@ export function validateTranslationNotes(notes: TranslationNotesV1, options:{req
     const normalized=entries.map(entry=>entry.reason.normalize('NFKC').toLocaleLowerCase().replace(/\s+/g,' ').trim())
     if(new Set(normalized).size!==normalized.length)errors.push('Translation-note reasons must be unique')
     for(const entry of entries){
-      const sourceWords=(entry.source.match(/[\p{L}\p{N}]+(?:['’][\p{L}\p{N}]+)?/gu)||[]).length
+      // Keep this ES5-compatible: this project does not set a TypeScript target,
+      // so Unicode property escapes with the `u` flag fail Vercel's type check.
+      // The Latin ranges cover the source manuscripts currently supported here.
+      const sourceWords=(entry.source.match(/[A-Za-zÀ-ÖØ-öø-ÿ0-9]+(?:['’][A-Za-zÀ-ÖØ-öø-ÿ0-9]+)?/g)||[]).length
       if(sourceWords>25)errors.push(`Translation-note decision quotes too much source text (${sourceWords} words; maximum 25): ${entry.source.slice(0,60)}`)
       const identical=entry.source.normalize('NFKC').trim()===entry.target.normalize('NFKC').trim()
       if(identical&&!/retained unchanged|kept unchanged/i.test(entry.reason))errors.push(`Translation-note unchanged wording lacks an explicit retention reason: ${entry.source.slice(0,60)}`)
