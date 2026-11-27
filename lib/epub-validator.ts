@@ -5,6 +5,8 @@ import { join } from 'path'
 
 export interface EpubCheckResult {
   valid: boolean
+  /** The Vercel runtime does not include Java/EPUBCheck. This is not an EPUB failure. */
+  unavailable: boolean
   output: string
   errors: string[]
   warnings: string[]
@@ -18,6 +20,7 @@ export function validateEpub(epubBuffer: Buffer): EpubCheckResult {
 
     let output = ''
     let commandFailed = false
+    let unavailable = false
     try {
       output = execSync(
         `epubcheck "${epubPath}"`,
@@ -34,6 +37,10 @@ export function validateEpub(epubBuffer: Buffer): EpubCheckResult {
       } else {
         output = e.message || ''
       }
+      // Only infrastructure absence is deferrable.  A non-zero EPUBCheck
+      // result remains a real validation failure and must fail closed.
+      unavailable = e?.code === 'ENOENT'
+        || /(?:epubcheck|java).*(?:not found|not installed|not available)|could not be executed|no java runtime/i.test(output)
     }
 
     const errors: string[] = []
@@ -51,10 +58,10 @@ export function validateEpub(epubBuffer: Buffer): EpubCheckResult {
 
     // epubcheck returns exit 0 if 0 fatals, 0 errors, 0 warnings
     // We consider it valid only if truly clean (no errors, no warnings)
-    if(commandFailed&&errors.length===0)errors.push(output.trim()||'EPUBCheck could not be executed')
+    if(commandFailed&&!unavailable&&errors.length===0)errors.push(output.trim()||'EPUBCheck failed without a diagnostic')
     const valid = !commandFailed && errors.length === 0 && warnings.length === 0
 
-    return { valid, output, errors, warnings }
+    return { valid, unavailable, output, errors, warnings }
   } finally {
     rmSync(tmpDir, { recursive: true, force: true })
   }

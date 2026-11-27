@@ -43,6 +43,8 @@ export interface PackageManifestV1 {
   status: PackageStatus
   entitlements: PackageEntitlements
   artifacts: PackageArtifact[]
+  /** The package is reviewable but cannot be delivered until the worker records EPUBCheck 5.1.0 PASS. */
+  epubCheckPending?: boolean
   errors: string[]
   generatedAt: string
 }
@@ -62,14 +64,17 @@ export async function assemblePackageManifest(input: {
     .select('file_format, upsells').eq('id', input.orderId).single()
   if (orderError || !order) throw new Error('Unable to load package entitlements')
   const { data: rows, error } = await input.supabase.from('artifacts')
-    .select('id, order_id, language, build_id, artifact_type, storage_bucket, storage_path, filename, sha256, size_bytes, schema_version, validation_status, validation_report_id, validation_reports(passed)')
+    .select('id, order_id, language, build_id, artifact_type, storage_bucket, storage_path, filename, sha256, size_bytes, schema_version, validation_status, validation_report_id, validation_reports(passed,metrics)')
     .eq('order_id', input.orderId).eq('language', input.language).eq('build_id', input.buildId)
   if (error) throw new Error(`Unable to load authoritative artifacts: ${error.message}`)
   const artifacts: PackageArtifact[] = (rows || []).map((row: any) => ({
     id: row.id, buildId: row.build_id, type: row.artifact_type, required: true,
     filename: row.filename, storageBucket: row.storage_bucket, storagePath: row.storage_path,
     sha256: row.sha256, sizeBytes: Number(row.size_bytes), schemaVersion: row.schema_version || undefined,
-    validationStatus: row.validation_status === 'pass' && authoritativeValidationPassed(row.validation_reports) ? 'pass' : 'fail',
+    validationStatus: row.validation_status === 'pass' && authoritativeValidationPassed(row.validation_reports) ? 'pass'
+      : row.artifact_type === 'final_epub' && row.validation_status === 'pending'
+        && (Array.isArray(row.validation_reports) ? row.validation_reports[0] : row.validation_reports)?.metrics?.epubCheck?.status === 'pending'
+        ? 'pending' : 'fail',
     validationReportId: row.validation_report_id || undefined,
   }))
   const upsells = Array.isArray(order.upsells) ? order.upsells : JSON.parse(order.upsells || '[]')
@@ -100,12 +105,14 @@ export function evaluatePackageManifest(manifest: PackageManifestV1): PackageMan
     const artifact = matches[0]
     if (matches.length !== 1) errors.push(`Expected exactly one required artifact: ${type}`)
     if (!artifact) errors.push(`Missing required artifact: ${type}`)
-    else if (artifact.validationStatus !== 'pass') errors.push(`Required artifact did not pass validation: ${type}`)
+    else if (artifact.validationStatus !== 'pass' && !(type === 'final_epub' && artifact.validationStatus === 'pending')) errors.push(`Required artifact did not pass validation: ${type}`)
     else if (!artifact.id || !artifact.storagePath || !artifact.sha256 || artifact.sizeBytes <= 0) errors.push(`Required artifact metadata incomplete: ${type}`)
   }
-  return { ...manifest, status: errors.length ? 'fail' : 'pass', errors }
+  const epubCheckPending = manifest.artifacts.some(artifact => artifact.type === 'final_epub' && artifact.validationStatus === 'pending')
+  return { ...manifest, status: errors.length ? 'fail' : 'pass', errors, epubCheckPending }
 }
 
 export function canDeliverPackage(manifest: PackageManifestV1): boolean {
-  return evaluatePackageManifest(manifest).status === 'pass'
+  const evaluated = evaluatePackageManifest(manifest)
+  return evaluated.status === 'pass' && !evaluated.epubCheckPending
 }

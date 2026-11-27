@@ -8,4 +8,5 @@ supabase/migrations/202608120002_pipeline_hardening_state.sql
 supabase/migrations/202608120003_pipeline_hardening_briefs.sql
 supabase/migrations/202608120004_pipeline_hardening_cache.sql
 supabase/migrations/202608120005_semantic_pipeline.sql
+supabase/migrations/202611270001_deferred_epubcheck_worker.sql
 supabase/deployment/production_incremental_postconditions.sql
