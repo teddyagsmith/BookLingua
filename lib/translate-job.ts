@@ -269,6 +269,17 @@ export const translateBook = inngest.createFunction(
       .single()
     if (!order) throw new Error(`Order ${orderId} not found`)
 
+    // A retry is a new active run, not a continuation of its terminal state.
+    // Record that before any potentially slow source retrieval or model work so
+    // the admin view accurately reflects the live Inngest run.
+    await step.run('mark-order-processing', async () => {
+      const { error } = await getSupabaseAdmin()
+        .from('orders')
+        .update({ status: 'processing', failed_at: null })
+        .eq('id', orderId)
+      if (error) throw new Error(`Could not mark order ${orderId} as processing: ${error.message}`)
+    })
+
     // Fallback: load languages from order if not in event data
     if (!languages || languages.length === 0) {
       languages = (order.languages as string[]) || []
@@ -598,11 +609,6 @@ export const translateBook = inngest.createFunction(
         await storeCulturalTerms(orderId, culturalResult.terms, getSupabaseAdmin())
         console.log(`[CulturalTerms] ${culturalResult.terms.length} terms extracted`)
       }
-    })
-
-    // ── Step 3: Update order status ──
-    await step.run('update-status-processing', async () => {
-      await getSupabaseAdmin().from('orders').update({ status: 'processing' }).eq('id', orderId)
     })
 
     const translations: Record<string, { translated: string; edited: string; notes: string }> = {}
