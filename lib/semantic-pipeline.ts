@@ -209,7 +209,7 @@ async function validationReport(supabase: SupabaseClient, input: { orderId: stri
   return data.id
 }
 
-async function storeValidated(input: SemanticPipelineInput, buildId: string, type: ArtifactType, filename: string, buffer: Buffer, kind?: 'docx'|'epub', semanticDuplicateParityValidated = false,expectedCreator?:string) {
+async function storeValidated(input: SemanticPipelineInput, buildId: string, type: ArtifactType, filename: string, buffer: Buffer, kind?: 'docx'|'epub', semanticDuplicateParityValidated = false,expectedCreator?:string,baselineGluedWordCount = 0) {
   // Partial-build retries reuse already validated immutable artifacts. The
   // deterministic build ID binds them to the exact source/brief/language, and
   // avoids regenerating container formats after a later stage fails.
@@ -237,7 +237,7 @@ async function storeValidated(input: SemanticPipelineInput, buildId: string, typ
     validationStatus: existing.validation_status, validationReportId: existing.validation_report_id || undefined,
     }
   }
-  const result = kind ? validateArtifact(buffer, kind, { semanticDuplicateParityValidated, semanticHeadingDuplicateParityValidated: semanticDuplicateParityValidated, expectedLanguage: input.language,expectedCreator }) : { passed: buffer.length > 0, errors: buffer.length ? [] : [{ code: 'EMPTY', message: 'Artifact empty' }], metrics: {} }
+  const result = kind ? validateArtifact(buffer, kind, { semanticDuplicateParityValidated, semanticHeadingDuplicateParityValidated: semanticDuplicateParityValidated, expectedLanguage: input.language, expectedCreator, baselineGluedWordCount }) : { passed: buffer.length > 0, errors: buffer.length ? [] : [{ code: 'EMPTY', message: 'Artifact empty' }], metrics: {} }
   if(kind==='epub'){
     const checked=validateEpub(buffer)
     ;(result.metrics as Record<string,unknown>).epubCheck={valid:checked.valid,errors:checked.errors.length,warnings:checked.warnings.length}
@@ -362,6 +362,11 @@ export async function runSemanticPipeline(input: SemanticPipelineInput) {
   const sourceDocument = input.sourceFormat === 'epub' ? parseSemanticEpub(input.source, sourceHash)
     : input.sourceFormat === 'docx' ? await parseSemanticDocx(input.source, sourceHash)
       : parseSemanticTxt(input.source.toString('utf8'), sourceHash)
+  // Camel-cased names and brands (for example, MacLeod) are legitimate
+  // lower-to-upper transitions. The artifact validator must compare each
+  // reconstructed package with this exact source baseline, then flag only
+  // transitions introduced by reconstruction.
+  const sourceGluedWordBaseline = (sourceDocument.nodes.map(node => node.sourceText).join('\n').match(/[a-zà-ÿ][A-ZÀ-Þ]/g) || []).length
   const eligibility = evaluateSemanticEligibility(sourceDocument)
   if (eligibility.status === 'unsupported' || (eligibility.status === 'review_required' && !input.allowReviewedStructure)) throw new Error(`Semantic structure ${eligibility.status}: ${eligibility.reasons.join('; ')}`)
   assertTranslationBriefForSource(input.brief, input.language, sourceHash)
@@ -433,9 +438,9 @@ export async function runSemanticPipeline(input: SemanticPipelineInput) {
   }
 
   await storeValidated(input, buildId, 'translation_brief', 'translation-brief.json', Buffer.from(JSON.stringify(input.brief, null, 2)))
-  await storeValidated(input, buildId, 'pass1_docx', `${input.title} - ${input.language} - Pass 1.docx`, await buildSemanticDocx(pass1, titleAuthority.effectiveValue, 'pass1'), 'docx', true)
+  await storeValidated(input, buildId, 'pass1_docx', `${input.title} - ${input.language} - Pass 1.docx`, await buildSemanticDocx(pass1, titleAuthority.effectiveValue, 'pass1'), 'docx', true, undefined, sourceGluedWordBaseline)
   const reviewDocx=await buildSemanticReviewDocx(pass1, pass2, titleAuthority.effectiveValue)
-  await storeValidated(input, buildId, 'review_docx', `${input.title} - ${input.language} - Review.docx`, reviewDocx, 'docx', true)
+  await storeValidated(input, buildId, 'review_docx', `${input.title} - ${input.language} - Review.docx`, reviewDocx, 'docx', true, undefined, sourceGluedWordBaseline)
   const bookAuthor=resolveBookAuthor(pass2,input.authorName)
   if(input.authorName?.trim()&&bookAuthor!==input.authorName.trim())throw new Error(`Author contract failed: expected ${input.authorName.trim()}, received ${bookAuthor||'(missing)'}`)
   const finalEpub=(input.sourceFormat === 'epub' || input.dualFormat)
@@ -449,7 +454,7 @@ export async function runSemanticPipeline(input: SemanticPipelineInput) {
   }
   if(finalEpub){
     assertEpubFootnotePlacementMatchesDocx(finalEpub,finalDocx)
-    await storeValidated(input, buildId, 'final_epub', `${input.title} - ${input.language} - Final.epub`, finalEpub, 'epub', true,bookAuthor)
+    await storeValidated(input, buildId, 'final_epub', `${input.title} - ${input.language} - Final.epub`, finalEpub, 'epub', true, bookAuthor, sourceGluedWordBaseline)
   }
   const deliveredNodes = artifactDocxNodes(pass2)
   const headingStyles: Record<string, number> = {}
@@ -479,7 +484,7 @@ export async function runSemanticPipeline(input: SemanticPipelineInput) {
     metrics: { readerRegister, headingStyles, nodes: deliveredNodes.length, finalWordCount:finalFacts.acceptedWordCount, reviewWordCount:reviewFacts.acceptedWordCount, wordCountDelta:reviewFacts.acceptedWordCount-finalFacts.acceptedWordCount, emptyTextTotal:finalFacts.emptyTextTotal, prohibitedEmptyTextRuns:finalFacts.prohibitedEmptyTextRuns, germanQuotes:finalFacts.germanQuotes },
   })
   if (blockingDeliveryFailures.length) throw new Error(`Delivery contract failed for ${input.language}: ${describeFailures(blockingDeliveryFailures)}`)
-  await storeValidated(input, buildId, 'final_docx', `${input.title} - ${input.language} - Final.docx`, finalDocx, 'docx', true)
+  await storeValidated(input, buildId, 'final_docx', `${input.title} - ${input.language} - Final.docx`, finalDocx, 'docx', true, undefined, sourceGluedWordBaseline)
   const map = buildChapterMap(pass2)
   const sourceHeadingCount=buildChapterMap(sourceDocument).length
   const minimumMapRows=Math.max(1,Math.ceil(sourceHeadingCount*0.9))
