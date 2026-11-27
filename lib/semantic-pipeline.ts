@@ -219,13 +219,13 @@ async function storeValidated(input: SemanticPipelineInput, buildId: string, typ
     .eq('artifact_type', type).maybeSingle()
   if (existingError) throw new Error(`Artifact cache lookup failed: ${existingError.message}`)
   if (existing) {
-    // A pre-EPUBCheck immutable artifact is not safe to reuse. New output
-    // versions force a clean build, while retrying a current build remains
-    // permitted only when its authoritative report proves a zero-error check.
+    // A locally unavailable EPUBCheck is explicitly deferred to the Java
+    // worker. A real EPUBCheck failure is never reusable.
     if (kind === 'epub') {
       const report:any = Array.isArray((existing as any).validation_reports) ? (existing as any).validation_reports[0] : (existing as any).validation_reports
       const epubCheck = report?.metrics?.epubCheck
-      if (existing.validation_status !== 'pass' || report?.passed !== true || epubCheck?.valid !== true || epubCheck?.errors !== 0) {
+      const pending = existing.validation_status === 'pending' && epubCheck?.status === 'pending'
+      if (!pending && (existing.validation_status !== 'pass' || report?.passed !== true || epubCheck?.valid !== true || epubCheck?.errors !== 0)) {
         throw new Error('Cached EPUB has no authoritative zero-error EPUBCheck result; rebuild required')
       }
     }
@@ -238,14 +238,18 @@ async function storeValidated(input: SemanticPipelineInput, buildId: string, typ
     }
   }
   const result = kind ? validateArtifact(buffer, kind, { semanticDuplicateParityValidated, semanticHeadingDuplicateParityValidated: semanticDuplicateParityValidated, expectedLanguage: input.language, expectedCreator, baselineGluedWordCount }) : { passed: buffer.length > 0, errors: buffer.length ? [] : [{ code: 'EMPTY', message: 'Artifact empty' }], metrics: {} }
+  let validationStatus: 'pending'|'pass' = 'pass'
   if(kind==='epub'){
     const checked=validateEpub(buffer)
-    ;(result.metrics as Record<string,unknown>).epubCheck={valid:checked.valid,errors:checked.errors.length,warnings:checked.warnings.length}
-    if(!checked.valid){result.passed=false;result.errors.push({code:'EPUBCHECK',message:checked.errors.concat(checked.warnings).join('; ')||'EPUBCheck failed'})}
+    ;(result.metrics as Record<string,unknown>).epubCheck=checked.unavailable
+      ? {status:'pending',version:'5.1.0',reason:'runtime_unavailable'}
+      : {status:checked.valid?'pass':'fail',version:'5.1.0',valid:checked.valid,errors:checked.errors.length,warnings:checked.warnings.length}
+    if(checked.unavailable) validationStatus='pending'
+    else if(!checked.valid){result.passed=false;result.errors.push({code:'EPUBCHECK',message:checked.errors.concat(checked.warnings).join('; ')||'EPUBCheck failed'})}
   }
-  const reportId = await validationReport(input.supabase, { orderId: input.orderId, language: input.language, buildId, stage: `artifact:${type}`, passed: result.passed, errors: result.errors, metrics: result.metrics })
+  const reportId = await validationReport(input.supabase, { orderId: input.orderId, language: input.language, buildId, stage: `artifact:${type}`, passed: validationStatus === 'pass' && result.passed, errors: result.errors, metrics: result.metrics })
   if (!result.passed) throw new Error(`${type} validation failed: ${result.errors.map((error: any) => error.message).join('; ')}`)
-  return storeImmutableArtifact({ supabase: input.supabase, orderId: input.orderId, language: input.language, buildId, type, filename, buffer, schemaVersion: 'semantic-v2', validationStatus: 'pass', validationReportId: reportId })
+  return storeImmutableArtifact({ supabase: input.supabase, orderId: input.orderId, language: input.language, buildId, type, filename, buffer, schemaVersion: 'semantic-v2', validationStatus, validationReportId: reportId })
 }
 
 async function cachedTranslation(input: SemanticPipelineInput, batch: NodeTranslationInput, pass: 1|2, batchIndex: number, batchCount: number, batchId: string, authoritativeNodes: SemanticDocumentV2['nodes']): Promise<SemanticDocumentV2['nodes']> {

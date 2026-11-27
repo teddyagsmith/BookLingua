@@ -39,8 +39,8 @@ export async function resolvePackageGate(
     language: evaluated.language,
     stage: 'package_gate',
     status: evaluated.status === 'pass' ? 'passed' : 'failed',
-    level: evaluated.status === 'pass' ? 'info' : 'error',
-    safeMessage: evaluated.status === 'pass' ? 'Package validation passed' : evaluated.errors.join('; '),
+    level: evaluated.status === 'pass' ? (evaluated.epubCheckPending ? 'warning' : 'info') : 'error',
+    safeMessage: evaluated.status === 'pass' ? (evaluated.epubCheckPending ? 'EPUBCHECK_PENDING_DELIVERY_BLOCKED' : 'Package validation passed') : evaluated.errors.join('; '),
   })
   return { ...evaluated, status: orderStatus === 'ready_for_review' ? evaluated.status : 'fail' }
 }

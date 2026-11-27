@@ -111,6 +111,15 @@ test('migrations encode atomic all-language gate, immutable briefs, versioned ca
   assert.match(source, /translation_requested_at/)
 })
 
+test('deferred EPUBCheck is review-only and delivery still needs an immutable Java-worker pass', () => {
+  const migration = fs.readFileSync(path.join(process.cwd(), 'supabase/migrations/202611270001_deferred_epubcheck_worker.sql'), 'utf8')
+  assert.match(migration, /create table if not exists epubcheck_results/i)
+  assert.match(migration, /validator_version = '5\.1\.0'/)
+  assert.match(migration, /is_reviewable_package_manifest/)
+  assert.match(migration, /epubcheck_results_are_immutable/)
+  assert.match(migration, /er\.passed=true/)
+})
+
 test('hardened behavior defaults disabled and admin supports both review states', () => {
   const capability = fs.readFileSync(path.join(process.cwd(), 'lib/pipeline-capabilities.ts'), 'utf8')
   const admin = fs.readFileSync(path.join(process.cwd(), 'app/admin/page.tsx'), 'utf8')

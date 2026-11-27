@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { PackageArtifact, PackageManifestV1, evaluatePackageManifest } from '../lib/package-manifest'
+import { PackageArtifact, PackageManifestV1, canDeliverPackage, evaluatePackageManifest } from '../lib/package-manifest'
 import { renderCustomerDeliveryEmail, renderReviewEmail } from '../lib/email-templates'
 import { buildPass1Docx, buildReviewContractDocx, REVIEW_LEGEND } from '../lib/review-contract'
 
@@ -22,6 +22,14 @@ test('missing promised or purchased artifact makes package fail', () => {
   const launch = manifest(requiredEpub)
   launch.entitlements.launchPack = true
   assert.match(evaluatePackageManifest(launch).errors.join(' '), /launch_pack/)
+})
+
+test('only an explicitly pending final EPUB is reviewable and it remains delivery-blocked', () => {
+  const pending = manifest(requiredEpub).artifacts.map(item => item.type === 'final_epub' ? { ...item, validationStatus: 'pending' as const } : item)
+  const evaluated = evaluatePackageManifest({ ...manifest(requiredEpub), artifacts: pending })
+  assert.equal(evaluated.status, 'pass')
+  assert.equal(evaluated.epubCheckPending, true)
+  assert.equal(canDeliverPackage(evaluated), false)
 })
 
 test('review email states PASS or exact FAIL reasons', () => {

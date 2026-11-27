@@ -1,0 +1,73 @@
+name: EPUBCheck worker
+
+on:
+  workflow_dispatch:
+    inputs:
+      order_id:
+        description: BookLingua order UUID
+        required: true
+        type: string
+      language:
+        description: Canonical language code
+        required: true
+        type: string
+      build_id:
+        description: Immutable build UUID
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Fetch exact pending artifact
+        id: job
+        env:
+          WORKER_TOKEN: ${{ secrets.EPUBCHECK_WORKER_TOKEN }}
+          ORDER_ID: ${{ inputs.order_id }}
+          LANGUAGE: ${{ inputs.language }}
+          BUILD_ID: ${{ inputs.build_id }}
+        run: |
+          set -euo pipefail
+          response=$(curl --fail-with-body --silent --show-error -X POST https://booklingua.io/api/internal/epubcheck-job \
+            -H "Authorization: Bearer $WORKER_TOKEN" -H 'Content-Type: application/json' \
+            --data "{\"orderId\":\"$ORDER_ID\",\"language\":\"$LANGUAGE\",\"buildId\":\"$BUILD_ID\"}")
+          echo "$response" > job.json
+          curl --fail-with-body --silent --show-error "$(jq -r .downloadUrl job.json)" -o book.epub
+          expected=$(jq -r .sha256 job.json)
+          actual=$(sha256sum book.epub | awk '{print $1}')
+          test "$actual" = "$expected"
+      - name: Run EPUBCheck 5.1.0
+        run: |
+          set -o pipefail
+          curl --fail-with-body --silent --show-error -L https://github.com/w3c/epubcheck/releases/download/v5.1.0/epubcheck-5.1.0.zip -o epubcheck.zip
+          unzip -q epubcheck.zip
+          set +e
+          java -jar epubcheck-5.1.0/epubcheck.jar --json report.json book.epub > epubcheck-output.txt 2>&1
+          echo $? > epubcheck-exit-code.txt
+          set -e
+      - name: Record immutable result
+        env:
+          WORKER_TOKEN: ${{ secrets.EPUBCHECK_WORKER_TOKEN }}
+          ORDER_ID: ${{ inputs.order_id }}
+          LANGUAGE: ${{ inputs.language }}
+          BUILD_ID: ${{ inputs.build_id }}
+        run: |
+          set -euo pipefail
+          exit_code=$(cat epubcheck-exit-code.txt)
+          passed=false; test "$exit_code" = 0 && passed=true
+          errors=$(jq -c '[.messages[]? | select(.severity == "ERROR" or .severity == "FATAL") | .message]' report.json 2>/dev/null || echo '[]')
+          warnings=$(jq -c '[.messages[]? | select(.severity == "WARNING") | .message]' report.json 2>/dev/null || echo '[]')
+          jq -n --arg orderId "$ORDER_ID" --arg language "$LANGUAGE" --arg buildId "$BUILD_ID" \
+            --arg artifactId "$(jq -r .artifactId job.json)" --arg sha256 "$(jq -r .sha256 job.json)" \
+            --arg output "$(head -c 95000 epubcheck-output.txt)" --argjson passed "$passed" --argjson errors "$errors" --argjson warnings "$warnings" \
+            '{orderId:$orderId,language:$language,buildId:$buildId,artifactId:$artifactId,sha256:$sha256,passed:$passed,errors:$errors,warnings:$warnings,output:$output}' > result.json
+          curl --fail-with-body --silent --show-error -X POST https://booklingua.io/api/internal/epubcheck-result \
+            -H "Authorization: Bearer $WORKER_TOKEN" -H 'Content-Type: application/json' --data @result.json
