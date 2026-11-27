@@ -1,5 +1,6 @@
 import { PackageArtifact, PackageManifestV1, evaluatePackageManifest } from './package-manifest'
 import { cleanBookTitle } from './authoritative-title'
+import { localeDisplayName, normalizeLocale } from './locales'
 
 export const CUSTOMER_DELIVERY_TEMPLATE_VERSION = '2.0'
 
@@ -27,8 +28,8 @@ const PRESENTATION: Record<CustomerArtifactType,{label:string;fileType:string;de
   launch_pack:{label:'Launch Pack',fileType:'Launch Pack',description:'Launch and marketing material prepared for the target-language market.'},
 }
 
-export function customerLanguageCode(language:string):string{return LANGUAGE_CODES[language]||language.toUpperCase()}
-export function customerLanguageName(language:string):string{return LANGUAGE_NAMES[language]||language}
+export function customerLanguageCode(language:string):string{const locale=normalizeLocale(language);return LANGUAGE_CODES[locale]||locale.toUpperCase()}
+export function customerLanguageName(language:string):string{return localeDisplayName(language)}
 
 export function sanitizeCustomerFilenamePart(value:string):string{
   const cleaned=cleanBookTitle(value).normalize('NFKC').replace(/[<>:"/\\|?*\u0000-\u001f]/g,' ').replace(/\s+/g,' ').replace(/^[. ]+|[. ]+$/g,'').trim()

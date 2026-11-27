@@ -1,8 +1,10 @@
+import { normalizeLocale } from './locales'
+
 export const LAUNCH_PACK_SCHEMA_VERSION = '3.1'
 
 export const LAUNCH_MARKETS = {
   'es-es': { language: 'Spanish (Spain)', market: 'Spain', amazonDomain: 'amazon.es', currency: 'EUR' },
-  'es-419': { language: 'Spanish (Latin America)', market: 'Mexico and Spanish-speaking Latin America', amazonDomain: 'amazon.com.mx', currency: 'MXN/USD' },
+  'es-latam': { language: 'Spanish (Latin America)', market: 'Mexico and Spanish-speaking Latin America', amazonDomain: 'amazon.com.mx', currency: 'MXN/USD' },
   fr: { language: 'French', market: 'France', amazonDomain: 'amazon.fr', currency: 'EUR' },
   de: { language: 'German', market: 'Germany', amazonDomain: 'amazon.de', currency: 'EUR' },
   it: { language: 'Italian', market: 'Italy', amazonDomain: 'amazon.it', currency: 'EUR' },
@@ -38,9 +40,10 @@ export interface LaunchPackV1 {
 }
 
 export function launchMarket(locale: string) {
-  const market = LAUNCH_MARKETS[locale as LaunchLocale]
+  const canonicalLocale = normalizeLocale(locale)
+  const market = LAUNCH_MARKETS[canonicalLocale as LaunchLocale]
   if (!market) throw new Error(`Unsupported Launch Pack locale: ${locale}`)
-  return { locale: locale as LaunchLocale, ...market }
+  return { locale: canonicalLocale as LaunchLocale, ...market }
 }
 
 export function validateLaunchPack(input: { pack: LaunchPackV1; expectedLocale: string; purchased: boolean }): string[] {

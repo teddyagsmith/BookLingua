@@ -9,6 +9,7 @@ import { BOOKLINGUA_CLEAN_BOOK_STYLE } from './formatting-policy'
 import { TitleAuthority } from './authoritative-title'
 import { blockEmphasisRuns, distributeEmphasis, EmphasisRun, parseInlineStyles } from './inline-emphasis'
 import { epubBlockMarkup } from './semantic-parser'
+import { localeEpubTag } from './locales'
 
 function heading(level: number | null): typeof HeadingLevel[keyof typeof HeadingLevel] {
   return level === 1 ? HeadingLevel.HEADING_1 : level === 2 ? HeadingLevel.HEADING_2 : level === 3 ? HeadingLevel.HEADING_3 : HeadingLevel.HEADING_4
@@ -488,7 +489,7 @@ function editionIdentifier(seed:string,language:string):string{
 }
 
 function epubLanguageTag(language:string):string{
-  return ({'es-latam':'es-419','es-es':'es-ES','pt-br':'pt-BR','pt-pt':'pt-PT'} as Record<string,string>)[language]||language
+  return localeEpubTag(language)
 }
 
 function setEpubDocumentLanguage(xml:string,language:string):string{

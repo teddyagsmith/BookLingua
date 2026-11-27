@@ -8,7 +8,8 @@ import type { Segment } from '@/lib/extract-segments'
 import crypto from 'crypto'
 import { extractStyleProfile, storeStyleProfile, loadStylePrompt } from './style-extractor'
 import { extractCulturalTerms, storeCulturalTerms, loadGlossaryPrompt } from './cultural-term-extractor'
-import { recordTerminalFailure } from './pipeline-events'
+import { recordPipelineEvent, recordTerminalFailure } from './pipeline-events'
+import { normalizeLocales } from './locales'
 import { assertTranslationBriefForSource, ensureMaterializedExplanatoryWording, loadTranslationBrief, renderTranslationBriefPrompt, translationBriefFingerprint, verifiedExplanatoryNotesFromBrief } from './translation-brief'
 import { HARDENED_V1_ENABLED } from './pipeline-capabilities'
 import { SEMANTIC_V2_ENABLED } from './semantic-document'
@@ -273,6 +274,7 @@ export const translateBook = inngest.createFunction(
       languages = (order.languages as string[]) || []
       console.log(`[BookLingua] Loaded languages from order: ${languages.join(', ')}`)
     }
+    languages = normalizeLocales(languages)
 
     const { data: fileData } = await getSupabaseAdmin()
       .from('files')
@@ -334,6 +336,7 @@ export const translateBook = inngest.createFunction(
           }
           let launchPack: Buffer | undefined
           if ((order.upsells || []).includes('launch-pack')) {
+            try {
             const launchPackModel = String(order.special_instructions || '').includes('[LAUNCH_PACK_SONNET_FALLBACK]')
               ? BOOKLINGUA_MODEL_CONFIG.translation
               : BOOKLINGUA_MODEL_CONFIG.launchPack
@@ -369,6 +372,12 @@ export const translateBook = inngest.createFunction(
               requestIdentity:`${launchPackRequestIdentity(cached.identity)}:cache-hit`,provider:'anthropic',modelId:launchPackModel,
               success:true,inputTokens:0,outputTokens:0,cacheStatus:'hit'})
             launchPack = Buffer.from(JSON.stringify(cached.pack))
+            } catch (error) {
+              // This paid add-on is tracked separately; a provider failure must not
+              // discard the completed translation work or trigger a whole-job retry.
+              await recordPipelineEvent(getSupabaseAdmin(), { orderId, language, stage: 'launch_pack', status: 'failed', level: 'warning', safeMessage: 'LAUNCH_PACK_GENERATION_FAILED', details: { error: error instanceof Error ? error.message : String(error) } })
+              console.error(`[BookLingua] Launch Pack failed for ${orderId}/${language}; continuing translation`, error)
+            }
           }
           const explanatoryWarnings: string[] = []
           const result = await runSemanticPipeline({

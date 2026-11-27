@@ -10,6 +10,7 @@ import { Resend } from 'resend'
 import { newOrderPipelineFields } from '@/lib/customer-package-version'
 import { bundleDiscountPercent } from '@/lib/bundle-pricing'
 import { CORE_LANGUAGE_CODES } from '@/lib/languages'
+import { normalizeLocales } from '@/lib/locales'
 import { WORD_TIERS, pricingTierForWordCount, PricingTierKey } from '@/lib/pricing'
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
@@ -207,7 +208,7 @@ export async function POST(request: NextRequest) {
       wordCount,
       tier,
       fileFormat,
-      selectedLanguages,
+      selectedLanguages: rawSelectedLanguages,
       selectedGenre,
       heatLevel,
       selectedUpsells,
@@ -236,12 +237,13 @@ export async function POST(request: NextRequest) {
 
     const authoritativeWordCount = authoritativeUpload ? Number(authoritativeUpload.word_count) : Number(wordCount)
     const authoritativeFileFormat = authoritativeUpload ? String(authoritativeUpload.file_format) : String(fileFormat)
-    if (!Array.isArray(selectedLanguages) || selectedLanguages.length === 0
-      || selectedLanguages.some(language => typeof language !== 'string' || !/^[a-z]{2}(?:-[a-z]{2,5})?$/i.test(language))
-      || selectedLanguages.some(language => !CORE_LANGUAGE_CODES.has(language))
-      || new Set(selectedLanguages).size !== selectedLanguages.length) {
+    if (!Array.isArray(rawSelectedLanguages) || rawSelectedLanguages.length === 0
+      || rawSelectedLanguages.some((language: unknown) => typeof language !== 'string' || !/^[a-z]{2}(?:-[a-z]{2,5})?$/i.test(language))) {
       return NextResponse.json({ error: 'Invalid target languages' }, { status: 400 })
     }
+
+    const selectedLanguages = normalizeLocales(rawSelectedLanguages)
+    if (selectedLanguages.some(language => !CORE_LANGUAGE_CODES.has(language)) || new Set(selectedLanguages).size !== selectedLanguages.length) return NextResponse.json({ error: 'Invalid target languages' }, { status: 400 })
 
     // ✅ SECURITY: Recalculate price server-side — ignore any client-submitted totalAmount
     // Also validate tier against word count — correct it if client sent wrong tier
