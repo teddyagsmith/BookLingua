@@ -225,9 +225,13 @@ export const translateBook = inngest.createFunction(
       try {
         const { data: order } = await getSupabaseAdmin()
           .from('orders')
-          .select('author_name,book_title,languages')
+          .select('author_name,book_title,languages,special_instructions')
           .eq('id', orderId)
           .maybeSingle()
+        if (String(order?.special_instructions || '').includes('[INTERNAL_REVIEW_EMAIL_HOLD]')) {
+          console.log(`[BookLingua] Failure alert held for ${orderId}; operator review is required before any email.`)
+          return
+        }
         const result = await getResend().emails.send({
           from: 'BookLingua <orders@booklingua.io>',
           to: process.env.ADMIN_EMAIL!,
