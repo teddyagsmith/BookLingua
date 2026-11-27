@@ -1,7 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { BLOCKED_ORDER_STATUSES, isOrderStatus } from '../lib/order-status'
-import { safePipelineError } from '../lib/pipeline-events'
+import { refreshTerminalFailureEvent, safePipelineError } from '../lib/pipeline-events'
 
 test('qa and gate failures are represented as blocked order states', () => {
   assert.equal(isOrderStatus('qa_blocked'), true)
@@ -21,4 +21,34 @@ test('timeouts and model truncation retain actionable safe causes', () => {
   assert.equal(safePipelineError(new Error('Function execution exceeded its timeout')), 'PIPELINE_TIMEOUT')
   assert.equal(safePipelineError(new Error('MODEL_OUTPUT_TRUNCATED: provider stopped at max_tokens')), 'MODEL_OUTPUT_TRUNCATED')
   assert.equal(safePipelineError(new SyntaxError('Unexpected end of JSON input')), 'MODEL_JSON_INVALID')
+})
+
+test('terminal failure refresh replaces the stale event timestamp and reason', async () => {
+  const calls: Array<{ table: string; action: string; value?: unknown }> = []
+  const supabase: any = {
+    from(table: string) {
+      return {
+        select() { calls.push({ table, action: 'select' }); return this },
+        eq() { return this },
+        order() { return this },
+        limit() { return this },
+        maybeSingle: async () => ({ data: { id: 'terminal-event' }, error: null }),
+        update(value: unknown) { calls.push({ table, action: 'update', value }); return this },
+      }
+    },
+  }
+  await refreshTerminalFailureEvent({
+    supabase,
+    orderId: 'order',
+    stage: 'translation_job',
+    safeMessage: 'PIPELINE_EXECUTION_FAILURE',
+    failedAt: '2026-11-27T18:02:00.000Z',
+  })
+  assert.deepEqual(calls.find(call => call.action === 'update'), {
+    table: 'pipeline_events', action: 'update', value: {
+      safe_message: 'PIPELINE_EXECUTION_FAILURE',
+      details: { adminAlertRequired: true, failedAt: '2026-11-27T18:02:00.000Z' },
+      created_at: '2026-11-27T18:02:00.000Z',
+    },
+  })
 })
