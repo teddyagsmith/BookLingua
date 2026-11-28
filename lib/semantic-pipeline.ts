@@ -160,7 +160,10 @@ export const PIPELINE_OUTPUT_VERSION = 'output-v15-epub-language-and-dropcap-gat
 // Any deterministic artifact-generation change must advance this version so a
 // restart cannot reuse a package produced before the new validation/rebuild
 // policy existed.
-export const SEMANTIC_BUILD_POLICY_VERSION = 'semantic-v2-epub-and-notes-v11'
+// v12 defers an unavailable local EPUBCheck runtime to the hash-bound Java
+// worker.  The version bump deliberately creates a new immutable generation
+// rather than replaying a failed v11 validation report.
+export const SEMANTIC_BUILD_POLICY_VERSION = 'semantic-v2-epub-and-notes-v12'
 
 export function readerRegisterNarrationText(nodes:SemanticDocumentV2['nodes']):string{
   const genericLabels=/^(?:note|exercise|example|warning|tip|step|question|answer|summary|remember)$/i
@@ -170,8 +173,8 @@ export function readerRegisterNarrationText(nodes:SemanticDocumentV2['nodes']):s
   return nodes.map((node,index)=>labels[index]&&(counts.get(labels[index]!)||0)>=2?'':node.translatedText||'').join('\n')
 }
 
-export function deterministicSemanticBuildId(orderId: string, language: string, sourceHash: string, briefRevision: number, promptSignature: string = SEMANTIC_PROMPT_SIGNATURE): string {
-  const hex = createHash('sha256').update(`${orderId}:${language}:${sourceHash}:${briefRevision}:${SEMANTIC_BUILD_POLICY_VERSION}:${promptSignature}`).digest('hex').slice(0, 32).split('')
+export function deterministicSemanticBuildId(orderId: string, language: string, sourceHash: string, briefRevision: number, promptSignature: string = SEMANTIC_PROMPT_SIGNATURE, buildPolicyVersion: string = SEMANTIC_BUILD_POLICY_VERSION): string {
+  const hex = createHash('sha256').update(`${orderId}:${language}:${sourceHash}:${briefRevision}:${buildPolicyVersion}:${promptSignature}`).digest('hex').slice(0, 32).split('')
   hex[12] = '5'; hex[16] = ((parseInt(hex[16], 16) & 3) | 8).toString(16)
   return `${hex.slice(0,8).join('')}-${hex.slice(8,12).join('')}-${hex.slice(12,16).join('')}-${hex.slice(16,20).join('')}-${hex.slice(20).join('')}`
 }
