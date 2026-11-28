@@ -163,7 +163,9 @@ export const PIPELINE_OUTPUT_VERSION = 'output-v15-epub-language-and-dropcap-gat
 // v13 includes shell-level runtime absence detection (exit 127/stderr) for
 // EPUBCheck. The version bump deliberately creates a new immutable generation
 // rather than replaying a failed v12 validation report.
-export const SEMANTIC_BUILD_POLICY_VERSION = 'semantic-v2-epub-and-notes-v13'
+// v14 omits paragraph-scale source quotations from automatic customer Notes.
+// A policy bump allocates a fresh immutable build instead of replaying v13.
+export const SEMANTIC_BUILD_POLICY_VERSION = 'semantic-v2-epub-and-notes-v14'
 
 export function readerRegisterNarrationText(nodes:SemanticDocumentV2['nodes']):string{
   const genericLabels=/^(?:note|exercise|example|warning|tip|step|question|answer|summary|remember)$/i

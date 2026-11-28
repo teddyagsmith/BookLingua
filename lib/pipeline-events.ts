@@ -27,6 +27,14 @@ export function safePipelineError(error: unknown): string {
   return 'PIPELINE_EXECUTION_FAILURE'
 }
 
+/** Keep a useful operator diagnostic without persisting credentials or a stack. */
+export function safePipelineErrorDetail(error: unknown): string {
+  const raw = error instanceof Error ? error.message : String(error || 'Unknown pipeline failure')
+  return raw.replace(/[\r\n\t]+/g, ' ')
+    .replace(/((?:token|secret|api[_-]?key|authorization|password)\s*[=:]\s*)([^\s,;]+)/gi, '$1[REDACTED]')
+    .replace(/\s+/g, ' ').trim().slice(0, 2000)
+}
+
 export async function recordPipelineEvent(
   supabase: SupabaseClient,
   input: PipelineEventInput,
@@ -56,6 +64,7 @@ export async function refreshTerminalFailureEvent(input: {
   orderId: string
   stage: string
   safeMessage: string
+  errorDetail: string
   failedAt: string
 }): Promise<void> {
   const { data: event, error: lookupError } = await input.supabase.from('pipeline_events')
@@ -70,7 +79,7 @@ export async function refreshTerminalFailureEvent(input: {
 
   const { error: refreshError } = await input.supabase.from('pipeline_events').update({
     safe_message: input.safeMessage,
-    details: { adminAlertRequired: true, failedAt: input.failedAt },
+    details: { adminAlertRequired: true, failedAt: input.failedAt, errorDetail: input.errorDetail },
     created_at: input.failedAt,
   }).eq('id', event.id)
   if (refreshError) throw new Error(`Terminal failure event refresh failed: ${refreshError.message}`)
@@ -84,6 +93,7 @@ export async function recordTerminalFailure(input: {
   language?: string | null
 }): Promise<string> {
   const safeMessage = safePipelineError(input.error)
+  const errorDetail = safePipelineErrorDetail(input.error)
   const failedAt = new Date().toISOString()
 
   const failureUpdate = HARDENED_V1_ENABLED ? {
@@ -105,13 +115,14 @@ export async function recordTerminalFailure(input: {
       orderId: input.orderId,
       stage: input.stage,
       safeMessage,
+      errorDetail,
       failedAt,
     })
   } else {
     await recordPipelineEvent(input.supabase, {
       orderId: input.orderId, language: input.language, stage: input.stage,
       status: 'failed', level: 'error', safeMessage,
-      details: { adminAlertRequired: true, failedAt },
+      details: { adminAlertRequired: true, failedAt, errorDetail },
     })
   }
   if (updateError) throw new Error(`Terminal failure state persistence failed: ${updateError.message}`)
