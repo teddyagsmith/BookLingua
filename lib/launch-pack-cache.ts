@@ -2,7 +2,7 @@ import { createHash } from 'crypto'
 import { SupabaseClient } from '@supabase/supabase-js'
 import { LaunchPackV1, validateLaunchPack } from './launch-pack-schema'
 
-export const LAUNCH_PACK_TEMPLATE_VERSION = 'launch-pack-research-v3'
+export const LAUNCH_PACK_TEMPLATE_VERSION = 'launch-pack-research-v4'
 
 function canonicalJson(value:unknown):string{
   if(Array.isArray(value))return `[${value.map(canonicalJson).join(',')}]`

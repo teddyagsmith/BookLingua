@@ -1,6 +1,6 @@
 import Anthropic from '@anthropic-ai/sdk'
 import type { Message, MessageCreateParamsNonStreaming } from '@anthropic-ai/sdk/resources/messages'
-import { LAUNCH_PACK_SCHEMA_VERSION, LaunchPackV1, launchMarket, validateLaunchPack } from './launch-pack-schema'
+import { LAUNCH_PACK_SCHEMA_VERSION, LaunchPackV1, launchMarket, normalizeLaunchPackCategories, validateLaunchPack } from './launch-pack-schema'
 import { BOOKLINGUA_MODEL_CONFIG } from './model-config'
 
 const anthropic = new Anthropic({
@@ -81,7 +81,7 @@ export function toCanonicalLaunchPack(
   purchased: boolean,
 ): LaunchPackV1 {
   const identity = launchMarket(locale)
-  const pack: LaunchPackV1 = { schemaVersion: LAUNCH_PACK_SCHEMA_VERSION, ...identity, ...strategy }
+  const pack = normalizeLaunchPackCategories({ schemaVersion: LAUNCH_PACK_SCHEMA_VERSION, ...identity, ...strategy } as LaunchPackV1)
   const errors = validateLaunchPack({ pack, expectedLocale: locale, purchased })
   if (errors.length) throw new Error(`Launch Pack validation failed: ${errors.join('; ')}`)
   return pack
@@ -172,6 +172,7 @@ Generate the following in JSON format. All author-facing explanations and instru
     // - Not overly competitive (avoid top-level categories)
     // - Popular enough to have active shoppers
   ],
+  "categoriesNote": "Optional short caveat about category paths. Put caveats here, never inside a category string.",
   
   "pricingRecommendation": {
     "ebook": "€X.XX or equivalent",

@@ -121,3 +121,10 @@ test('legacy inline category verification becomes a separate Launch Pack note',(
   assert.deepEqual(normalized.categories,['Romance > Romantic Suspense'])
   assert.equal(normalized.categoriesNote,'Existing note. verify current KDP path')
 })
+
+test('model category commentary is moved to categoriesNote before strict validation',()=>{
+  const pack:any={categories:['Books > Fiction > Medical Thrillers - Category paths vary by Amazon KDP menu'],categoriesNote:'Existing note.'}
+  const normalized=normalizeLegacyLaunchPackForCustomer(pack)
+  assert.deepEqual(normalized.categories,['Books > Fiction > Medical Thrillers'])
+  assert.equal(normalized.categoriesNote,'Existing note. Category paths vary by Amazon KDP menu')
+})

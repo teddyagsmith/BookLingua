@@ -1,7 +1,7 @@
 import { AlignmentType, BorderStyle, Document, ExternalHyperlink, Footer, HeadingLevel, PageBreak, PageNumber, Packer, Paragraph, ShadingType, Table, TableCell, TableLayoutType, TableRow, TextRun, WidthType } from 'docx'
 import { brandedDocumentHeader } from './branded-document-header'
 import { deterministicDocx } from './deterministic-docx'
-import { LaunchPackV1, validateLaunchPack } from './launch-pack-schema'
+import { LaunchPackV1, normalizeLaunchPackCategories, validateLaunchPack } from './launch-pack-schema'
 import { BOOKLINGUA_CLEAN_BOOK_STYLE } from './formatting-policy'
 
 const PURPLE='6D28D9',DARK='312E81',LAVENDER='F3E8FF',PALE='FAF7FF',GRAY='4B5563',BORDER='DDD6FE'
@@ -38,13 +38,7 @@ export function extractAuthoritativeTranslatedTitle(bytes:Buffer,bookTitle:strin
 
 /** Move legacy inline category verification prose into the schema's note field. */
 export function normalizeLegacyLaunchPackForCustomer(pack:LaunchPackV1):LaunchPackV1{
-  const notes:string[]=[]
-  const categories=pack.categories.map(category=>category.replace(/\s*\((verify[^)]*)\)\s*$/i,(_match,note:string)=>{
-    notes.push(note.trim())
-    return ''
-  }).trim())
-  if(!notes.length)return pack
-  return{...pack,categories,categoriesNote:[pack.categoriesNote,...notes].filter(Boolean).join(' ')}
+  return normalizeLaunchPackCategories(pack)
 }
 
 export async function renderCustomerLaunchPackDocx(bytes:Buffer,bookTitle:string,translatedTitle?:string,authorName?:string):Promise<Buffer>{

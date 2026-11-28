@@ -39,6 +39,25 @@ export interface LaunchPackV1 {
   research: { completedAt:string; sources:Array<{ name:string; url:string; note:string }> }
 }
 
+/**
+ * Categories are navigable paths, never operator commentary. Models sometimes
+ * append a useful caveat to a valid path; preserve that caveat in the schema's
+ * dedicated note field before the strict category validator runs.
+ */
+export function normalizeLaunchPackCategories(pack: LaunchPackV1): LaunchPackV1 {
+  const notes: string[] = []
+  const categories = pack.categories.map(category => {
+    const value = category.trim()
+    const match = value.match(/(?:\s*(?:\(|\[)|\s*(?:[-—–:]\s*)?)(verify|available|category paths?|amazon kdp|methodolog)\b([\s\S]*)$/i)
+    if (!match || match.index === undefined) return value
+    const note = `${match[1]}${match[2]}`.replace(/[\])}\s]+$/g, '').trim()
+    if (note) notes.push(note)
+    return value.slice(0, match.index).replace(/\s*[(\[]\s*$/, '').trim()
+  }).filter(Boolean)
+  if (!notes.length) return pack
+  return { ...pack, categories, categoriesNote: [pack.categoriesNote, ...notes].filter(Boolean).join(' ') }
+}
+
 export function launchMarket(locale: string) {
   const canonicalLocale = normalizeLocale(locale)
   const market = LAUNCH_MARKETS[canonicalLocale as LaunchLocale]
