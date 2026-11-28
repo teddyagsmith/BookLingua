@@ -678,7 +678,7 @@ export function buildSemanticEpubFromDocument(document: SemanticDocumentV2, titl
   const zip: any = new (AdmZip as any)(undefined, { noSort: true })
   zip.addFile('mimetype', Buffer.from('application/epub+zip'))
   zip.getEntry('mimetype').header.method = 0
-  zip.addFile('META-INF/container.xml', Buffer.from('<?xml version="1.0"?><container xmlns="urn:oasis:names:tc:opendocument:xmlns:container"><rootfiles><rootfile full-path="OPS/book.opf" media-type="application/oebps-package+xml"/></rootfiles></container>'))
+  zip.addFile('META-INF/container.xml', Buffer.from('<?xml version="1.0"?><container xmlns="urn:oasis:names:tc:opendocument:xmlns:container" version="1.0"><rootfiles><rootfile full-path="OPS/book.opf" media-type="application/oebps-package+xml"/></rootfiles></container>'))
   const chapters: Array<{ id: string; title: string; nodes: SemanticNodeV2[] }> = []
   for (const node of document.nodes) {
     if (node.type === 'heading' && node.headingLevel === 1 || !chapters.length) chapters.push({ id: `c${chapters.length + 1}`, title: node.type === 'heading' ? node.translatedText! : title, nodes: [] })
@@ -688,8 +688,11 @@ export function buildSemanticEpubFromDocument(document: SemanticDocumentV2, titl
     const body = chapter.nodes.map(n => n.type === 'heading' ? `<h${Math.min(6,n.headingLevel||1)}>${escapeXml(n.translatedText!)}</h${Math.min(6,n.headingLevel||1)}>` : `<p>${escapeXml(n.translatedText!)}</p>`).join('')
     zip.addFile(`OPS/${chapter.id}.xhtml`, Buffer.from(`<html xmlns="http://www.w3.org/1999/xhtml" lang="${escapeXml(language)}" xml:lang="${escapeXml(language)}"><head><title>${escapeXml(chapter.title)}</title></head><body lang="${escapeXml(language)}">${body}</body></html>`))
   }
-  const manifest = chapters.map(c=>`<item id="${c.id}" href="${c.id}.xhtml" media-type="application/xhtml+xml"/>`).join('')
+  const nav = `<html xmlns="http://www.w3.org/1999/xhtml" xmlns:epub="http://www.idpf.org/2007/ops" lang="${escapeXml(language)}" xml:lang="${escapeXml(language)}"><head><title>Contents</title></head><body lang="${escapeXml(language)}"><nav epub:type="toc" id="toc"><ol>${chapters.map(c=>`<li><a href="${c.id}.xhtml">${escapeXml(c.title)}</a></li>`).join('')}</ol></nav></body></html>`
+  zip.addFile('OPS/nav.xhtml', Buffer.from(nav))
+  const manifest = `${chapters.map(c=>`<item id="${c.id}" href="${c.id}.xhtml" media-type="application/xhtml+xml"/>`).join('')}<item id="nav" href="nav.xhtml" media-type="application/xhtml+xml" properties="nav"/>`
   const spine = chapters.map(c=>`<itemref idref="${c.id}"/>`).join('')
-  zip.addFile('OPS/book.opf', Buffer.from(`<package xmlns="http://www.idpf.org/2007/opf" version="3.0" unique-identifier="bookid"><metadata xmlns:dc="http://purl.org/dc/elements/1.1/"><dc:identifier id="bookid">${editionIdentifier(editionSeed,language)}</dc:identifier><dc:title>${escapeXml(title)}</dc:title><dc:creator>${escapeXml(authorName)}</dc:creator><dc:language>${escapeXml(language)}</dc:language></metadata><manifest>${manifest}</manifest><spine>${spine}</spine></package>`))
+  const modified = new Date().toISOString().replace(/\.\d{3}Z$/, 'Z')
+  zip.addFile('OPS/book.opf', Buffer.from(`<package xmlns="http://www.idpf.org/2007/opf" version="3.0" unique-identifier="bookid"><metadata xmlns:dc="http://purl.org/dc/elements/1.1/"><dc:identifier id="bookid">${editionIdentifier(editionSeed,language)}</dc:identifier><dc:title>${escapeXml(title)}</dc:title><dc:creator>${escapeXml(authorName)}</dc:creator><dc:language>${escapeXml(language)}</dc:language><meta property="dcterms:modified">${modified}</meta></metadata><manifest>${manifest}</manifest><spine>${spine}</spine></package>`))
   return zip.toBuffer()
 }
