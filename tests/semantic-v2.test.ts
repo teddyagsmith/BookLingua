@@ -453,11 +453,11 @@ test('build identity changes when output behaviour changes, not only prompts', (
 })
 
 test('a changed artifact policy allocates a new immutable build identity after a failed build', () => {
-  const failedV11 = deterministicSemanticBuildId('order', 'es-latam', 'source', 1, undefined, 'semantic-v2-epub-and-notes-v11')
-  const deferredEpubCheckV12 = deterministicSemanticBuildId('order', 'es-latam', 'source', 1, undefined, 'semantic-v2-epub-and-notes-v12')
+  const failedV12 = deterministicSemanticBuildId('order', 'es-latam', 'source', 1, undefined, 'semantic-v2-epub-and-notes-v12')
+  const deferredEpubCheckV13 = deterministicSemanticBuildId('order', 'es-latam', 'source', 1, undefined, 'semantic-v2-epub-and-notes-v13')
   // begin_order_language_build supersedes the current build when this identity changes;
   // cached translation batches remain reusable because their cache identity is separate.
-  assert.notEqual(deferredEpubCheckV12, failedV11)
+  assert.notEqual(deferredEpubCheckV13, failedV12)
 })
 
 test('an unavailable local EPUBCheck runtime is deferred, not treated as an EPUB failure', () => {
