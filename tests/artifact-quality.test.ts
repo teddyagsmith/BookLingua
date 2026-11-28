@@ -297,6 +297,21 @@ test('translation notes reject long source quotes and stock template reasons',()
   assert.match(errors,/stock template/)
 })
 
+test('translation notes skip paragraph-scale edits and keep later concise evidence',()=>{
+  const longSource=Array.from({length:26},(_,index)=>`word${index + 1}`).join(' ')
+  const pass1=document([
+    {sourceText:longSource,translatedText:'Borrador largo.'},
+    {sourceText:'A concise source decision.',translatedText:'Borrador conciso.'},
+  ])
+  const pass2=structuredClone(pass1)
+  pass2.nodes[0].translatedText='Versión final larga.'
+  pass2.nodes[1].translatedText='Decisión final concisa.'
+  const notes=deriveEditorialTranslationNotes({language:'es-latam',pass1,pass2})
+  assert.deepEqual(validateTranslationNotes(notes,{requireSpecificReasons:true}),[])
+  assert.deepEqual(notes.sections[0].entries.map(entry=>entry.source),['A concise source decision.'])
+  assert.deepEqual(validateCustomerTranslationNotes(notes,{sourceTexts:pass1.nodes.map((node:any)=>node.sourceText),finalText:pass2.nodes.map((node:any)=>node.translatedText).join('\n')}),[])
+})
+
 test('required German held-order customer Notes selections are source-linked and exact-final-linked',()=>{
   const ashes:any={schemaVersion:'1.0',language:'de',approach:'English to German.',sections:[{id:'decisions',title:'Decisions',entries:[
     {source:'Enjoy your holiday in sunny Slovakia',target:'Genießen Sie Ihren Urlaub in der sonnigen Slowakei',reason:'German uses the feminine country construction while preserving the dry announcement.'},

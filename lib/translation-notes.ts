@@ -50,7 +50,7 @@ export function validateTranslationNotes(notes: TranslationNotesV1, options:{req
       // Keep this ES5-compatible: this project does not set a TypeScript target,
       // so Unicode property escapes with the `u` flag fail Vercel's type check.
       // The Latin ranges cover the source manuscripts currently supported here.
-      const sourceWords=(entry.source.match(/[A-Za-zÀ-ÖØ-öø-ÿ0-9]+(?:['’][A-Za-zÀ-ÖØ-öø-ÿ0-9]+)?/g)||[]).length
+      const sourceWords=sourceWordCount(entry.source)
       if(sourceWords>25)errors.push(`Translation-note decision quotes too much source text (${sourceWords} words; maximum 25): ${entry.source.slice(0,60)}`)
       const identical=entry.source.normalize('NFKC').trim()===entry.target.normalize('NFKC').trim()
       if(identical&&!/retained unchanged|kept unchanged/i.test(entry.reason))errors.push(`Translation-note unchanged wording lacks an explicit retention reason: ${entry.source.slice(0,60)}`)
@@ -65,6 +65,10 @@ export function validateTranslationNotes(notes: TranslationNotesV1, options:{req
 
 function normalizedExact(value:string):string{
   return decodeVisibleEntities(value).normalize('NFKC').replace(/[‘’]/g,"'").replace(/[“”]/g,'"').replace(/[\u00a0\u2007\u202f]/g,' ').replace(/\s+/g,' ').trim()
+}
+
+function sourceWordCount(value:string):number{
+  return (value.match(/[A-Za-zÀ-ÖØ-öø-ÿ0-9]+(?:['’][A-Za-zÀ-ÖØ-öø-ÿ0-9]+)?/g)||[]).length
 }
 
 function englishSourceLanguageResult(value:string,allowlisted:Set<string>):{passed:boolean;reason:string}{
@@ -176,6 +180,9 @@ export function deriveEditorialTranslationNotes(input: {
     const source=normalizedExact(first.sourceText),target=normalizedExact(second.translatedText)
     if(!source||!target)continue
     if(input.authoritativeTitle&&source===normalizedExact(input.authoritativeTitle.source)&&target===normalizedExact(input.authoritativeTitle.target))continue
+    // Customer Notes are concise representative decisions, not a second copy
+    // of the manuscript. Later concise edits remain eligible.
+    if(sourceWordCount(source)>25)continue
     decisions.push({source,target,reason:reason(source,decisions.length)})
   }
   return {
