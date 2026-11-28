@@ -165,7 +165,9 @@ export const PIPELINE_OUTPUT_VERSION = 'output-v15-epub-language-and-dropcap-gat
 // rather than replaying a failed v12 validation report.
 // v14 omits paragraph-scale source quotations from automatic customer Notes.
 // A policy bump allocates a fresh immutable build instead of replaying v13.
-export const SEMANTIC_BUILD_POLICY_VERSION = 'semantic-v2-epub-and-notes-v14'
+// v15 includes the EPUB3 navigation and package-metadata fix. Existing EPUB
+// artifacts were built without it, so they must never be reused.
+export const SEMANTIC_BUILD_POLICY_VERSION = 'semantic-v2-epub-and-notes-v15'
 
 export function readerRegisterNarrationText(nodes:SemanticDocumentV2['nodes']):string{
   const genericLabels=/^(?:note|exercise|example|warning|tip|step|question|answer|summary|remember)$/i

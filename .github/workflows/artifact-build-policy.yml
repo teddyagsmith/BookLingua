@@ -1,0 +1,30 @@
+name: Artifact build policy guard
+
+on:
+  pull_request:
+    paths:
+      - 'lib/semantic-artifacts.ts'
+      - 'lib/semantic-pipeline.ts'
+
+permissions:
+  contents: read
+
+jobs:
+  require-policy-bump:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Require an immutable-build policy bump
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          set -euo pipefail
+          if git diff --quiet "$BASE_SHA" HEAD -- lib/semantic-artifacts.ts lib/semantic-pipeline.ts; then
+            exit 0
+          fi
+          if ! git diff --unified=0 "$BASE_SHA" HEAD -- lib/semantic-pipeline.ts | grep -Eq '^[+-]export const SEMANTIC_BUILD_POLICY_VERSION = '; then
+            echo 'Semantic artifact-builder changes require a SEMANTIC_BUILD_POLICY_VERSION bump.' >&2
+            exit 1
+          fi
