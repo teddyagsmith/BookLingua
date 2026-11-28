@@ -160,10 +160,10 @@ export const PIPELINE_OUTPUT_VERSION = 'output-v15-epub-language-and-dropcap-gat
 // Any deterministic artifact-generation change must advance this version so a
 // restart cannot reuse a package produced before the new validation/rebuild
 // policy existed.
-// v12 defers an unavailable local EPUBCheck runtime to the hash-bound Java
-// worker.  The version bump deliberately creates a new immutable generation
-// rather than replaying a failed v11 validation report.
-export const SEMANTIC_BUILD_POLICY_VERSION = 'semantic-v2-epub-and-notes-v12'
+// v13 includes shell-level runtime absence detection (exit 127/stderr) for
+// EPUBCheck. The version bump deliberately creates a new immutable generation
+// rather than replaying a failed v12 validation report.
+export const SEMANTIC_BUILD_POLICY_VERSION = 'semantic-v2-epub-and-notes-v13'
 
 export function readerRegisterNarrationText(nodes:SemanticDocumentV2['nodes']):string{
   const genericLabels=/^(?:note|exercise|example|warning|tip|step|question|answer|summary|remember)$/i
