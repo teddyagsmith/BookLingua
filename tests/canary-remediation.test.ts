@@ -36,6 +36,13 @@ test('Launch Pack parsing fails closed for malformed text and unsupported locale
   assert.throws(() => toCanonicalLaunchPack(strategy, 'xx', true), /Unsupported Launch Pack locale/)
 })
 
+test('Launch Pack canonical generation moves category commentary into categoriesNote before validation', () => {
+  const noisy = { ...strategy, categories: ['Books > Fiction > Medical Thrillers - Category paths vary by Amazon KDP menu', 'Books > Fiction > Suspense', 'Books > Fiction > Action'] }
+  const pack = toCanonicalLaunchPack(noisy, 'fr', true)
+  assert.deepEqual(pack.categories, ['Books > Fiction > Medical Thrillers', 'Books > Fiction > Suspense', 'Books > Fiction > Action'])
+  assert.equal(pack.categoriesNote, 'Category paths vary by Amazon KDP menu')
+})
+
 test('Launch Pack captures successful and failed attempt metadata', async () => {
   const records: any[] = []
   const output = await generateLaunchStrategy({ bookTitle: 'Synthetic', authorName: 'Author', genre: 'fantasy', bookDescription: 'Synthetic', targetLanguage: 'French', targetMarket: 'France' }, {
