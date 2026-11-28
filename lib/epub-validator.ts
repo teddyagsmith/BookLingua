@@ -12,8 +12,18 @@ export interface EpubCheckResult {
   warnings: string[]
 }
 
-export function isEpubCheckRuntimeUnavailable(code: unknown, output: string): boolean {
-  return code === 'ENOENT'
+function processOutput(value: unknown): string {
+  if (typeof value === 'string') return value
+  if (Buffer.isBuffer(value)) return value.toString('utf-8')
+  return ''
+}
+
+export function isEpubCheckRuntimeUnavailable(error: { code?: unknown; status?: unknown; stdout?: unknown; stderr?: unknown; message?: unknown }): boolean {
+  // A shell reports a missing command as exit status 127 and writes the
+  // diagnostic to stderr.  execSync does not expose this as ENOENT because it
+  // successfully launched the shell first.
+  const output = [processOutput(error.stdout), processOutput(error.stderr), processOutput(error.message)].filter(Boolean).join('\n')
+  return error.code === 'ENOENT' || error.status === 127
     || /(?:epubcheck|java).*(?:not found|not installed|not available)|could not be executed|no java runtime/i.test(output)
 }
 
@@ -34,17 +44,10 @@ export function validateEpub(epubBuffer: Buffer): EpubCheckResult {
     } catch (e: any) {
       commandFailed = true
       // epubcheck exits with non-zero code when errors are found
-      const stdout = e.stdout
-      if (typeof stdout === 'string') {
-        output = stdout
-      } else if (Buffer.isBuffer(stdout)) {
-        output = stdout.toString('utf-8')
-      } else {
-        output = e.message || ''
-      }
+      output = [processOutput(e.stdout), processOutput(e.stderr), processOutput(e.message)].filter(Boolean).join('\n')
       // Only infrastructure absence is deferrable.  A non-zero EPUBCheck
       // result remains a real validation failure and must fail closed.
-      unavailable = isEpubCheckRuntimeUnavailable(e?.code, output)
+      unavailable = isEpubCheckRuntimeUnavailable(e)
     }
 
     const errors: string[] = []

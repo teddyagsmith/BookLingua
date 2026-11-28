@@ -461,8 +461,8 @@ test('a changed artifact policy allocates a new immutable build identity after a
 })
 
 test('an unavailable local EPUBCheck runtime is deferred, not treated as an EPUB failure', () => {
-  assert.equal(isEpubCheckRuntimeUnavailable(127, '/bin/sh: epubcheck: command not found'), true)
-  assert.equal(isEpubCheckRuntimeUnavailable(1, 'ERROR: malformed OPF document'), false)
+  assert.equal(isEpubCheckRuntimeUnavailable({ status: 127, stdout: '', stderr: '/bin/sh: epubcheck: command not found' }), true)
+  assert.equal(isEpubCheckRuntimeUnavailable({ status: 1, stdout: 'ERROR: malformed OPF document', stderr: '' }), false)
 })
 
 test('EPUB parser decodes named and numeric visible entities',()=>{
