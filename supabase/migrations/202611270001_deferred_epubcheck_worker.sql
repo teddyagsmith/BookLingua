@@ -2,9 +2,20 @@
 -- runtime.  A pending result permits internal review only; delivery continues
 -- to require a matching EPUBCheck 5.1.0 PASS recorded by the Java worker.
 
-alter table artifacts
-  add constraint artifacts_id_order_language_build_key
-  unique (id, order_id, language, build_id);
+do $$
+begin
+  if not exists (
+    select 1
+    from pg_constraint
+    where conname = 'artifacts_id_order_language_build_key'
+      and conrelid = 'public.artifacts'::regclass
+  ) then
+    alter table public.artifacts
+      add constraint artifacts_id_order_language_build_key
+      unique (id, order_id, language, build_id);
+  end if;
+end;
+$$;
 
 create table if not exists epubcheck_results (
   id uuid primary key default gen_random_uuid(),
