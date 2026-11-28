@@ -10,6 +10,7 @@ import { evaluateSemanticEligibility } from '../lib/semantic-document'
 import { buildSemanticDocx, buildSemanticEpub, buildSemanticEpubFromDocument, buildSemanticReviewDocx, consolidatedArtifactNodes, decodeVisibleEntities, normalizeEpubImages, resolveBookAuthor } from '../lib/semantic-artifacts'
 import { validateArtifact } from '../lib/artifact-validation-v2'
 import { applyVerifiedEditorialOverrides, deterministicSemanticBuildId, readerRegisterNarrationText, stripLeakedSourcePageMarkers } from '../lib/semantic-pipeline'
+import { isEpubCheckRuntimeUnavailable } from '../lib/epub-validator'
 import { editorialSystemPrompt } from '../lib/editorial-prompt'
 import { semanticV2AllowedForOrder } from '../lib/semantic-canary'
 
@@ -449,6 +450,19 @@ test('build identity changes when output behaviour changes, not only prompts', (
   // this the completed package is returned and the delivered files never change.
   const base = deterministicSemanticBuildId('order', 'fr', 'source', 1)
   assert.notEqual(base, deterministicSemanticBuildId('order', 'fr', 'source', 1, 'translation-v1+editorial-v2+output-v3'))
+})
+
+test('a changed artifact policy allocates a new immutable build identity after a failed build', () => {
+  const failedV11 = deterministicSemanticBuildId('order', 'es-latam', 'source', 1, undefined, 'semantic-v2-epub-and-notes-v11')
+  const deferredEpubCheckV12 = deterministicSemanticBuildId('order', 'es-latam', 'source', 1, undefined, 'semantic-v2-epub-and-notes-v12')
+  // begin_order_language_build supersedes the current build when this identity changes;
+  // cached translation batches remain reusable because their cache identity is separate.
+  assert.notEqual(deferredEpubCheckV12, failedV11)
+})
+
+test('an unavailable local EPUBCheck runtime is deferred, not treated as an EPUB failure', () => {
+  assert.equal(isEpubCheckRuntimeUnavailable(127, '/bin/sh: epubcheck: command not found'), true)
+  assert.equal(isEpubCheckRuntimeUnavailable(1, 'ERROR: malformed OPF document'), false)
 })
 
 test('EPUB parser decodes named and numeric visible entities',()=>{

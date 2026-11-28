@@ -12,6 +12,11 @@ export interface EpubCheckResult {
   warnings: string[]
 }
 
+export function isEpubCheckRuntimeUnavailable(code: unknown, output: string): boolean {
+  return code === 'ENOENT'
+    || /(?:epubcheck|java).*(?:not found|not installed|not available)|could not be executed|no java runtime/i.test(output)
+}
+
 export function validateEpub(epubBuffer: Buffer): EpubCheckResult {
   const tmpDir = mkdtempSync(join(tmpdir(), 'booklingua-epub-'))
   try {
@@ -39,8 +44,7 @@ export function validateEpub(epubBuffer: Buffer): EpubCheckResult {
       }
       // Only infrastructure absence is deferrable.  A non-zero EPUBCheck
       // result remains a real validation failure and must fail closed.
-      unavailable = e?.code === 'ENOENT'
-        || /(?:epubcheck|java).*(?:not found|not installed|not available)|could not be executed|no java runtime/i.test(output)
+      unavailable = isEpubCheckRuntimeUnavailable(e?.code, output)
     }
 
     const errors: string[] = []
