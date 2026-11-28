@@ -1,0 +1,36 @@
+name: Semantic EPUBCheck regression
+
+on:
+  pull_request:
+    paths:
+      - 'lib/semantic-artifacts.ts'
+      - 'tests/semantic-epubcheck.test.ts'
+      - '.github/workflows/semantic-epubcheck.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'lib/semantic-artifacts.ts'
+      - 'tests/semantic-epubcheck.test.ts'
+      - '.github/workflows/semantic-epubcheck.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  epubcheck:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - run: npm ci
+      - run: |
+          curl --fail-with-body --silent --show-error -L https://github.com/w3c/epubcheck/releases/download/v5.1.0/epubcheck-5.1.0.zip -o epubcheck.zip
+          unzip -q epubcheck.zip
+          EPUBCHECK_JAR="$PWD/epubcheck-5.1.0/epubcheck.jar" npm run test -- tests/semantic-epubcheck.test.ts
